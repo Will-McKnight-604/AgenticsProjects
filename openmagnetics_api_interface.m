@@ -1,47 +1,85 @@
 % openmagnetics_api_interface.m
-% Interface to OpenMagnetics data following the MAS (Magnetic Agnostic Structure)
-%
-% Provides offline fallback databases for:
-%   - Wire specifications (round, litz, rectangular, foil)
-%   - Core shapes with bobbin/winding window geometry
-%   - Core materials with magnetic properties
-%
-% Based on the OpenMagnetics MAS schema:
-%   https://github.com/OpenMagnetics/MAS
-%
-% Wire data follows MAS wire definitions with conductingDiameter,
-% outerDiameter, numberConductors, etc.
-%
-% Core data follows MAS core definitions with processedDescription
-% containing effectiveParameters (Ae, le, Ve) and windingWindows.
+% OpenMagnetics-compatible offline database with full wire/core/material specs
+% Includes: supplier-indexed cores, wire Type/Standard/Coating/Diameter fields
 
 classdef openmagnetics_api_interface < handle
 
     properties
-        wire_database       % Struct of wire specs keyed by name
-        core_database       % Struct of core specs keyed by name
-        material_database   % Struct of material specs keyed by name
-        api_available       % Whether online API is reachable
+        wire_database
+        core_database
+        material_database
+        supplier_list      % Cell array of supplier names
+        supplier_cores     % Struct: supplier -> {core names}
+        supplier_materials % Struct: supplier -> {material names}
+        mode = 'offline'
+        online_url = 'http://localhost:8484'
+        online_client
+        online_connected = false
+        cache_loaded = false
+        cached_wire_database
+        cached_core_database
+        cached_material_database
+        cache_path = ''
     end
 
     methods
 
         function obj = openmagnetics_api_interface()
-            % Constructor - initialize with offline databases
-            obj.api_available = false;
-            obj.wire_database = obj.build_wire_database();
-            obj.core_database = obj.build_core_database();
-            obj.material_database = obj.build_material_database();
+            obj.cache_path = obj.default_cache_path();
+            if ~obj.load_cache()
+                obj.wire_database = obj.init_wire_database();
+                obj.core_database = obj.init_core_database();
+                obj.material_database = obj.init_material_database();
+            end
+            obj.init_supplier_index();
+
+            nw = length(fieldnames(obj.wire_database));
+            nc = length(fieldnames(obj.core_database));
+            nm = length(fieldnames(obj.material_database));
+            ns = length(obj.supplier_list);
             fprintf('OpenMagnetics API interface initialized (offline mode)\n');
-            fprintf('  Wires: %d | Cores: %d | Materials: %d\n', ...
-                length(fieldnames(obj.wire_database)), ...
-                length(fieldnames(obj.core_database)), ...
-                length(fieldnames(obj.material_database)));
+            fprintf('  Wires: %d | Cores: %d | Materials: %d | Suppliers: %d\n', nw, nc, nm, ns);
         end
 
-        %% ============================================================
-        %  PUBLIC DATABASE ACCESS
-        %  ============================================================
+        function mode = get_mode(obj)
+            mode = obj.mode;
+        end
+
+        function ok = set_mode(obj, mode, url)
+            ok = false;
+            if nargin >= 3 && ~isempty(url)
+                obj.online_url = url;
+            end
+
+            if ischar(mode) && strcmpi(mode, 'online')
+                try
+                    obj.online_client = om_client(obj.online_url);
+                    if obj.online_client.connected
+                        obj.online_connected = true;
+                        obj.mode = 'online';
+                        ok = obj.refresh_from_online();
+                        if ok
+                            fprintf('OpenMagnetics API interface switched to online mode (%s)\n', obj.online_url);
+                            return;
+                        end
+                    end
+                catch
+                end
+                obj.online_connected = false;
+                obj.mode = 'offline';
+                obj.apply_offline_data();
+                fprintf('OpenMagnetics API interface staying offline (online unavailable)\n');
+                return;
+            end
+
+            obj.mode = 'offline';
+            obj.online_connected = false;
+            obj.apply_offline_data();
+            fprintf('OpenMagnetics API interface set to offline mode\n');
+            ok = true;
+        end
+
+        % ======== PUBLIC ACCESSORS ========
 
         function wires = get_wires(obj)
             wires = obj.wire_database;
@@ -55,405 +93,965 @@ classdef openmagnetics_api_interface < handle
             materials = obj.material_database;
         end
 
+        function suppliers = get_suppliers(obj)
+            suppliers = obj.supplier_list;
+        end
+
+        function cores = get_cores_by_supplier(obj, supplier)
+            safe = strrep(strrep(supplier, '/', '_'), ' ', '_');
+            if isfield(obj.supplier_cores, safe)
+                cores = obj.supplier_cores.(safe);
+            else
+                cores = {};
+            end
+        end
+
+        function mats = get_materials_by_supplier(obj, supplier)
+            safe = strrep(strrep(supplier, '/', '_'), ' ', '_');
+            if isfield(obj.supplier_materials, safe)
+                mats = obj.supplier_materials.(safe);
+            else
+                mats = {};
+            end
+        end
+
         function info = get_wire_info(obj, wire_name)
-            % Return wire specification struct for a given wire name
             if isfield(obj.wire_database, wire_name)
                 info = obj.wire_database.(wire_name);
             else
-                warning('Wire "%s" not found in database', wire_name);
-                info = [];
+                info = struct('type', 'Unknown', 'diameter', 0.5e-3, ...
+                              'area', pi/4*(0.5e-3)^2, 'conductor_shape', 'round');
             end
         end
 
-        function info = get_core_info(obj, core_name)
-            % Return core specification struct for a given core name
-            if isfield(obj.core_database, core_name)
-                info = obj.core_database.(core_name);
+        function [w, h, shape] = wire_to_conductor_dims(obj, wire_name)
+            % Returns conductor dimensions for PEEC solver
+            % Round/Litz: equivalent square side (same area as circle)
+            % Foil/Rect: actual width x height
+            % Also returns shape: 'round' or 'rectangular'
+
+            wire = obj.get_wire_info(wire_name);
+
+            if isfield(wire, 'conductor_shape')
+                shape = wire.conductor_shape;
             else
-                warning('Core "%s" not found in database', core_name);
-                info = [];
-            end
-        end
-
-        function [width, height, shape] = wire_to_conductor_dims(obj, wire_name)
-            % Convert wire specification to equivalent rectangular conductor
-            % dimensions for PEEC analysis.
-            %
-            % For round wire: width = height = diameter (area-equivalent square)
-            % For litz wire:  width = height = outer_diameter equivalent
-            % For rectangular: width and height directly from spec
-            % For foil:       width (thin) x height (wide)
-            %
-            % Returns:
-            %   width  - Conductor width in meters (radial direction)
-            %   height - Conductor height in meters (axial direction)
-            %   shape  - 'round', 'rectangular', 'foil', or 'litz'
-
-            if ~isfield(obj.wire_database, wire_name)
-                warning('Wire "%s" not in database, using defaults', wire_name);
-                width  = 0.644e-3;
-                height = 0.644e-3;
-                shape  = 'round';
-                return;
+                shape = 'round';
             end
 
-            wire = obj.wire_database.(wire_name);
-
-            switch wire.type
-                case 'round'
-                    % MAS: conductingDiameter -> area-equivalent square
-                    d = wire.diameter;
-                    equiv = d * sqrt(pi/4);  % Area-equivalent square side
-                    width  = equiv;
-                    height = equiv;
-                    shape  = 'round';
-
-                case 'litz'
-                    % MAS: bundle treated as single round conductor
+            if strcmp(shape, 'rectangular')
+                % Foil or rectangular: use actual dimensions
+                if isfield(wire, 'foil_width') && isfield(wire, 'foil_thickness')
+                    w = wire.foil_width;
+                    h = wire.foil_thickness;
+                elseif isfield(wire, 'rect_width') && isfield(wire, 'rect_height')
+                    w = wire.rect_width;
+                    h = wire.rect_height;
+                elseif isfield(wire, 'width') && isfield(wire, 'thickness')
+                    w = wire.width;
+                    h = wire.thickness;
+                else
+                    w = 10e-3;
+                    h = 0.1e-3;
+                end
+            else
+                % Round or Litz: equivalent square
+                if isfield(wire, 'outer_diameter')
                     d = wire.outer_diameter;
-                    equiv = d * sqrt(pi/4);
-                    width  = equiv;
-                    height = equiv;
-                    shape  = 'round';
-
-                case 'rectangular'
-                    % MAS: conductingWidth x conductingHeight
-                    width  = wire.width;
-                    height = wire.height;
-                    shape  = 'rectangular';
-
-                case 'foil'
-                    % MAS: foil thickness (thin) x foil width (wide)
-                    width  = wire.thickness;   % radial (thin dimension)
-                    height = wire.foil_width;  % axial (wide dimension)
-                    shape  = 'foil';
-
-                otherwise
-                    d = wire.diameter;
-                    equiv = d * sqrt(pi/4);
-                    width  = equiv;
-                    height = equiv;
-                    shape  = 'round';
+                elseif isfield(wire, 'diameter')
+                    d = wire.diameter * 1.12;
+                else
+                    d = 0.5e-3;
+                end
+                side = d * sqrt(pi) / 2;  % Equal-area square
+                w = side;
+                h = side;
             end
         end
 
         function od = get_wire_outer_diameter(obj, wire_name)
-            % Get wire outer diameter including insulation
-            % Follows MAS outerDiameter field
-            wire = obj.wire_database.(wire_name);
-
+            % Returns outer diameter for visualization (drawing circles)
+            wire = obj.get_wire_info(wire_name);
             if isfield(wire, 'outer_diameter')
                 od = wire.outer_diameter;
             elseif isfield(wire, 'diameter')
-                od = wire.diameter * 1.12;  % ~12% insulation buildup
+                od = wire.diameter * 1.12;
             else
-                od = 1e-3;  % fallback
+                od = 0.5e-3;
             end
         end
 
-        function list_available_wires(obj)
-            % Print all available wires
-            names = fieldnames(obj.wire_database);
-            fprintf('\nAvailable wires (%d):\n', length(names));
-            for i = 1:length(names)
-                w = obj.wire_database.(names{i});
-                switch w.type
-                    case 'round'
-                        fprintf('  %-20s  Round  d=%.3f mm  R=%.3f Ohm/m\n', ...
-                            names{i}, w.diameter*1e3, w.resistance);
-                    case 'litz'
-                        fprintf('  %-20s  Litz   %dx%.3fmm  OD=%.3f mm\n', ...
-                            names{i}, w.strands, w.strand_diameter*1e3, w.outer_diameter*1e3);
-                    case 'rectangular'
-                        fprintf('  %-20s  Rect   %.2fx%.2f mm\n', ...
-                            names{i}, w.width*1e3, w.height*1e3);
-                    case 'foil'
-                        fprintf('  %-20s  Foil   t=%.3f mm  w=%.1f mm\n', ...
-                            names{i}, w.thickness*1e3, w.foil_width*1e3);
+        function [w, h] = get_wire_visual_dims(obj, wire_name)
+            % Returns dimensions for visualization (actual shape dimensions)
+            % Round/Litz: returns [od, od]
+            % Foil/Rect: returns [width, thickness]
+            wire = obj.get_wire_info(wire_name);
+            shape = 'round';
+            if isfield(wire, 'conductor_shape')
+                shape = wire.conductor_shape;
+            end
+
+            if strcmp(shape, 'rectangular')
+                if isfield(wire, 'foil_width')
+                    w = wire.foil_width;
+                    h = wire.foil_thickness;
+                elseif isfield(wire, 'rect_width')
+                    w = wire.rect_width;
+                    h = wire.rect_height;
+                else
+                    w = 10e-3; h = 0.1e-3;
+                end
+            else
+                od = obj.get_wire_outer_diameter(wire_name);
+                w = od;
+                h = od;
+            end
+        end
+
+        % ======== ONLINE DATA (OPTIONAL) ========
+
+        function ok = refresh_from_online(obj)
+            ok = false;
+            if isempty(obj.online_client) || ~obj.online_client.connected
+                return;
+            end
+
+            try
+                remote_wires = obj.online_client.get_wires();
+                remote_cores = obj.online_client.get_core_shapes();
+                remote_mats = obj.online_client.get_materials();
+            catch
+                return;
+            end
+
+            wire_db = obj.convert_wire_database(remote_wires);
+            core_db = obj.convert_core_database(remote_cores);
+            mat_db = obj.convert_material_database(remote_mats);
+
+            if isempty(fieldnames(wire_db)) || isempty(fieldnames(core_db)) || isempty(fieldnames(mat_db))
+                return;
+            end
+
+            obj.wire_database = wire_db;
+            obj.core_database = core_db;
+            obj.material_database = mat_db;
+            obj.cached_wire_database = wire_db;
+            obj.cached_core_database = core_db;
+            obj.cached_material_database = mat_db;
+            obj.cache_loaded = true;
+            obj.save_cache();
+            obj.init_supplier_index();
+            ok = true;
+        end
+
+        function apply_offline_data(obj)
+            if ~obj.cache_loaded
+                obj.load_cache();
+            end
+            if obj.cache_loaded
+                obj.wire_database = obj.cached_wire_database;
+                obj.core_database = obj.cached_core_database;
+                obj.material_database = obj.cached_material_database;
+            else
+                obj.wire_database = obj.init_wire_database();
+                obj.core_database = obj.init_core_database();
+                obj.material_database = obj.init_material_database();
+            end
+            obj.init_supplier_index();
+        end
+
+        function ok = load_cache(obj)
+            ok = false;
+            if isempty(obj.cache_path) || ~exist(obj.cache_path, 'file')
+                return;
+            end
+            try
+                data = load(obj.cache_path);
+            catch
+                return;
+            end
+            if isfield(data, 'wire_database') && isfield(data, 'core_database') && isfield(data, 'material_database')
+                obj.cached_wire_database = data.wire_database;
+                obj.cached_core_database = data.core_database;
+                obj.cached_material_database = data.material_database;
+                obj.wire_database = obj.cached_wire_database;
+                obj.core_database = obj.cached_core_database;
+                obj.material_database = obj.cached_material_database;
+                obj.cache_loaded = true;
+                ok = true;
+            end
+        end
+
+        function save_cache(obj)
+            if isempty(obj.cache_path)
+                return;
+            end
+            try
+                wire_database = obj.cached_wire_database;
+                core_database = obj.cached_core_database;
+                material_database = obj.cached_material_database;
+                save(obj.cache_path, 'wire_database', 'core_database', 'material_database');
+            catch
+            end
+        end
+
+        function path = default_cache_path(obj)
+            try
+                here = fileparts(mfilename('fullpath'));
+                path = fullfile(here, 'openmagnetics_cache.mat');
+            catch
+                path = 'openmagnetics_cache.mat';
+            end
+        end
+
+        function db = convert_wire_database(obj, remote)
+            db = struct();
+            if isempty(remote)
+                return;
+            end
+
+            if isstruct(remote) && ~isfield(remote, 'name')
+                names = fieldnames(remote);
+                for i = 1:numel(names)
+                    name = names{i};
+                    wire = remote.(name);
+                    key = make_valid_name(name);
+                    db.(key) = obj.normalize_wire(wire, name);
+                end
+                return;
+            end
+
+            if isstruct(remote) && isfield(remote, 'name')
+                for i = 1:numel(remote)
+                    name = remote(i).name;
+                    key = make_valid_name(name);
+                    db.(key) = obj.normalize_wire(remote(i), name);
+                end
+                return;
+            end
+
+            if iscell(remote)
+                for i = 1:numel(remote)
+                    wire = remote{i};
+                    if isstruct(wire) && isfield(wire, 'name')
+                        name = wire.name;
+                    else
+                        name = sprintf('Wire_%d', i);
+                    end
+                    key = make_valid_name(name);
+                    db.(key) = obj.normalize_wire(wire, name);
                 end
             end
         end
 
-        function list_available_cores(obj)
-            % Print all available cores
-            names = fieldnames(obj.core_database);
-            fprintf('\nAvailable cores (%d):\n', length(names));
-            for i = 1:length(names)
-                c = obj.core_database.(names{i});
-                fprintf('  %-20s  %s  Ae=%.1f mm^2  le=%.1f mm\n', ...
-                    names{i}, c.shape, c.Ae*1e6, c.le*1e3);
+        function out = normalize_wire(obj, wire, name)
+            out = struct();
+            out.name = name;
+            if ~isstruct(wire)
+                return;
+            end
+            if isfield(wire, 'standard'); out.standard = wire.standard; end
+            if isfield(wire, 'coating'); out.coating = wire.coating; end
+            if isfield(wire, 'type'); out.type = wire.type; end
+
+            shape = '';
+            if isfield(wire, 'conductor_shape'); shape = wire.conductor_shape; end
+            if isempty(shape) && isfield(wire, 'shape'); shape = wire.shape; end
+            if isempty(shape) && isfield(wire, 'type'); shape = wire.type; end
+
+            is_rect = local_contains(shape, 'rect') || local_contains(shape, 'foil') || local_contains(shape, 'planar');
+            if is_rect
+                out.conductor_shape = 'rectangular';
+            else
+                out.conductor_shape = 'round';
+            end
+
+            d_bare = resolve_dim_value(wire, {'diameter','conducting_diameter','conductingDiameter','conductorDiameter'});
+            d_outer = resolve_dim_value(wire, {'outer_diameter','outerDiameter','outer_diameter_total','outerDiameterTotal'});
+
+            w_rect = resolve_dim_value(wire, {'rect_width','width','conducting_width','conductingWidth','foil_width','foilWidth'});
+            h_rect = resolve_dim_value(wire, {'rect_height','height','conducting_height','conductingHeight','foil_thickness','foilThickness'});
+
+            if strcmp(out.conductor_shape, 'rectangular')
+                if w_rect > 0
+                    out.rect_width = w_rect;
+                end
+                if h_rect > 0
+                    out.rect_height = h_rect;
+                end
+                if w_rect > 0 && h_rect > 0
+                    out.area = w_rect * h_rect;
+                end
+                if isfield(wire, 'foil_width'); out.foil_width = resolve_dim_value(wire, {'foil_width','foilWidth'}); end
+                if isfield(wire, 'foil_thickness'); out.foil_thickness = resolve_dim_value(wire, {'foil_thickness','foilThickness'}); end
+            else
+                if d_bare > 0
+                    out.diameter = d_bare;
+                end
+                if d_outer > 0
+                    out.outer_diameter = d_outer;
+                elseif d_bare > 0
+                    out.outer_diameter = d_bare * 1.12;
+                end
+                if d_bare > 0
+                    out.area = pi/4 * d_bare^2;
+                end
+            end
+
+            if isfield(wire, 'awg')
+                out.awg = wire.awg;
+                out.cond_diameter = sprintf('%d AWG', wire.awg);
+            elseif d_bare > 0
+                out.cond_diameter = sprintf('%.3f mm', d_bare * 1e3);
+            end
+
+            if isfield(wire, 'resistance')
+                out.resistance = wire.resistance;
+            elseif isfield(out, 'area')
+                out.resistance = 1 / (5.8e7 * out.area);
             end
         end
 
-        %% ============================================================
-        %  OFFLINE WIRE DATABASE
-        %  Following MAS wire schema with type, conductingDiameter,
-        %  outerDiameter, material, numberConductors, etc.
-        %  ============================================================
+        function db = convert_core_database(obj, remote)
+            db = struct();
+            if isempty(remote)
+                return;
+            end
 
-        function db = build_wire_database(obj)
+            if isstruct(remote) && ~isfield(remote, 'name')
+                names = fieldnames(remote);
+                for i = 1:numel(names)
+                    name = names{i};
+                    core = remote.(name);
+                    key = make_valid_name(name);
+                    db.(key) = obj.normalize_core(core, name);
+                end
+                return;
+            end
+
+            if isstruct(remote) && isfield(remote, 'name')
+                for i = 1:numel(remote)
+                    name = remote(i).name;
+                    key = make_valid_name(name);
+                    db.(key) = obj.normalize_core(remote(i), name);
+                end
+                return;
+            end
+
+            if iscell(remote)
+                for i = 1:numel(remote)
+                    core = remote{i};
+                    if isstruct(core) && isfield(core, 'name')
+                        name = core.name;
+                    else
+                        name = sprintf('Core_%d', i);
+                    end
+                    key = make_valid_name(name);
+                    db.(key) = obj.normalize_core(core, name);
+                end
+            end
+        end
+
+        function out = normalize_core(obj, core, name)
+            if ~isstruct(core)
+                out = struct();
+                out.name = name;
+                return;
+            end
+            out = core;
+            out.name = name;
+            if ~isfield(out, 'manufacturer')
+                if isfield(core, 'manufacturer')
+                    out.manufacturer = core.manufacturer;
+                elseif isfield(core, 'supplier')
+                    out.manufacturer = core.supplier;
+                elseif isfield(core, 'vendor')
+                    out.manufacturer = core.vendor;
+                end
+            end
+
+            if ~isfield(out, 'bobbin')
+                bobbin = struct();
+                if isfield(core, 'bobbin')
+                    bobbin = core.bobbin;
+                elseif isfield(core, 'winding_window')
+                    bobbin = normalize_window(core.winding_window);
+                elseif isfield(core, 'windingWindow')
+                    bobbin = normalize_window(core.windingWindow);
+                elseif isfield(core, 'window')
+                    bobbin = normalize_window(core.window);
+                end
+
+                if isfield(bobbin, 'width') && isfield(bobbin, 'height')
+                    out.bobbin = bobbin;
+                end
+            end
+        end
+
+        function db = convert_material_database(obj, remote)
+            db = struct();
+            if isempty(remote)
+                return;
+            end
+
+            if isstruct(remote) && ~isfield(remote, 'name')
+                names = fieldnames(remote);
+                for i = 1:numel(names)
+                    name = names{i};
+                    mat = remote.(name);
+                    key = make_valid_name(name);
+                    db.(key) = mat;
+                    db.(key).name = name;
+                end
+                return;
+            end
+
+            if isstruct(remote) && isfield(remote, 'name')
+                for i = 1:numel(remote)
+                    name = remote(i).name;
+                    key = make_valid_name(name);
+                    db.(key) = remote(i);
+                end
+                return;
+            end
+
+            if iscell(remote)
+                for i = 1:numel(remote)
+                    mat = remote{i};
+                    if isstruct(mat) && isfield(mat, 'name')
+                        name = mat.name;
+                    else
+                        name = sprintf('Material_%d', i);
+                    end
+                    key = make_valid_name(name);
+                    db.(key) = mat;
+                    db.(key).name = name;
+                end
+            end
+        end
+
+        % ======== WIRE DATABASE ========
+
+        function db = init_wire_database(obj)
             db = struct();
 
-            % --- Round solid wires (AWG series) ---
-            % Data: [AWG, bare_diameter_mm, resistance_ohm_per_m]
-            awg_data = {
-                'AWG_10', 2.588, 0.00328;
-                'AWG_12', 2.053, 0.00521;
-                'AWG_14', 1.628, 0.00829;
-                'AWG_16', 1.291, 0.01317;
-                'AWG_18', 1.024, 0.02095;
-                'AWG_20', 0.812, 0.03331;
-                'AWG_22', 0.644, 0.05296;
-                'AWG_24', 0.511, 0.08420;
-                'AWG_26', 0.405, 0.13385;
-                'AWG_28', 0.321, 0.21266;
-                'AWG_30', 0.255, 0.33799;
-                'AWG_32', 0.202, 0.53735;
-                'AWG_34', 0.160, 0.85429;
-                'AWG_36', 0.127, 1.35825;
-                'AWG_38', 0.101, 2.15885;
-                'AWG_40', 0.080, 3.43124;
-                'AWG_42', 0.063, 5.45455;
-                'AWG_44', 0.050, 8.67200;
-            };
-
-            insulation_buildup = 1.12;  % Grade 2 ~12%
+            % === AWG Round Wire (16 sizes: 10-40 even) ===
+            awg_data = [
+                10, 2.588e-3, 2.700e-3;
+                12, 2.053e-3, 2.160e-3;
+                14, 1.628e-3, 1.730e-3;
+                16, 1.291e-3, 1.380e-3;
+                18, 1.024e-3, 1.100e-3;
+                20, 0.812e-3, 0.879e-3;
+                22, 0.644e-3, 0.721e-3;
+                24, 0.511e-3, 0.573e-3;
+                26, 0.405e-3, 0.457e-3;
+                28, 0.321e-3, 0.366e-3;
+                30, 0.255e-3, 0.294e-3;
+                32, 0.202e-3, 0.234e-3;
+                34, 0.160e-3, 0.188e-3;
+                36, 0.127e-3, 0.152e-3;
+                38, 0.101e-3, 0.124e-3;
+                40, 0.080e-3, 0.102e-3;
+            ];
 
             for i = 1:size(awg_data, 1)
-                name = awg_data{i, 1};
-                d_bare = awg_data{i, 2} * 1e-3;  % Convert to meters
-                R = awg_data{i, 3};
-
-                w = struct();
-                w.type = 'round';
-                w.diameter = d_bare;
-                w.outer_diameter = d_bare * insulation_buildup;
-                w.area = pi/4 * d_bare^2;
-                w.resistance = R;
-                w.material = 'copper';
-
-                db.(name) = w;
+                awg = awg_data(i, 1);
+                d_bare = awg_data(i, 2);
+                d_outer = awg_data(i, 3);
+                name = sprintf('AWG_%d', awg);
+                db.(name).awg = awg;
+                db.(name).diameter = d_bare;
+                db.(name).outer_diameter = d_outer;
+                db.(name).area = pi/4 * d_bare^2;
+                db.(name).resistance = 1 / (5.8e7 * pi/4 * d_bare^2);
+                db.(name).type = 'Round';
+                db.(name).standard = 'NEMA MW 1000 C';
+                db.(name).cond_diameter = sprintf('%d AWG', awg);
+                db.(name).coating = 'Enamel single build';
+                db.(name).conductor_shape = 'round';
             end
 
-            % --- Litz wires ---
-            % Format: name, n_strands, strand_awg, strand_diameter_mm
-            litz_data = {
-                'Litz_7_40',    7,   40, 0.080;
-                'Litz_20_38',   20,  38, 0.101;
-                'Litz_40_38',   40,  38, 0.101;
-                'Litz_50_40',   50,  40, 0.080;
-                'Litz_100_38',  100, 38, 0.101;
-                'Litz_100_40',  100, 40, 0.080;
-                'Litz_200_40',  200, 40, 0.080;
-                'Litz_300_38',  300, 38, 0.101;
-                'Litz_400_40',  400, 40, 0.080;
-                'Litz_600_40',  600, 40, 0.080;
-                'Litz_800_40',  800, 40, 0.080;
-                'Litz_1000_44', 1000, 44, 0.050;
+            % === Litz Wire (16 variants) ===
+            litz_configs = {
+                'Litz_50_40',   50,  40, 0.080e-3, 0.854e-3;
+                'Litz_50_38',   50,  38, 0.101e-3, 1.043e-3;
+                'Litz_50_44',   50,  44, 0.051e-3, 0.551e-3;
+                'Litz_100_40', 100,  40, 0.080e-3, 1.353e-3;
+                'Litz_100_38', 100,  38, 0.101e-3, 1.708e-3;
+                'Litz_100_44', 100,  44, 0.051e-3, 0.864e-3;
+                'Litz_200_40', 200,  40, 0.080e-3, 1.913e-3;
+                'Litz_200_38', 200,  38, 0.101e-3, 2.415e-3;
+                'Litz_200_44', 200,  44, 0.051e-3, 1.222e-3;
+                'Litz_400_40', 400,  40, 0.080e-3, 2.706e-3;
+                'Litz_400_38', 400,  38, 0.101e-3, 3.416e-3;
+                'Litz_400_44', 400,  44, 0.051e-3, 1.729e-3;
+                'Litz_660_40', 660,  40, 0.080e-3, 3.476e-3;
+                'Litz_660_44', 660,  44, 0.051e-3, 2.220e-3;
+                'Litz_1050_44',1050, 44, 0.051e-3, 2.802e-3;
+                'Litz_1050_46',1050, 46, 0.040e-3, 2.204e-3;
             };
 
-            for i = 1:size(litz_data, 1)
-                name = litz_data{i, 1};
-                n = litz_data{i, 2};
-                strand_d = litz_data{i, 4} * 1e-3;
+            for i = 1:size(litz_configs, 1)
+                name = litz_configs{i, 1};
+                ns = litz_configs{i, 2};
+                sawg = litz_configs{i, 3};
+                sd = litz_configs{i, 4};
+                od = litz_configs{i, 5};
 
-                w = struct();
-                w.type = 'litz';
-                w.strands = n;
-                w.strand_diameter = strand_d;
-                w.strand_area = pi/4 * strand_d^2;
-                w.area = n * w.strand_area;
-                % Bundle OD estimate: packing factor ~0.55-0.65
-                w.outer_diameter = strand_d * insulation_buildup * sqrt(n / 0.58) * 1.15;
-                w.resistance = 1 / (5.8e7 * w.area);
-                w.material = 'copper';
-
-                db.(name) = w;
+                db.(name).strands = ns;
+                db.(name).strand_awg = sawg;
+                db.(name).strand_diameter = sd;
+                db.(name).outer_diameter = od;
+                db.(name).area = ns * pi/4 * sd^2;
+                db.(name).resistance = 1 / (5.8e7 * ns * pi/4 * sd^2);
+                db.(name).type = 'Litz';
+                db.(name).standard = 'IEC 60317-11';
+                db.(name).cond_diameter = sprintf('%dx%dAWG', ns, sawg);
+                db.(name).coating = 'Served Litz';
+                db.(name).conductor_shape = 'round';
             end
 
-            % --- Rectangular / planar wires ---
-            rect_data = {
-                'Rect_2x0_5',  2.0e-3, 0.5e-3;
-                'Rect_3x0_5',  3.0e-3, 0.5e-3;
-                'Rect_5x0_5',  5.0e-3, 0.5e-3;
-                'Rect_3x1',    3.0e-3, 1.0e-3;
-                'Rect_5x1',    5.0e-3, 1.0e-3;
-                'Rect_8x1',    8.0e-3, 1.0e-3;
-                'Rect_10x1',  10.0e-3, 1.0e-3;
-                'Rect_5x2',    5.0e-3, 2.0e-3;
-                'Rect_10x2',  10.0e-3, 2.0e-3;
+            % === Foil Wire (8 variants) ===
+            foil_configs = {
+                'Foil_0_05x10', 10, 0.05;
+                'Foil_0_05x20', 20, 0.05;
+                'Foil_0_1x10',  10, 0.1;
+                'Foil_0_1x20',  20, 0.1;
+                'Foil_0_1x30',  30, 0.1;
+                'Foil_0_2x20',  20, 0.2;
+                'Foil_0_5x10',  10, 0.5;
+                'Foil_0_5x20',  20, 0.5;
             };
 
-            for i = 1:size(rect_data, 1)
-                name = rect_data{i, 1};
-                h = rect_data{i, 2};  % height (axial, tall)
-                t = rect_data{i, 3};  % width (radial, thin)
+            for i = 1:size(foil_configs, 1)
+                name = foil_configs{i, 1};
+                fw = foil_configs{i, 2} * 1e-3;
+                ft = foil_configs{i, 3} * 1e-3;
 
-                w = struct();
-                w.type = 'rectangular';
-                w.height = h;      % axial dimension
-                w.width  = t;      % radial dimension
-                w.area = h * t;
-                w.outer_diameter = sqrt(h^2 + t^2);  % diagonal for reference
-                w.resistance = 1 / (5.8e7 * w.area);
-                w.material = 'copper';
-
-                db.(name) = w;
+                db.(name).foil_width = fw;
+                db.(name).foil_thickness = ft;
+                db.(name).width = fw;
+                db.(name).thickness = ft;
+                db.(name).area = fw * ft;
+                db.(name).outer_diameter = fw;  % Backward compat
+                db.(name).resistance = 1 / (5.8e7 * fw * ft);
+                db.(name).type = 'Foil';
+                db.(name).standard = 'IEC 60317-0-1';
+                db.(name).cond_diameter = sprintf('%.1fmm x %.2fmm', fw*1e3, ft*1e3);
+                db.(name).coating = 'Kapton tape';
+                db.(name).conductor_shape = 'rectangular';
             end
 
-            % --- Foil wires ---
-            foil_data = {
-                'Foil_0_05x10',  0.05e-3, 10e-3;
-                'Foil_0_05x20',  0.05e-3, 20e-3;
-                'Foil_0_1x10',   0.10e-3, 10e-3;
-                'Foil_0_1x20',   0.10e-3, 20e-3;
-                'Foil_0_1x30',   0.10e-3, 30e-3;
-                'Foil_0_2x20',   0.20e-3, 20e-3;
-                'Foil_0_2x30',   0.20e-3, 30e-3;
-                'Foil_0_5x20',   0.50e-3, 20e-3;
-                'Foil_0_5x30',   0.50e-3, 30e-3;
+            % === Rectangular Wire (8 variants) ===
+            rect_configs = {
+                'Rect_2x1',    2, 1;
+                'Rect_3x1',    3, 1;
+                'Rect_4x1',    4, 1;
+                'Rect_5x1',    5, 1;
+                'Rect_5x2',    5, 2;
+                'Rect_8x1',    8, 1;
+                'Rect_10x1',  10, 1;
+                'Rect_10x2',  10, 2;
             };
 
-            for i = 1:size(foil_data, 1)
-                name = foil_data{i, 1};
-                t = foil_data{i, 2};  % thickness (radial)
-                fw = foil_data{i, 3}; % foil width (axial)
+            for i = 1:size(rect_configs, 1)
+                name = rect_configs{i, 1};
+                rw = rect_configs{i, 2} * 1e-3;
+                rh = rect_configs{i, 3} * 1e-3;
 
-                w = struct();
-                w.type = 'foil';
-                w.thickness = t;
-                w.foil_width = fw;
-                w.area = t * fw;
-                w.outer_diameter = fw;  % For fit check: axial extent
-                w.resistance = 1 / (5.8e7 * w.area);
-                w.material = 'copper';
-
-                db.(name) = w;
+                db.(name).rect_width = rw;
+                db.(name).rect_height = rh;
+                db.(name).width = rw;
+                db.(name).thickness = rh;
+                db.(name).area = rw * rh;
+                db.(name).outer_diameter = rw;  % Backward compat
+                db.(name).resistance = 1 / (5.8e7 * rw * rh);
+                db.(name).type = 'Rectangular';
+                db.(name).standard = 'NEMA MW 1000 C';
+                db.(name).cond_diameter = sprintf('%.1fmm x %.1fmm', rw*1e3, rh*1e3);
+                db.(name).coating = 'Enamel single build';
+                db.(name).conductor_shape = 'rectangular';
             end
         end
 
-        %% ============================================================
-        %  OFFLINE CORE DATABASE
-        %  Following MAS processedDescription with effectiveParameters
-        %  and windingWindows.
-        %  ============================================================
+        % ======== CORE DATABASE ========
 
-        function db = build_core_database(obj)
+        function db = init_core_database(obj)
             db = struct();
 
-            % Core data format:
-            %   shape, Ae(m^2), le(m), Ve(m^3), material,
-            %   winding_window_width(m), winding_window_height(m)
-            %
-            % Winding window follows MAS windingWindows definition:
-            %   width  = radial depth available for winding
-            %   height = axial height available for winding
-
-            core_entries = {
-                % E-cores (ETD series)
-                'ETD_29_16_10',  'ETD', 76e-6,  72e-3,  5.47e-6, 'N87', 10.3e-3, 11.2e-3;
-                'ETD_34_17_11',  'ETD', 97e-6,  79e-3,  7.64e-6, 'N87', 11.0e-3, 12.5e-3;
-                'ETD_39_20_13',  'ETD', 125e-6, 92e-3, 11.5e-6,  'N87', 13.1e-3, 14.2e-3;
-                'ETD_44_22_15',  'ETD', 173e-6, 103e-3, 17.8e-6, 'N87', 14.5e-3, 16.0e-3;
-                'ETD_49_25_16',  'ETD', 211e-6, 114e-3, 24.0e-6, 'N87', 16.3e-3, 18.0e-3;
-                'ETD_54_28_19',  'ETD', 280e-6, 127e-3, 35.6e-6, 'N87', 18.0e-3, 20.0e-3;
-                'ETD_59_31_22',  'ETD', 368e-6, 139e-3, 51.2e-6, 'N87', 20.2e-3, 22.5e-3;
-                % E-cores (standard)
-                'E_25_13_7',     'E',   52e-6,  57e-3,  2.96e-6, 'N87',  7.6e-3,  9.5e-3;
-                'E_30_15_7',     'E',   60e-6,  67e-3,  4.02e-6, 'N87',  8.2e-3, 10.6e-3;
-                'E_36_18_11',    'E',  120e-6,  74e-3,  8.88e-6, 'N87', 10.5e-3, 12.5e-3;
-                'E_42_21_15',    'E',  178e-6,  97e-3, 17.3e-6,  'N87', 13.0e-3, 15.0e-3;
-                'E_42_21_20',    'E',  234e-6,  97e-3, 22.7e-6,  'N87', 13.0e-3, 15.0e-3;
-                'E_55_28_21',    'E',  354e-6, 124e-3, 43.9e-6,  'N87', 17.5e-3, 20.0e-3;
-                'E_65_32_27',    'E',  540e-6, 147e-3, 79.4e-6,  'N87', 21.0e-3, 24.0e-3;
-                'E_70_33_32',    'E',  680e-6, 149e-3, 101e-6,   'N87', 22.0e-3, 25.0e-3;
-                'E_80_38_20',    'E',  395e-6, 184e-3, 72.7e-6,  'N87', 23.5e-3, 27.0e-3;
-                % PQ cores
-                'PQ_20_16',      'PQ',  62e-6,  46e-3,  2.85e-6, 'N87',  7.7e-3, 10.5e-3;
-                'PQ_26_25',      'PQ', 121e-6,  58e-3,  6.53e-6, 'N87', 10.2e-3, 14.0e-3;
-                'PQ_32_30',      'PQ', 167e-6,  76e-3, 12.7e-6,  'N87', 11.8e-3, 17.0e-3;
-                'PQ_35_35',      'PQ', 196e-6,  87e-3, 17.0e-6,  'N87', 12.8e-3, 19.5e-3;
-                'PQ_40_40',      'PQ', 201e-6, 102e-3, 20.5e-6,  'N87', 13.5e-3, 23.0e-3;
-                'PQ_50_50',      'PQ', 328e-6, 113e-3, 37.1e-6,  'N87', 17.5e-3, 28.0e-3;
-                % RM cores
-                'RM_6',          'RM',  37e-6,  28e-3,  1.04e-6, 'N87',  4.6e-3,  6.3e-3;
-                'RM_8',          'RM',  64e-6,  38e-3,  2.43e-6, 'N87',  6.2e-3,  8.0e-3;
-                'RM_10',         'RM',  98e-6,  44e-3,  4.31e-6, 'N87',  7.8e-3, 10.0e-3;
-                'RM_12',         'RM', 146e-6,  52e-3,  7.59e-6, 'N87',  9.5e-3, 12.0e-3;
-                'RM_14',         'RM', 200e-6,  60e-3, 12.0e-6,  'N87', 11.0e-3, 14.0e-3;
-                % EFD (low-profile)
-                'EFD_15',        'EFD', 22e-6,  33e-3,  0.73e-6, 'N87',  4.3e-3,  8.5e-3;
-                'EFD_20',        'EFD', 31e-6,  47e-3,  1.46e-6, 'N87',  5.4e-3, 11.2e-3;
-                'EFD_25',        'EFD', 58e-6,  57e-3,  3.31e-6, 'N87',  7.2e-3, 14.5e-3;
-                'EFD_30',        'EFD', 69e-6,  68e-3,  4.69e-6, 'N87',  8.0e-3, 17.0e-3;
-                % Toroid (approximate rectangular window)
-                'T_25_15_10',    'T',   49e-6,  55e-3,  2.69e-6, 'N87',  5.0e-3,  7.5e-3;
-                'T_36_23_15',    'T',   96e-6,  78e-3,  7.49e-6, 'N87',  6.5e-3, 11.5e-3;
-                'T_50_30_19',    'T',  173e-6, 107e-3, 18.5e-6,  'N87', 10.0e-3, 15.0e-3;
+            % ETD Series
+            etd = {
+                'ETD_29_16_10', 29, 16, 10, 76.0,  72.0,  5470,  'TDK';
+                'ETD_34_17_11', 34, 17, 11, 97.1,  78.6,  7640,  'TDK';
+                'ETD_39_20_13', 39, 20, 13, 125.0, 92.2,  11500, 'TDK';
+                'ETD_44_22_15', 44, 22, 15, 173.0, 103.0, 17800, 'TDK';
+                'ETD_49_25_16', 49, 25, 16, 211.0, 114.0, 24100, 'TDK';
+                'ETD_54_28_19', 54, 28, 19, 280.0, 127.0, 35600, 'Ferroxcube';
+                'ETD_59_31_22', 59, 31, 22, 368.0, 139.0, 51200, 'Ferroxcube';
             };
 
-            for i = 1:size(core_entries, 1)
-                name = core_entries{i, 1};
+            for i = 1:size(etd, 1)
+                name = etd{i, 1};
+                db.(name).shape = 'ETD';
+                db.(name).dimensions.A = etd{i,2}*1e-3;
+                db.(name).dimensions.B = etd{i,3}*1e-3;
+                db.(name).dimensions.C = etd{i,4}*1e-3;
+                db.(name).Ae = etd{i,5}*1e-6;
+                db.(name).le = etd{i,6}*1e-3;
+                db.(name).Ve = etd{i,7}*1e-9;
+                db.(name).manufacturer = etd{i,8};
+                db.(name).material = 'N87';
+                bw = etd{i,2}*0.355e-3; bh = etd{i,4}*1.12e-3;
+                db.(name).bobbin.width = bw;
+                db.(name).bobbin.height = bh;
+            end
 
-                c = struct();
-                c.shape        = core_entries{i, 2};
-                c.Ae           = core_entries{i, 3};   % Effective area [m^2]
-                c.le           = core_entries{i, 4};   % Effective path length [m]
-                c.Ve           = core_entries{i, 5};   % Effective volume [m^3]
-                c.material     = core_entries{i, 6};
+            % E Series
+            e_cores = {
+                'E_20_10_6',  20, 10,  6,  32.0, 42.8,  1370, 'TDK';
+                'E_25_13_7',  25, 13,  7,  52.0, 57.5,  2990, 'TDK';
+                'E_30_15_7',  30, 15,  7,  60.0, 67.0,  4020, 'TDK';
+                'E_36_18_11', 36, 18, 11, 120.0, 72.0,  8640, 'TDK';
+                'E_42_21_15', 42, 21, 15, 178.0, 97.0, 17300, 'Ferroxcube';
+                'E_55_28_21', 55, 28, 21, 353.0, 124.0, 43800, 'Ferroxcube';
+                'E_65_32_27', 65, 32, 27, 540.0, 147.0, 79400, 'Ferroxcube';
+                'E_80_38_20', 80, 38, 20, 380.0, 184.0, 69900, 'Magnetics_Inc';
+            };
 
-                % MAS windingWindows: the available space for winding
-                c.bobbin.width  = core_entries{i, 7};  % Radial depth [m]
-                c.bobbin.height = core_entries{i, 8};  % Axial height [m]
+            for i = 1:size(e_cores, 1)
+                name = e_cores{i, 1};
+                db.(name).shape = 'E';
+                db.(name).dimensions.A = e_cores{i,2}*1e-3;
+                db.(name).dimensions.B = e_cores{i,3}*1e-3;
+                db.(name).dimensions.C = e_cores{i,4}*1e-3;
+                db.(name).Ae = e_cores{i,5}*1e-6;
+                db.(name).le = e_cores{i,6}*1e-3;
+                db.(name).Ve = e_cores{i,7}*1e-9;
+                db.(name).manufacturer = e_cores{i,8};
+                db.(name).material = 'N87';
+                bw = e_cores{i,2}*0.30e-3; bh = e_cores{i,4}*1.35e-3;
+                db.(name).bobbin.width = bw;
+                db.(name).bobbin.height = bh;
+            end
 
-                % Dimensional metadata
-                c.manufacturer = 'TDK/EPCOS';
+            % PQ Series
+            pq = {
+                'PQ_20_16', 20, 16, 116.0, 46.3,  5370, 'TDK';
+                'PQ_20_20', 20, 20, 116.0, 50.3,  5820, 'TDK';
+                'PQ_26_25', 26, 25, 121.0, 58.7,  7100, 'TDK';
+                'PQ_32_30', 32, 30, 170.0, 74.8, 12700, 'Ferroxcube';
+                'PQ_35_35', 35, 35, 196.0, 87.3, 17100, 'Ferroxcube';
+                'PQ_40_40', 40, 40, 201.0, 102.0, 20500, 'Ferroxcube';
+            };
 
-                db.(name) = c;
+            for i = 1:size(pq, 1)
+                name = pq{i, 1};
+                db.(name).shape = 'PQ';
+                db.(name).dimensions.A = pq{i,2}*1e-3;
+                db.(name).dimensions.B = pq{i,3}*1e-3;
+                db.(name).Ae = pq{i,4}*1e-6;
+                db.(name).le = pq{i,5}*1e-3;
+                db.(name).Ve = pq{i,6}*1e-9;
+                db.(name).manufacturer = pq{i,7};
+                db.(name).material = 'N87';
+                bw = pq{i,2}*0.30e-3; bh = pq{i,3}*0.40e-3;
+                db.(name).bobbin.width = bw;
+                db.(name).bobbin.height = bh;
+            end
+
+            % RM Series
+            rm = {
+                'RM_5',    5,   25.0, 28.0,  700,   'TDK';
+                'RM_6',    6,   37.0, 28.3,  1045,  'TDK';
+                'RM_8',    8,   64.0, 38.2,  2440,  'TDK';
+                'RM_10',  10,  110.0, 44.6,  4910,  'TDK';
+                'RM_12',  12,  146.0, 52.0,  7590,  'Ferroxcube';
+                'RM_14',  14,  200.0, 58.0, 11600,  'Ferroxcube';
+            };
+
+            for i = 1:size(rm, 1)
+                name = rm{i, 1};
+                sz = rm{i, 2};
+                db.(name).shape = 'RM';
+                db.(name).dimensions.A = sz*1e-3;
+                db.(name).Ae = rm{i,3}*1e-6;
+                db.(name).le = rm{i,4}*1e-3;
+                db.(name).Ve = rm{i,5}*1e-9;
+                db.(name).manufacturer = rm{i,6};
+                db.(name).material = 'N87';
+                bw = sz*0.78e-3; bh = sz*1.0e-3;
+                db.(name).bobbin.width = bw;
+                db.(name).bobbin.height = bh;
+            end
+
+            % EFD Series
+            efd = {
+                'EFD_15_8_5',   15,  8,  5,  22.0, 34.0,  750,  'TDK';
+                'EFD_20_10_7',  20, 10,  7,  31.0, 47.0,  1460, 'TDK';
+                'EFD_25_13_9',  25, 13,  9,  58.0, 57.0,  3300, 'Ferroxcube';
+                'EFD_30_15_9',  30, 15,  9,  69.0, 68.0,  4690, 'Ferroxcube';
+            };
+
+            for i = 1:size(efd, 1)
+                name = efd{i, 1};
+                db.(name).shape = 'EFD';
+                db.(name).dimensions.A = efd{i,2}*1e-3;
+                db.(name).dimensions.B = efd{i,3}*1e-3;
+                db.(name).dimensions.C = efd{i,4}*1e-3;
+                db.(name).Ae = efd{i,5}*1e-6;
+                db.(name).le = efd{i,6}*1e-3;
+                db.(name).Ve = efd{i,7}*1e-9;
+                db.(name).manufacturer = efd{i,8};
+                db.(name).material = 'N87';
+                bw = efd{i,2}*0.28e-3; bh = efd{i,4}*1.2e-3;
+                db.(name).bobbin.width = bw;
+                db.(name).bobbin.height = bh;
+            end
+
+            % EP Series
+            ep = {
+                'EP_7',    7,  10.7, 16.5,  176,  'TDK';
+                'EP_10',  10,  11.5, 23.8,  274,  'TDK';
+                'EP_13',  13,  14.7, 30.3,  445,  'Ferroxcube';
+            };
+
+            for i = 1:size(ep, 1)
+                name = ep{i, 1};
+                sz = ep{i, 2};
+                db.(name).shape = 'EP';
+                db.(name).dimensions.A = sz*1e-3;
+                db.(name).Ae = ep{i,3}*1e-6;
+                db.(name).le = ep{i,4}*1e-3;
+                db.(name).Ve = ep{i,5}*1e-9;
+                db.(name).manufacturer = ep{i,6};
+                db.(name).material = 'N87';
+                bw = sz*0.6e-3; bh = sz*0.7e-3;
+                db.(name).bobbin.width = bw;
+                db.(name).bobbin.height = bh;
             end
         end
 
-        %% ============================================================
-        %  OFFLINE MATERIAL DATABASE
-        %  Following MAS coreMaterial definitions
-        %  ============================================================
+        % ======== MATERIAL DATABASE ========
 
-        function db = build_material_database(obj)
+        function db = init_material_database(obj)
             db = struct();
 
             % TDK/EPCOS ferrites
-            mat_entries = {
-                'N27',  'TDK',  2000, 0.41, 'MnZn', 1e5;
-                'N30',  'TDK',  4300, 0.38, 'MnZn', 2e5;
-                'N49',  'TDK',  1500, 0.40, 'MnZn', 5e5;
-                'N87',  'TDK',  2200, 0.39, 'MnZn', 5e5;
-                'N92',  'TDK',  1500, 0.41, 'MnZn', 3e5;
-                'N95',  'TDK',  3000, 0.41, 'MnZn', 5e5;
-                'N97',  'TDK',  2300, 0.41, 'MnZn', 5e5;
-                '3C90', 'Ferroxcube', 2300, 0.38, 'MnZn', 2e5;
-                '3C92', 'Ferroxcube', 1500, 0.40, 'MnZn', 3e5;
-                '3C95', 'Ferroxcube', 3000, 0.41, 'MnZn', 5e5;
-                '3C97', 'Ferroxcube', 3000, 0.41, 'MnZn', 5e5;
-                '3F35', 'Ferroxcube', 1400, 0.39, 'MnZn', 1e6;
-                '3F36', 'Ferroxcube', 1100, 0.38, 'MnZn', 2e6;
-                'PC40', 'TDK',  2300, 0.39, 'MnZn', 5e5;
-                'PC44', 'TDK',  2400, 0.39, 'MnZn', 3e5;
-                'PC95', 'TDK',  3300, 0.41, 'MnZn', 5e5;
+            tdk_mats = {
+                'N87',  2200, 0.39, 1.5,  1.3, 2.5, 500, 'TDK';
+                'N49',  1500, 0.41, 2.5,  1.1, 2.3, 1000, 'TDK';
+                'N97',  2300, 0.41, 1.2,  1.3, 2.5, 500, 'TDK';
+                'N27',  2000, 0.41, 4.0,  1.2, 2.2, 300, 'TDK';
+                'N30',  4300, 0.38, 0.7,  1.5, 2.7, 200, 'TDK';
+                'N72',  3000, 0.35, 2.0,  1.3, 2.4, 150, 'TDK';
             };
 
-            for i = 1:size(mat_entries, 1)
-                name = mat_entries{i, 1};
+            for i = 1:size(tdk_mats, 1)
+                name = tdk_mats{i, 1};
+                db.(name).mu_initial = tdk_mats{i, 2};
+                db.(name).Bsat = tdk_mats{i, 3};
+                db.(name).steinmetz_k = tdk_mats{i, 4};
+                db.(name).steinmetz_alpha = tdk_mats{i, 5};
+                db.(name).steinmetz_beta = tdk_mats{i, 6};
+                db.(name).f_max = tdk_mats{i, 7} * 1e3;
+                db.(name).manufacturer = tdk_mats{i, 8};
+            end
 
-                m = struct();
-                m.manufacturer = mat_entries{i, 2};
-                m.mu_initial   = mat_entries{i, 3};
-                m.Bsat         = mat_entries{i, 4};   % Saturation flux density [T]
-                m.family       = mat_entries{i, 5};
-                m.max_freq     = mat_entries{i, 6};   % Recommended max frequency [Hz]
+            % Ferroxcube (use x prefix to make valid field names)
+            fx_mats = {
+                'x3C90', 2300, 0.47, 1.4, 1.3, 2.5, 500, 'Ferroxcube';
+                'x3C95', 3000, 0.53, 1.0, 1.4, 2.6, 500, 'Ferroxcube';
+                'x3F3',  2000, 0.44, 2.0, 1.2, 2.3, 700, 'Ferroxcube';
+                'x3F4',  900,  0.41, 5.0, 1.1, 2.2, 3000, 'Ferroxcube';
+                'x3F36', 1800, 0.44, 1.5, 1.3, 2.5, 1000, 'Ferroxcube';
+            };
 
-                db.(name) = m;
+            for i = 1:size(fx_mats, 1)
+                name = fx_mats{i, 1};
+                db.(name).mu_initial = fx_mats{i, 2};
+                db.(name).Bsat = fx_mats{i, 3};
+                db.(name).steinmetz_k = fx_mats{i, 4};
+                db.(name).steinmetz_alpha = fx_mats{i, 5};
+                db.(name).steinmetz_beta = fx_mats{i, 6};
+                db.(name).f_max = fx_mats{i, 7} * 1e3;
+                db.(name).manufacturer = fx_mats{i, 8};
+            end
+
+            % Magnetics Inc
+            mag_mats = {
+                'P',  2500, 0.50, 1.3, 1.3, 2.5, 500, 'Magnetics_Inc';
+                'R',  2300, 0.49, 1.5, 1.3, 2.4, 500, 'Magnetics_Inc';
+                'F',  3000, 0.47, 0.9, 1.4, 2.6, 300, 'Magnetics_Inc';
+                'W',  10000, 0.44, 0.5, 1.5, 2.7, 100, 'Magnetics_Inc';
+                'L',  2500, 0.48, 1.7, 1.3, 2.5, 400, 'Magnetics_Inc';
+            };
+
+            for i = 1:size(mag_mats, 1)
+                name = mag_mats{i, 1};
+                db.(name).mu_initial = mag_mats{i, 2};
+                db.(name).Bsat = mag_mats{i, 3};
+                db.(name).steinmetz_k = mag_mats{i, 4};
+                db.(name).steinmetz_alpha = mag_mats{i, 5};
+                db.(name).steinmetz_beta = mag_mats{i, 6};
+                db.(name).f_max = mag_mats{i, 7} * 1e3;
+                db.(name).manufacturer = mag_mats{i, 8};
             end
         end
 
-    end  % methods
-end  % classdef
+        % ======== SUPPLIER INDEXING ========
+
+        function init_supplier_index(obj)
+            suppliers = {};
+
+            obj.supplier_cores = struct();
+            obj.supplier_materials = struct();
+
+            % Index cores by supplier
+            core_names = fieldnames(obj.core_database);
+            for c = 1:length(core_names)
+                core = obj.core_database.(core_names{c});
+                if isfield(core, 'manufacturer')
+                    suppliers{end+1} = core.manufacturer; %#ok<AGROW>
+                end
+            end
+
+            % Index materials by supplier
+            mat_names = fieldnames(obj.material_database);
+            for m = 1:length(mat_names)
+                mat = obj.material_database.(mat_names{m});
+                if isfield(mat, 'manufacturer')
+                    suppliers{end+1} = mat.manufacturer; %#ok<AGROW>
+                end
+            end
+
+            if isempty(suppliers)
+                obj.supplier_list = {'TDK', 'Ferroxcube', 'Magnetics_Inc'};
+            else
+                obj.supplier_list = unique(suppliers, 'stable');
+            end
+
+            for s = 1:length(obj.supplier_list)
+                sup = obj.supplier_list{s};
+                safe_sup = strrep(strrep(sup, '/', '_'), ' ', '_');
+                obj.supplier_cores.(safe_sup) = {};
+                obj.supplier_materials.(safe_sup) = {};
+            end
+
+            for c = 1:length(core_names)
+                core = obj.core_database.(core_names{c});
+                if isfield(core, 'manufacturer')
+                    safe_sup = strrep(strrep(core.manufacturer, '/', '_'), ' ', '_');
+                    if isfield(obj.supplier_cores, safe_sup)
+                        obj.supplier_cores.(safe_sup){end+1} = core_names{c}; %#ok<AGROW>
+                    end
+                end
+            end
+
+            for m = 1:length(mat_names)
+                mat = obj.material_database.(mat_names{m});
+                if isfield(mat, 'manufacturer')
+                    safe_sup = strrep(strrep(mat.manufacturer, '/', '_'), ' ', '_');
+                    if isfield(obj.supplier_materials, safe_sup)
+                        obj.supplier_materials.(safe_sup){end+1} = mat_names{m}; %#ok<AGROW>
+                    end
+                end
+            end
+        end
+
+    end % methods
+end
+
+function name = make_valid_name(raw)
+    if ~ischar(raw)
+        if isa(raw, 'string')
+            raw = char(raw);
+        else
+            raw = 'Unknown';
+        end
+    end
+    name = regexprep(raw, '[^a-zA-Z0-9_]', '_');
+    if isempty(name)
+        name = 'Unknown';
+    end
+    if ~isletter(name(1))
+        name = ['W_' name];
+    end
+end
+
+function val = resolve_dim_value(s, keys)
+    val = 0;
+    for i = 1:numel(keys)
+        key = keys{i};
+        if isfield(s, key)
+            val = extract_numeric(s.(key));
+            if val > 0
+                return;
+            end
+        end
+    end
+end
+
+function val = extract_numeric(v)
+    val = 0;
+    if isnumeric(v)
+        if ~isempty(v)
+            val = v(1);
+        end
+        return;
+    end
+    if isstruct(v)
+        if isfield(v, 'nominal') && isnumeric(v.nominal)
+            val = v.nominal;
+            return;
+        end
+        if isfield(v, 'value') && isnumeric(v.value)
+            val = v.value;
+            return;
+        end
+        if isfield(v, 'max') && isnumeric(v.max)
+            val = v.max;
+            return;
+        end
+        if isfield(v, 'min') && isnumeric(v.min)
+            val = v.min;
+            return;
+        end
+    end
+end
+
+function win = normalize_window(w)
+    win = struct();
+    if ~isstruct(w)
+        return;
+    end
+    if isfield(w, 'width')
+        win.width = extract_numeric(w.width);
+    elseif isfield(w, 'window_width')
+        win.width = extract_numeric(w.window_width);
+    end
+    if isfield(w, 'height')
+        win.height = extract_numeric(w.height);
+    elseif isfield(w, 'window_height')
+        win.height = extract_numeric(w.window_height);
+    end
+end
+
+function tf = local_contains(str, pattern)
+    if ~ischar(str)
+        if isa(str, 'string')
+            str = char(str);
+        else
+            tf = false;
+            return;
+        end
+    end
+    if ~ischar(pattern)
+        if isa(pattern, 'string')
+            pattern = char(pattern);
+        else
+            tf = false;
+            return;
+        end
+    end
+    tf = ~isempty(strfind(lower(str), lower(pattern)));
+end

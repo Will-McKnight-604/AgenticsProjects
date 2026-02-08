@@ -1,6 +1,7 @@
 % interactive_winding_designer.m
 % Interactive GUI for designing multi-filar transformer windings
 % Layout: Core (left) | Windings (center) | Visualization (right)
+% Fixes: Layout-matched analysis, rect wire viz, OM wire info, supplier cascade
 
 function interactive_winding_designer()
 
@@ -11,6 +12,8 @@ function interactive_winding_designer()
 
     % Initialize OpenMagnetics API
     data.api = openmagnetics_api_interface();
+    data.data_mode = 'offline';
+    data.online_url = 'http://localhost:8484';
 
     % Initialize layout calculator
     data.layout_calc = openmagnetics_winding_layout(data.api);
@@ -20,11 +23,14 @@ function interactive_winding_designer()
     data.wires = data.api.get_wires();
     data.cores = data.api.get_cores();
     data.materials = data.api.get_materials();
+    data.suppliers = data.api.get_suppliers();
+    data.wire_options = build_wire_option_lists(data.wires);
 
     % Default transformer configuration
     data.n_windings = 2;
     data.winding_names = {'Primary', 'Secondary'};
     data.winding_colors = {[0.2 0.4 0.8], [0.8 0.2 0.2]};
+    data.section_order = '12';
 
     % Default winding parameters
     data.windings(1).name = 'Primary';
@@ -34,6 +40,8 @@ function interactive_winding_designer()
     data.windings(1).phase = 0;
     data.windings(1).wire_type = 'AWG_22';
     data.windings(1).wire_shape = 'round';
+    data.windings(1).voltage = 0;
+    data.windings(1).wire_insulation = 'standard';
 
     data.windings(2).name = 'Secondary';
     data.windings(2).n_turns = 5;
@@ -42,26 +50,65 @@ function interactive_winding_designer()
     data.windings(2).phase = 180;
     data.windings(2).wire_type = 'AWG_22';
     data.windings(2).wire_shape = 'round';
+    data.windings(2).voltage = 0;
+    data.windings(2).wire_insulation = 'standard';
 
-    % Default core selection
-    core_list = fieldnames(data.cores);
-    if ~isempty(core_list)
-        data.selected_core = core_list{1};
+    % Default supplier & core selection
+    if ~isempty(data.suppliers)
+        data.selected_supplier = data.suppliers{1};
     else
-        data.selected_core = 'None';
+        data.selected_supplier = 'TDK';
     end
 
-    % Geometry parameters (from selected wire)
-    wire_info = data.api.get_wire_info(data.windings(1).wire_type);
-    [w, h, shape] = data.api.wire_to_conductor_dims(data.windings(1).wire_type);
+    % Get cores for default supplier
+    supplier_cores = data.api.get_cores_by_supplier(data.selected_supplier);
+    if ~isempty(supplier_cores)
+        data.selected_core = supplier_cores{1};
+    else
+        core_list = fieldnames(data.cores);
+        if ~isempty(core_list)
+            data.selected_core = core_list{1};
+        else
+            data.selected_core = 'None';
+        end
+    end
 
+    % Default material for this supplier
+    supplier_mats = data.api.get_materials_by_supplier(data.selected_supplier);
+    if ~isempty(supplier_mats)
+        data.selected_material = supplier_mats{1};
+    else
+        mat_list = fieldnames(data.materials);
+        if ~isempty(mat_list)
+            data.selected_material = mat_list{1};
+        else
+            data.selected_material = 'N87';
+        end
+    end
+
+    % Geometry parameters
+    [w, h, shape] = data.api.wire_to_conductor_dims(data.windings(1).wire_type);
     data.width = w;
     data.height = h;
     data.windings(1).wire_shape = shape;
     data.windings(2).wire_shape = shape;
     data.gap_layer = 0.2e-3;
     data.gap_filar = 0.05e-3;
-    data.gap_winding = 1e-3;
+    data.gap_winding = 0.0e-3;
+    data.insulation_class = 'basic';
+    data.insulation_standard = 'IEC 60664-1';
+    data.overvoltage_category = 'OVC-II';
+    data.pollution_degree = 2;
+    data.cti_group = 'Group II';
+    data.altitude_m = 0;
+    data.wiring_technology = 'Wound';
+    data.allow_margin_tape = true;
+    data.allow_insulated_wire = true;
+    data.tape_thickness = 0.05e-3;
+    data.tape_layers = 1;
+    data.tape_kv_per_mm = 120;  % user-adjustable estimate
+    data.edge_margin = 0.0e-3;
+    data.tiw_kv = 3.0;
 
     % Analysis parameters
     data.sigma = 5.8e7;
@@ -71,13 +118,12 @@ function interactive_winding_designer()
     data.Ny = 6;
 
     % Create main GUI figure
-    data.fig_gui = figure('Name', 'Interactive Winding Designer', ...
+    data.fig_gui = figure('Name', 'Interactive Transformer Design Tool [Offline Mode]', ...
                           'Position', [50 100 1600 700], ...
                           'NumberTitle', 'off', ...
                           'MenuBar', 'none', ...
                           'Resize', 'off');
 
-    % Create results figure (initially hidden)
     data.fig_results = [];
 
     % Build GUI layout
@@ -87,74 +133,118 @@ function interactive_winding_designer()
     update_visualization(data);
 end
 
+% ===============================================================
+% BUILD GUI
+% ===============================================================
+
 function build_gui(data)
 
     fig = data.fig_gui;
 
     % Main title
     uicontrol('Parent', fig, 'Style', 'text', ...
-              'String', 'Interactive Transformer Design Tool with OpenMagnetics Integration', ...
+              'String', 'Interactive Transformer Design Tool [Offline Mode]', ...
               'Position', [20 660 1560 30], ...
               'FontSize', 14, 'FontWeight', 'bold', ...
-              'HorizontalAlignment', 'center');
+              'HorizontalAlignment', 'center', ...
+              'Tag', 'main_title');
 
-    % ========== LEFT PANEL: CORE SELECTION ==========
+    % Data mode controls (top bar)
+    uicontrol('Parent', fig, 'Style', 'text', ...
+              'String', 'Data Mode:', ...
+              'Position', [560 35 80 18], ...
+              'FontWeight', 'bold', 'HorizontalAlignment', 'left');
+
+    uicontrol('Parent', fig, 'Style', 'popupmenu', ...
+              'String', {'Offline', 'Online (OM Server)'}, ...
+              'Position', [650 32 200 25], ...
+              'Tag', 'data_mode', ...
+              'Callback', @update_data_mode);
+
+    uicontrol('Parent', fig, 'Style', 'text', ...
+              'String', 'Server URL:', ...
+              'Position', [560 8 80 18], ...
+              'HorizontalAlignment', 'left');
+
+    uicontrol('Parent', fig, 'Style', 'edit', ...
+              'String', data.online_url, ...
+              'Position', [650 5 240 25], ...
+              'Tag', 'server_url', ...
+              'Callback', @update_server_url);
+
+    uicontrol('Parent', fig, 'Style', 'text', ...
+              'String', 'Status: Offline', ...
+              'Position', [900 8 300 18], ...
+              'HorizontalAlignment', 'left', ...
+              'Tag', 'data_mode_status');
+
+    % ========== LEFT PANEL: CORE SELECTION (with supplier cascade) ==========
     core_panel = uipanel('Parent', fig, ...
                         'Position', [0.02 0.15 0.28 0.8], ...
                         'Title', 'Core Selection (OpenMagnetics)');
 
-    % Core shape dropdown
+    % --- Supplier dropdown ---
     uicontrol('Parent', core_panel, 'Style', 'text', ...
-              'String', 'Core Shape:', ...
-              'Position', [20 480 120 20], ...
-              'HorizontalAlignment', 'left');
+              'String', 'Supplier:', ...
+              'Position', [20 490 120 20], ...
+              'FontWeight', 'bold', 'HorizontalAlignment', 'left');
 
-    core_list = fieldnames(data.cores);
-    if isempty(core_list)
-        core_list = {'None'};
-    end
+    supplier_list = data.suppliers;
+    if isempty(supplier_list); supplier_list = {'TDK'}; end
 
     uicontrol('Parent', core_panel, 'Style', 'popupmenu', ...
-              'String', core_list, ...
-              'Position', [20 455 380 25], ...
+              'String', supplier_list, ...
+              'Position', [20 468 380 25], ...
+              'Tag', 'supplier_dropdown', ...
+              'Callback', @select_supplier);
+
+    % --- Core Shape dropdown (filtered by supplier) ---
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'Core Shape:', ...
+              'Position', [20 438 120 20], ...
+              'HorizontalAlignment', 'left');
+
+    supplier_cores = data.api.get_cores_by_supplier(data.selected_supplier);
+    if isempty(supplier_cores); supplier_cores = fieldnames(data.cores); end
+
+    uicontrol('Parent', core_panel, 'Style', 'popupmenu', ...
+              'String', supplier_cores, ...
+              'Position', [20 416 380 25], ...
               'Tag', 'core_dropdown', ...
               'Callback', @select_core);
 
     % Core information display
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Core Information:', ...
-              'Position', [20 420 150 20], ...
-              'FontWeight', 'bold', ...
-              'HorizontalAlignment', 'left');
+              'Position', [20 385 150 20], ...
+              'FontWeight', 'bold', 'HorizontalAlignment', 'left');
 
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', get_core_info_text(data), ...
-              'Position', [20 250 380 165], ...
+              'Position', [20 270 380 110], ...
               'HorizontalAlignment', 'left', ...
               'BackgroundColor', [0.95 0.95 0.95], ...
               'Tag', 'core_info');
 
-    % Material selection
+    % --- Material dropdown (filtered by supplier) ---
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Core Material:', ...
-              'Position', [20 215 120 20], ...
+              'Position', [20 245 120 20], ...
               'HorizontalAlignment', 'left');
 
-    mat_list = fieldnames(data.materials);
-    if isempty(mat_list)
-        mat_list = {'N87'};
-    end
+    supplier_mats = data.api.get_materials_by_supplier(data.selected_supplier);
+    if isempty(supplier_mats); supplier_mats = fieldnames(data.materials); end
 
     uicontrol('Parent', core_panel, 'Style', 'popupmenu', ...
-              'String', mat_list, ...
-              'Position', [20 190 380 25], ...
+              'String', supplier_mats, ...
+              'Position', [20 223 380 25], ...
               'Tag', 'material_dropdown', ...
               'Callback', @select_material);
 
     % Material info
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', get_material_info_text(data), ...
-              'Position', [20 80 380 105], ...
+              'Position', [20 150 380 70], ...
               'HorizontalAlignment', 'left', ...
               'BackgroundColor', [0.95 0.95 0.95], ...
               'Tag', 'material_info');
@@ -162,26 +252,100 @@ function build_gui(data)
     % Frequency input
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Operating Frequency (kHz):', ...
-              'Position', [20 45 180 20], ...
+              'Position', [20 115 180 20], ...
               'HorizontalAlignment', 'left');
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', num2str(data.f/1e3), ...
-              'Position', [210 45 80 25], ...
+              'Position', [210 115 80 25], ...
               'Tag', 'frequency', ...
               'Callback', @update_frequency);
+
+    % Insulation class dropdown
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'Insulation Class:', ...
+              'Position', [20 85 180 20], ...
+              'HorizontalAlignment', 'left');
+
+    insulation_list = {'functional', 'basic', 'supplementary', 'reinforced'};
+    ins_idx = find(strcmp(insulation_list, data.insulation_class), 1);
+    if isempty(ins_idx); ins_idx = 2; end
+
+    uicontrol('Parent', core_panel, 'Style', 'popupmenu', ...
+              'String', insulation_list, ...
+              'Position', [210 85 180 25], ...
+              'Value', ins_idx, ...
+              'Tag', 'insulation_class', ...
+              'Callback', @update_insulation_class);
+
+    % Tape thickness + layers
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'Tape Thickness (mm):', ...
+              'Position', [20 55 180 20], ...
+              'HorizontalAlignment', 'left');
+
+    uicontrol('Parent', core_panel, 'Style', 'edit', ...
+              'String', num2str(data.tape_thickness * 1e3), ...
+              'Position', [210 55 60 25], ...
+              'Tag', 'tape_thickness', ...
+              'Callback', @update_tape_thickness);
+
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'Layers:', ...
+              'Position', [280 55 60 20], ...
+              'HorizontalAlignment', 'left');
+
+    uicontrol('Parent', core_panel, 'Style', 'edit', ...
+              'String', num2str(data.tape_layers), ...
+              'Position', [340 55 60 25], ...
+              'Tag', 'tape_layers', ...
+              'Callback', @update_tape_layers);
+
+    % Tape strength + TIW rating
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'Tape Strength (kV/mm):', ...
+              'Position', [20 30 180 20], ...
+              'HorizontalAlignment', 'left');
+
+    uicontrol('Parent', core_panel, 'Style', 'edit', ...
+              'String', num2str(data.tape_kv_per_mm), ...
+              'Position', [210 30 60 25], ...
+              'Tag', 'tape_strength', ...
+              'Callback', @update_tape_strength);
+
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'TIW kV:', ...
+              'Position', [280 30 60 20], ...
+              'HorizontalAlignment', 'left');
+
+    uicontrol('Parent', core_panel, 'Style', 'edit', ...
+              'String', num2str(data.tiw_kv), ...
+              'Position', [340 30 60 25], ...
+              'Tag', 'tiw_kv', ...
+              'Callback', @update_tiw_kv);
+
+    % Edge margin (mm)
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'Edge Margin (mm):', ...
+              'Position', [20 5 180 20], ...
+              'HorizontalAlignment', 'left');
+
+    uicontrol('Parent', core_panel, 'Style', 'edit', ...
+              'String', num2str(data.edge_margin * 1e3), ...
+              'Position', [210 5 80 25], ...
+              'Tag', 'edge_margin', ...
+              'Callback', @update_edge_margin);
 
     % ========== CENTER PANEL: WINDING CONFIGURATION ==========
     winding_panel = uipanel('Parent', fig, ...
                            'Position', [0.32 0.15 0.34 0.8], ...
                            'Title', 'Winding Configuration');
 
-    % Create tabs using button group
+    % Tab buttons
     tab_group = uibuttongroup('Parent', winding_panel, ...
                               'Position', [0.02 0.88 0.96 0.1], ...
                               'BorderType', 'none');
 
-    % Tab buttons
     for w = 1:data.n_windings
         uicontrol('Parent', tab_group, 'Style', 'togglebutton', ...
                   'String', data.windings(w).name, ...
@@ -189,8 +353,6 @@ function build_gui(data)
                   'Tag', sprintf('tab%d', w), ...
                   'Callback', {@switch_tab, w});
     end
-
-    % Set first tab as selected
     set(findobj(tab_group, 'Tag', 'tab1'), 'Value', 1);
 
     % Content panels for each winding
@@ -200,139 +362,192 @@ function build_gui(data)
                         'Visible', 'off', ...
                         'Tag', sprintf('content%d', w));
 
-        % Winding name
+        % Winding name header
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', sprintf('%s Winding', data.windings(w).name), ...
                   'Position', [20 430 300 25], ...
                   'FontSize', 12, 'FontWeight', 'bold', ...
                   'HorizontalAlignment', 'left');
 
-        % Wire type selection
+        % --- Wire Type dropdown ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'Wire Type:', ...
-                  'Position', [20 395 100 20], ...
-                  'HorizontalAlignment', 'left');
+                  'Position', [20 400 100 20], ...
+                  'FontWeight', 'bold', 'HorizontalAlignment', 'left');
 
         wire_list = fieldnames(data.wires);
-        if isempty(wire_list)
-            wire_list = {'AWG_22'};
-        end
+        if isempty(wire_list); wire_list = {'AWG_22'}; end
+        wire_idx = find(strcmp(wire_list, data.windings(w).wire_type), 1);
+        if isempty(wire_idx); wire_idx = 1; end
 
         uicontrol('Parent', panel, 'Style', 'popupmenu', ...
                   'String', wire_list, ...
-                  'Position', [130 395 250 25], ...
+                  'Position', [130 400 250 25], ...
+                  'Value', wire_idx, ...
                   'Tag', sprintf('wire_type_%d', w), ...
                   'Callback', {@select_wire, w});
 
-        % Wire info display
+        % --- Wire Standard dropdown ---
         uicontrol('Parent', panel, 'Style', 'text', ...
-                  'String', get_wire_info_text(data, w), ...
-                  'Position', [20 335 460 55], ...
-                  'HorizontalAlignment', 'left', ...
-                  'BackgroundColor', [0.95 0.95 1.0], ...
-                  'Tag', sprintf('wire_info_%d', w));
-
-        % Number of turns
-        uicontrol('Parent', panel, 'Style', 'text', ...
-                  'String', 'Number of Turns:', ...
-                  'Position', [20 290 150 20], ...
+                  'String', 'Standard:', ...
+                  'Position', [20 370 100 20], ...
                   'HorizontalAlignment', 'left');
 
+        uicontrol('Parent', panel, 'Style', 'popupmenu', ...
+                  'String', data.wire_options.standards, ...
+                  'Position', [130 370 250 25], ...
+                  'Tag', sprintf('wire_std_%d', w), ...
+                  'Callback', {@select_wire_attribute, w, 'standard'});
+
+        % --- Conductor diameter dropdown ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'Cond. diameter:', ...
+                  'Position', [20 335 120 20], ...
+                  'HorizontalAlignment', 'left');
+
+        uicontrol('Parent', panel, 'Style', 'popupmenu', ...
+                  'String', data.wire_options.cond_diameters, ...
+                  'Position', [130 335 250 25], ...
+                  'Tag', sprintf('wire_diam_%d', w), ...
+                  'Callback', {@select_wire_attribute, w, 'cond_diameter'});
+
+        % --- Coating dropdown ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'Coating:', ...
+                  'Position', [20 300 100 20], ...
+                  'HorizontalAlignment', 'left');
+
+        uicontrol('Parent', panel, 'Style', 'popupmenu', ...
+                  'String', data.wire_options.coatings, ...
+                  'Position', [130 300 250 25], ...
+                  'Tag', sprintf('wire_coat_%d', w), ...
+                  'Callback', {@select_wire_attribute, w, 'coating'});
+
+        % --- Wire insulation type ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'Wire Insulation:', ...
+                  'Position', [20 265 120 20], ...
+                  'HorizontalAlignment', 'left');
+
+        insulation_opts = {'Standard', 'TIW'};
+        if isfield(data.windings(w), 'wire_insulation') && strcmpi(data.windings(w).wire_insulation, 'tiw')
+            ins_val = 2;
+        else
+            ins_val = 1;
+        end
+
+        uicontrol('Parent', panel, 'Style', 'popupmenu', ...
+                  'String', insulation_opts, ...
+                  'Position', [130 265 250 25], ...
+                  'Value', ins_val, ...
+                  'Tag', sprintf('wire_insulation_%d', w), ...
+                  'Callback', {@update_wire_insulation, w});
+
+        % --- No. Turns ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'No. Turns:', ...
+                  'Position', [20 230 120 20], ...
+                  'FontWeight', 'bold', 'HorizontalAlignment', 'left');
+
         uicontrol('Parent', panel, 'Style', 'pushbutton', ...
-                  'String', 'âˆ’', ...
-                  'Position', [180 290 30 25], ...
+                  'String', '-', ...
+                  'Position', [180 230 30 25], ...
                   'FontSize', 14, ...
-                  'Tag', sprintf('turns_dec_%d', w), ...
                   'Callback', {@adjust_turns, w, -1});
 
         uicontrol('Parent', panel, 'Style', 'edit', ...
                   'String', num2str(data.windings(w).n_turns), ...
-                  'Position', [215 290 50 25], ...
-                  'FontSize', 11, ...
-                  'HorizontalAlignment', 'center', ...
+                  'Position', [215 230 60 25], ...
+                  'FontSize', 11, 'HorizontalAlignment', 'center', ...
                   'Tag', sprintf('turns_val_%d', w), ...
                   'Callback', {@update_turns_manual, w});
 
         uicontrol('Parent', panel, 'Style', 'pushbutton', ...
                   'String', '+', ...
-                  'Position', [270 290 30 25], ...
+                  'Position', [280 230 30 25], ...
                   'FontSize', 14, ...
-                  'Tag', sprintf('turns_inc_%d', w), ...
                   'Callback', {@adjust_turns, w, 1});
 
-        % Parallel strands (filar)
+        % --- No. Parallels (Filar) ---
         uicontrol('Parent', panel, 'Style', 'text', ...
-                  'String', 'Parallel Strands (Filar):', ...
-                  'Position', [20 240 150 20], ...
-                  'HorizontalAlignment', 'left');
+                  'String', 'No. Parallels:', ...
+                  'Position', [20 190 120 20], ...
+                  'FontWeight', 'bold', 'HorizontalAlignment', 'left');
 
         uicontrol('Parent', panel, 'Style', 'pushbutton', ...
-                  'String', 'âˆ’', ...
-                  'Position', [180 240 30 25], ...
+                  'String', '-', ...
+                  'Position', [180 190 30 25], ...
                   'FontSize', 14, ...
-                  'Tag', sprintf('filar_dec_%d', w), ...
                   'Callback', {@adjust_filar, w, -1});
 
         uicontrol('Parent', panel, 'Style', 'edit', ...
                   'String', num2str(data.windings(w).n_filar), ...
-                  'Position', [215 240 50 25], ...
-                  'FontSize', 11, ...
-                  'HorizontalAlignment', 'center', ...
+                  'Position', [215 190 60 25], ...
+                  'FontSize', 11, 'HorizontalAlignment', 'center', ...
                   'Tag', sprintf('filar_val_%d', w), ...
                   'Callback', {@update_filar_manual, w});
 
         uicontrol('Parent', panel, 'Style', 'pushbutton', ...
                   'String', '+', ...
-                  'Position', [270 240 30 25], ...
+                  'Position', [280 190 30 25], ...
                   'FontSize', 14, ...
-                  'Tag', sprintf('filar_inc_%d', w), ...
                   'Callback', {@adjust_filar, w, 1});
 
         % Filar type label
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', get_filar_name(data.windings(w).n_filar), ...
-                  'Position', [310 240 150 25], ...
+                  'Position', [320 190 150 25], ...
                   'FontSize', 10, 'FontWeight', 'bold', ...
                   'HorizontalAlignment', 'left', ...
                   'ForegroundColor', [0.2 0.6 0.2], ...
                   'Tag', sprintf('filar_name_%d', w));
 
-        % Current settings
+        % --- RMS Current ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'RMS Current (A):', ...
-                  'Position', [20 190 150 20], ...
+                  'Position', [20 150 150 20], ...
                   'HorizontalAlignment', 'left');
 
         uicontrol('Parent', panel, 'Style', 'edit', ...
                   'String', num2str(data.windings(w).current), ...
-                  'Position', [180 190 80 25], ...
+                  'Position', [180 150 80 25], ...
                   'Tag', sprintf('current_%d', w), ...
                   'Callback', {@update_current, w});
 
-        % Phase settings
+        % --- Voltage ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'Voltage (V):', ...
+                  'Position', [20 115 150 20], ...
+                  'HorizontalAlignment', 'left');
+
+        uicontrol('Parent', panel, 'Style', 'edit', ...
+                  'String', num2str(data.windings(w).voltage), ...
+                  'Position', [180 115 80 25], ...
+                  'Tag', sprintf('voltage_%d', w), ...
+                  'Callback', {@update_voltage, w});
+
+        % --- Phase ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'Phase (degrees):', ...
-                  'Position', [20 140 150 20], ...
+                  'Position', [20 80 150 20], ...
                   'HorizontalAlignment', 'left');
 
         uicontrol('Parent', panel, 'Style', 'edit', ...
                   'String', num2str(data.windings(w).phase), ...
-                  'Position', [180 140 80 25], ...
+                  'Position', [180 80 80 25], ...
                   'Tag', sprintf('phase_%d', w), ...
                   'Callback', {@update_phase, w});
 
-        % Summary info
+        % --- Configuration Summary ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'Configuration Summary:', ...
-                  'Position', [20 90 300 20], ...
+                  'Position', [20 60 300 20], ...
                   'FontSize', 10, 'FontWeight', 'bold', ...
                   'HorizontalAlignment', 'left');
 
-        summary_str = get_winding_summary(data, w);
-
         uicontrol('Parent', panel, 'Style', 'text', ...
-                  'String', summary_str, ...
-                  'Position', [20 20 460 65], ...
+                  'String', get_winding_summary(data, w), ...
+                  'Position', [20 5 460 55], ...
                   'HorizontalAlignment', 'left', ...
                   'Tag', sprintf('summary_%d', w));
     end
@@ -340,12 +555,16 @@ function build_gui(data)
     % Show first panel
     set(findobj(winding_panel, 'Tag', 'content1'), 'Visible', 'on');
 
+    % Initial wire info update
+    for w = 1:data.n_windings
+        update_wire_info_fields(fig, data, w);
+    end
+
     % ========== RIGHT PANEL: VISUALIZATION ==========
     vis_panel = uipanel('Parent', fig, ...
                         'Position', [0.68 0.15 0.30 0.8], ...
                         'Title', 'Winding Layout in Core Window');
 
-    % Visualization mode selector
     uicontrol('Parent', vis_panel, 'Style', 'text', ...
               'String', 'View Mode:', ...
               'Position', [10 500 80 20], ...
@@ -358,12 +577,10 @@ function build_gui(data)
               'Tag', 'vis_mode', ...
               'Callback', @change_vis_mode);
 
-    % Packing pattern selector (for Core Window Fit mode)
     uicontrol('Parent', vis_panel, 'Style', 'text', ...
               'String', 'Packing:', ...
               'Position', [250 500 60 20], ...
-              'HorizontalAlignment', 'left', ...
-              'Tag', 'packing_label');
+              'HorizontalAlignment', 'left');
 
     uicontrol('Parent', vis_panel, 'Style', 'popupmenu', ...
               'String', {'Layered', 'Orthocyclic', 'Random'}, ...
@@ -372,12 +589,21 @@ function build_gui(data)
               'Tag', 'packing_pattern', ...
               'Callback', @change_packing);
 
-    % Axes for visualization
-    ax = axes('Parent', vis_panel, ...
-              'Position', [0.1 0.1 0.85 0.75], ...
-              'Tag', 'vis_axes');
+    uicontrol('Parent', vis_panel, 'Style', 'text', ...
+              'String', 'Section Interl. Order:', ...
+              'Position', [10 470 140 20], ...
+              'HorizontalAlignment', 'left');
 
-    % Info text box
+    uicontrol('Parent', vis_panel, 'Style', 'edit', ...
+              'String', data.section_order, ...
+              'Position', [150 470 120 25], ...
+              'Tag', 'section_order', ...
+              'Callback', @update_section_order);
+
+    axes('Parent', vis_panel, ...
+         'Position', [0.1 0.1 0.85 0.75], ...
+         'Tag', 'vis_axes');
+
     uicontrol('Parent', vis_panel, 'Style', 'text', ...
               'String', '', ...
               'Position', [10 10 430 40], ...
@@ -389,7 +615,7 @@ function build_gui(data)
     % ========== BOTTOM BUTTONS ==========
     uicontrol('Parent', fig, 'Style', 'pushbutton', ...
               'String', 'Run Analysis', ...
-              'Position', [650 50 150 40], ...
+              'Position', [650 60 150 40], ...
               'FontSize', 12, 'FontWeight', 'bold', ...
               'BackgroundColor', [0.2 0.7 0.3], ...
               'ForegroundColor', 'w', ...
@@ -397,13 +623,54 @@ function build_gui(data)
 
     uicontrol('Parent', fig, 'Style', 'pushbutton', ...
               'String', 'Reset to Defaults', ...
-              'Position', [820 50 150 40], ...
+              'Position', [820 60 150 40], ...
               'FontSize', 11, ...
               'Callback', @reset_defaults);
 
-    % Store data in figure
     guidata(fig, data);
 end
+
+% ===============================================================
+% WIRE INFO FIELD UPDATER (Issue #3)
+% ===============================================================
+
+function update_wire_info_fields(fig, data, w)
+    wire_type = data.windings(w).wire_type;
+    wire = data.api.get_wire_info(wire_type);
+
+    % Keep wire type dropdown in sync
+    wire_dd = findobj(fig, 'Tag', sprintf('wire_type_%d', w));
+    set_popup_value(wire_dd, wire_type);
+
+    % Standard dropdown
+    if isfield(wire, 'standard')
+        set_popup_value(findobj(fig, 'Tag', sprintf('wire_std_%d', w)), wire.standard);
+    end
+
+    % Conductor diameter dropdown
+    if isfield(wire, 'cond_diameter')
+        set_popup_value(findobj(fig, 'Tag', sprintf('wire_diam_%d', w)), wire.cond_diameter);
+    end
+
+    % Coating dropdown
+    if isfield(wire, 'coating')
+        set_popup_value(findobj(fig, 'Tag', sprintf('wire_coat_%d', w)), wire.coating);
+    end
+
+    % Wire insulation dropdown
+    ins_dd = findobj(fig, 'Tag', sprintf('wire_insulation_%d', w));
+    if ~isempty(ins_dd) && ishandle(ins_dd)
+        if isfield(data.windings(w), 'wire_insulation') && strcmpi(data.windings(w).wire_insulation, 'tiw')
+            set(ins_dd, 'Value', 2);
+        else
+            set(ins_dd, 'Value', 1);
+        end
+    end
+end
+
+% ===============================================================
+% INFO TEXT GENERATORS
+% ===============================================================
 
 function str = get_core_info_text(data)
     if strcmp(data.selected_core, 'None')
@@ -428,42 +695,29 @@ function str = get_core_info_text(data)
     if isfield(core, 'Ve')
         str = [str sprintf('Ve: %.1f mm^3\n', core.Ve*1e9)];
     end
+    if isfield(core, 'bobbin')
+        str = [str sprintf('Bobbin: %.1f x %.1f mm', ...
+            core.bobbin.width*1e3, core.bobbin.height*1e3)];
+    end
 end
 
 function str = get_material_info_text(data)
-    mat_list = fieldnames(data.materials);
-    if isempty(mat_list)
+    mat_name = data.selected_material;
+    if ~isfield(data.materials, mat_name)
         str = 'No material data';
         return;
     end
 
-    mat_name = mat_list{1};  % Default to first material
     mat = data.materials.(mat_name);
-
     str = sprintf('Material: %s\n', mat_name);
     if isfield(mat, 'manufacturer')
         str = [str sprintf('Mfg: %s\n', mat.manufacturer)];
     end
     if isfield(mat, 'mu_initial')
-        str = [str sprintf('mu_i: %d\n', mat.mu_initial)];
+        str = [str sprintf('ui: %d\n', mat.mu_initial)];
     end
     if isfield(mat, 'Bsat')
         str = [str sprintf('Bsat: %.2f T\n', mat.Bsat)];
-    end
-end
-
-function str = get_wire_info_text(data, winding)
-    wire_type = data.windings(winding).wire_type;
-    wire = data.wires.(wire_type);
-
-    if isfield(wire, 'diameter')
-        str = sprintf('Diameter: %.3f mm\nArea: %.3e m^2\nR: %.3f Î©/m', ...
-            wire.diameter*1e3, wire.area, wire.resistance);
-    elseif isfield(wire, 'strands')
-        str = sprintf('Litz: %d x %.3f mm\nOuter: %.3f mm\nArea: %.3e m^2', ...
-            wire.strands, wire.strand_diameter*1e3, wire.outer_diameter*1e3, wire.area);
-    else
-        str = 'Wire info not available';
     end
 end
 
@@ -472,10 +726,913 @@ function str = get_winding_summary(data, winding)
     I_per_strand = data.windings(winding).current / data.windings(winding).n_filar;
 
     wire_type = data.windings(winding).wire_type;
-    [w, h] = data.api.wire_to_conductor_dims(wire_type);
+    wire = data.api.get_wire_info(wire_type);
+    [w, h, shape] = data.api.wire_to_conductor_dims(wire_type);
 
-    str = sprintf('Total conductors: %d\nCurrent per strand: %.2f A\nConductor size: %.3f x %.3f mm', ...
-        n_cond, I_per_strand, w*1e3, h*1e3);
+    if isfield(wire, 'area') && wire.area > 0
+        J_eff = I_per_strand / (wire.area * 1e6);  % A/mm^2
+        j_str = sprintf('Eff. current density: %.2f A/mm^2', J_eff);
+    else
+        j_str = 'Eff. current density: n/a';
+    end
+
+    iso_str = get_isolation_summary(data, winding);
+
+    str = sprintf('Total conductors: %d\nCurrent per strand: %.2f A\nConductor size: %.3f x %.3f mm\nShape: %s | %s\n%s', ...
+        n_cond, I_per_strand, w*1e3, h*1e3, shape, iso_str, j_str);
+end
+
+function iso_str = get_isolation_summary(data, winding)
+    if winding >= data.n_windings
+        iso_str = 'Iso: n/a';
+        return;
+    end
+
+    req = compute_insulation_requirements(data, winding, winding+1);
+
+    tape_layers = 0;
+    tape_gap_mm = 0;
+    if isfield(data, 'tape_thickness') && isfield(data, 'tape_layers')
+        tape_layers = max(0, data.tape_layers);
+        tape_gap_mm = data.tape_thickness * tape_layers * 1e3;
+    end
+
+    edge_margin_mm = 0;
+    if isfield(data, 'edge_margin')
+        edge_margin_mm = max(0, data.edge_margin) * 1e3;
+    end
+
+    req_layers = req.tape_layers_required;
+    req_gap_mm = req.tape_thickness * req_layers * 1e3;
+    req_edge_mm = req.margin_distance * 0.5 * 1e3;
+
+    tape_ok = (req_layers == 0) || (tape_layers >= req_layers);
+    edge_ok = (req.margin_distance <= 0) || (edge_margin_mm >= req_edge_mm);
+
+    status = 'OK';
+    if ~(tape_ok && edge_ok)
+        status = 'Need';
+    end
+
+    iso_str = sprintf(['Iso req: dV=%.0fV %s | withstand %.0fV | ' ...
+                       'tape %dL (%.2fmm), edge >= %.2fmm\n' ...
+                       'Iso act: tape %dL (%.2fmm), edge %.2fmm [%s]'], ...
+                       req.Vdiff, req.insulation_class, req.withstand_voltage, ...
+                       req_layers, req_gap_mm, req_edge_mm, ...
+                       tape_layers, tape_gap_mm, edge_margin_mm, status);
+end
+
+function iso_str = get_isolation_summary_legacy(data, winding)
+    if winding >= data.n_windings
+        iso_str = 'Iso: n/a';
+        return;
+    end
+
+    V1 = 0;
+    V2 = 0;
+    if isfield(data.windings(winding), 'voltage')
+        V1 = data.windings(winding).voltage;
+    end
+    if isfield(data.windings(winding+1), 'voltage')
+        V2 = data.windings(winding+1).voltage;
+    end
+    Vdiff = abs(V1 - V2);
+
+    class = data.insulation_class;
+    req_mult = get_insulation_multiplier(class);
+    req_v = Vdiff * req_mult;
+
+    tape_gap_mm = 0;
+    tape_layers = 0;
+    if isfield(data, 'tape_thickness') && isfield(data, 'tape_layers')
+        tape_layers = max(0, data.tape_layers);
+        tape_gap_mm = data.tape_thickness * tape_layers * 1e3;
+    end
+
+    layer_v = get_tape_layer_breakdown_v(data);
+    tape_v = tape_layers * layer_v;
+
+    tiw_v = 0;
+    if is_tiw_used(data, winding, winding+1) && isfield(data, 'tiw_kv')
+        tiw_v = data.tiw_kv * 1e3;
+    end
+
+    available_v = max(tape_v, tiw_v);
+    if layer_v <= 0 && tiw_v <= 0
+        avail_str = 'avail=n/a';
+    else
+        status = 'OK';
+        if available_v < req_v
+            status = 'Need';
+        end
+        avail_str = sprintf('avail=%.0fV %s', available_v, status);
+    end
+
+    iso_str = sprintf('Iso: ΔV=%.0fV %s, tape %dL (%.2fmm), %s', ...
+        Vdiff, class, tape_layers, tape_gap_mm, avail_str);
+end
+
+function mult = get_insulation_multiplier(class)
+    if ~ischar(class)
+        mult = 1.0;
+        return;
+    end
+    switch lower(class)
+        case 'functional'
+            mult = 1.0;
+        case 'basic'
+            mult = 1.0;
+        case 'supplementary'
+            mult = 2.0;
+        case 'reinforced'
+            mult = 3.0;
+        otherwise
+            mult = 1.0;
+    end
+end
+
+function req = compute_insulation_requirements(data, winding_a, winding_b)
+    req = struct();
+    req.Vdiff = 0;
+    req.withstand_voltage = 0;
+    req.clearance = 0;
+    req.creepage = 0;
+    req.margin_distance = 0;
+    req.distance_through_insulation = 0;
+    req.tape_layers_required = 0;
+    req.tape_thickness = 0;
+    req.insulation_class = data.insulation_class;
+
+    V1 = 0;
+    V2 = 0;
+    if winding_a >= 1 && winding_a <= data.n_windings && isfield(data.windings(winding_a), 'voltage')
+        V1 = data.windings(winding_a).voltage;
+    end
+    if winding_b >= 1 && winding_b <= data.n_windings && isfield(data.windings(winding_b), 'voltage')
+        V2 = data.windings(winding_b).voltage;
+    end
+    Vdiff = abs(V1 - V2);
+    req.Vdiff = Vdiff;
+
+    std_name = 'IEC 60664-1';
+    if isfield(data, 'insulation_standard')
+        std_name = data.insulation_standard;
+    end
+
+    if local_contains(std_name, '60664')
+        req = iec60664_requirements(data, Vdiff, data.insulation_class);
+    else
+        req.insulation_class = data.insulation_class;
+        req.Vdiff = Vdiff;
+        req.withstand_voltage = Vdiff * get_insulation_multiplier(data.insulation_class);
+        req.clearance = 0;
+        req.creepage = 0;
+        req.margin_distance = 0;
+        req.distance_through_insulation = 0;
+    end
+
+    tape_thickness = 0;
+    if isfield(data, 'tape_thickness')
+        tape_thickness = max(0, data.tape_thickness);
+    end
+    req.tape_thickness = tape_thickness;
+
+    layer_v = get_tape_layer_breakdown_v(data);
+    req_layers = 0;
+    if tape_thickness > 0 && layer_v > 0 && req.withstand_voltage > 0
+        req_layers = max(1, ceil(req.withstand_voltage / layer_v));
+    end
+
+    if req.distance_through_insulation > 0 && tape_thickness > 0
+        req_layers = max(req_layers, ceil(req.distance_through_insulation / tape_thickness));
+    end
+
+    if is_tiw_used(data, winding_a, winding_b) && isfield(data, 'allow_insulated_wire') && data.allow_insulated_wire
+        req_layers = max(1, req_layers);
+        req.margin_distance = 0;
+    end
+
+    req.tape_layers_required = req_layers;
+end
+
+function req = iec60664_requirements(data, Vdiff, insulation_class)
+    req = struct();
+    req.Vdiff = Vdiff;
+    req.insulation_class = insulation_class;
+    req.withstand_voltage = 0;
+    req.clearance = 0;
+    req.creepage = 0;
+    req.margin_distance = 0;
+    req.distance_through_insulation = 0;
+    req.tape_layers_required = 0;
+    req.tape_thickness = 0;
+
+    tables = iec60664_tables();
+    if isempty(tables)
+        req.withstand_voltage = Vdiff * get_insulation_multiplier(insulation_class);
+        return;
+    end
+
+    Vrms = abs(Vdiff);
+    Vpeak = Vrms * sqrt(2);
+    freq = data.f;
+    altitude = 0;
+    if isfield(data, 'altitude_m')
+        altitude = max(0, data.altitude_m);
+    end
+
+    pd = 2;
+    if isfield(data, 'pollution_degree')
+        pd = data.pollution_degree;
+    end
+    pd_key = sprintf('P%d', max(1, min(3, round(pd))));
+
+    ovc = 'OVC-II';
+    if isfield(data, 'overvoltage_category')
+        ovc = data.overvoltage_category;
+    end
+    ovc_key = strrep(upper(ovc), '-', '_');
+
+    cti = 'Group II';
+    if isfield(data, 'cti_group')
+        cti = data.cti_group;
+    end
+    cti_key = strrep(cti, ' ', '_');
+
+    wiring = 'Wound';
+    if isfield(data, 'wiring_technology')
+        wiring = data.wiring_technology;
+    end
+    wiring_key = wiring;
+
+    is_reinforced = any(strcmpi(insulation_class, {'reinforced', 'double'}));
+
+    rated_impulse = iec60664_get_rated_impulse_withstand_voltage(tables, ovc_key, Vrms, is_reinforced);
+    req.withstand_voltage = iec60664_calculate_withstand_voltage(Vrms, Vpeak, rated_impulse, is_reinforced);
+
+    clearance_transient = iec60664_get_clearance_f2(tables, pd_key, rated_impulse);
+    steady_peak = Vpeak;
+    if is_reinforced
+        steady_peak = steady_peak * 1.6;
+    end
+    clearance_steady = iec60664_get_clearance_f8(tables, steady_peak);
+    if freq > 30000
+        clearance_steady = iec60664_get_clearance_over_30kHz(tables, steady_peak, freq, clearance_steady);
+    end
+    clearance = max(clearance_transient, clearance_steady);
+    if altitude > 2000
+        clearance = clearance * iec60664_get_altitude_factor(tables, altitude);
+    end
+    req.clearance = clearance;
+
+    rated_insulation = iec60664_get_rated_insulation_voltage(tables, Vrms);
+    voltage_rms = max(Vrms, rated_insulation);
+    creepage = iec60664_get_creepage_f5(tables, wiring_key, pd_key, cti_key, voltage_rms);
+    if freq > 30000
+        creepage_over = iec60664_get_creepage_over_30kHz(tables, Vpeak, freq);
+        switch pd_key
+            case 'P2'
+                creepage_over = creepage_over * 1.2;
+            case 'P3'
+                creepage_over = creepage_over * 1.4;
+        end
+        creepage = max(creepage, creepage_over);
+    end
+    if is_reinforced
+        creepage = creepage * 2;
+    end
+    creepage = max(creepage, clearance);
+    req.creepage = creepage;
+
+    req.margin_distance = max(clearance, creepage);
+
+    if freq > 30000
+        req.distance_through_insulation = iec60664_distance_through_insulation_over_30kHz(Vrms);
+    end
+end
+
+function tables = iec60664_tables()
+    persistent cache
+    if ~isempty(cache)
+        tables = cache;
+        return;
+    end
+
+    tables = struct();
+
+    base_paths = {};
+    try
+        here = fileparts(mfilename('fullpath'));
+        base_paths{end+1} = fullfile(here, 'insulation_standards'); %#ok<AGROW>
+    catch
+    end
+    base_paths{end+1} = 'C:\Users\Will\Downloads\MKF-main\src\data\insulation_standards';
+
+    path_60664_1 = '';
+    path_60664_4 = '';
+    for i = 1:numel(base_paths)
+        p1 = fullfile(base_paths{i}, 'IEC_60664-1.json');
+        p4 = fullfile(base_paths{i}, 'IEC_60664-4.json');
+        if exist(p1, 'file')
+            path_60664_1 = p1;
+        end
+        if exist(p4, 'file')
+            path_60664_4 = p4;
+        end
+    end
+
+    if isempty(path_60664_1)
+        tables = [];
+        return;
+    end
+
+    data1 = jsondecode(fileread(path_60664_1));
+    tables.part1 = data1;
+
+    if ~isempty(path_60664_4) && exist(path_60664_4, 'file')
+        data4 = jsondecode(fileread(path_60664_4));
+        tables.part4 = data4;
+    else
+        tables.part4 = struct();
+    end
+
+    cache = tables;
+end
+
+function rated = iec60664_get_rated_impulse_withstand_voltage(tables, ovc_key, rated_voltage, is_reinforced)
+    ovc_field = pick_fieldname(tables.part1.F_1, ovc_key);
+    if isempty(ovc_field)
+        rated = rated_voltage;
+        return;
+    end
+    table = ensure_table_array(tables.part1.F_1.(ovc_field));
+    rated = lookup_step(table, rated_voltage);
+    if is_reinforced
+        idx = find(table(:,1) >= rated_voltage, 1);
+        if ~isempty(idx) && idx < size(table, 1)
+            rated = table(idx+1, 2);
+        else
+            rated = rated * 1.6;
+        end
+    end
+end
+
+function clearance = iec60664_get_clearance_f2(tables, pd_key, rated_impulse)
+    pd_field = pick_fieldname(tables.part1.F_2.InhomogeneusField, pd_key);
+    if isempty(pd_field)
+        clearance = 0;
+        return;
+    end
+    table = ensure_table_array(tables.part1.F_2.InhomogeneusField.(pd_field));
+    clearance = lookup_step(table, rated_impulse);
+end
+
+function clearance = iec60664_get_clearance_f8(tables, rated_peak)
+    table = ensure_table_array(tables.part1.F_8.InhomogeneusField);
+    clearance = lookup_step(table, rated_peak);
+end
+
+function rated = iec60664_get_rated_insulation_voltage(tables, main_supply)
+    table = ensure_table_array(tables.part1.F_3);
+    rated = lookup_step(table, main_supply);
+end
+
+function creepage = iec60664_get_creepage_f5(tables, wiring_key, pd_key, cti_key, voltage_rms)
+    wiring_field = pick_fieldname(tables.part1.F_5, wiring_key);
+    if isempty(wiring_field)
+        wiring_field = pick_fieldname(tables.part1.F_5, 'Wound');
+    end
+    if isempty(wiring_field)
+        creepage = 0;
+        return;
+    end
+    pd_field = pick_fieldname(tables.part1.F_5.(wiring_field), pd_key);
+    if isempty(pd_field)
+        creepage = 0;
+        return;
+    end
+    cti_field = pick_fieldname(tables.part1.F_5.(wiring_field).(pd_field), cti_key);
+    if isempty(cti_field)
+        creepage = 0;
+        return;
+    end
+    table = ensure_table_array(tables.part1.F_5.(wiring_field).(pd_field).(cti_field));
+    creepage = lookup_step(table, voltage_rms);
+end
+
+function factor = iec60664_get_altitude_factor(tables, altitude)
+    table = ensure_table_array(tables.part1.A_2);
+    factor = linear_table_interpolation(table, altitude);
+end
+
+function clearance = iec60664_get_clearance_over_30kHz(tables, rated_peak, freq, current_clearance)
+    if ~isfield(tables, 'part4') || ~isfield(tables.part4, 'Table_1')
+        clearance = current_clearance;
+        return;
+    end
+    skin = skin_depth_copper(freq);
+    is_homogeneous = skin >= current_clearance * 0.2;
+    if is_homogeneous
+        freq_mhz = freq / 1e6;
+        crit_mhz = 0.2 / current_clearance;
+        min_mhz = 3;
+        if freq_mhz < crit_mhz
+            clearance = current_clearance;
+        elseif freq_mhz > min_mhz
+            clearance = current_clearance * 1.25;
+        else
+            factor = 1 + (freq_mhz - crit_mhz) / (min_mhz - crit_mhz) * 0.25;
+            clearance = current_clearance * factor;
+        end
+    else
+        table = ensure_table_array(tables.part4.Table_1);
+        clearance = linear_table_interpolation(table, rated_peak);
+    end
+end
+
+function creepage = iec60664_get_creepage_over_30kHz(tables, voltage_peak, freq)
+    creepage = 0;
+    if ~isfield(tables, 'part4') || ~isfield(tables.part4, 'Table_2')
+        return;
+    end
+    table2 = tables.part4.Table_2;
+    freq_fields = fieldnames(table2);
+    freqs = zeros(numel(freq_fields), 1);
+    for i = 1:numel(freq_fields)
+        freqs(i) = str2double(freq_fields{i});
+    end
+    [freqs, idx] = sort(freqs);
+    tables_sorted = cell(numel(freqs), 1);
+    for i = 1:numel(freqs)
+        tables_sorted{i} = ensure_table_array(table2.(freq_fields{idx(i)}));
+    end
+
+    prev_freq = 30000;
+    prev_table = [];
+    for i = 1:numel(freqs)
+        f = freqs(i);
+        if freq >= prev_freq && freq <= f
+            top_val = linear_table_interpolation(tables_sorted{i}, voltage_peak);
+            if isempty(prev_table)
+                creepage = top_val;
+            else
+                bottom_val = linear_table_interpolation(prev_table, voltage_peak);
+                prop = (freq - prev_freq) / (f - prev_freq);
+                creepage = bottom_val + (top_val - bottom_val) * prop;
+            end
+            return;
+        end
+        prev_freq = f;
+        prev_table = tables_sorted{i};
+    end
+end
+
+function withstand = iec60664_calculate_withstand_voltage(Vrms, Vpeak, rated_impulse, is_reinforced)
+    voltage_temp = Vrms + 1200;
+    if is_reinforced
+        voltage_temp = voltage_temp * 2;
+    end
+    F1 = 1.2;
+    F3 = 1.25;
+    F4 = 1.1;
+    voltage_recurring = F1 * F4 * sqrt(2) * Vrms;
+    if is_reinforced
+        voltage_recurring = voltage_recurring * F3;
+    end
+    withstand = max([rated_impulse, voltage_temp, voltage_recurring, Vpeak]);
+end
+
+function dti = iec60664_distance_through_insulation_over_30kHz(working_voltage)
+    dti = 0;
+    max_iter = 5000;
+    for i = 1:max_iter
+        if electric_field_strength_is_valid(dti, working_voltage)
+            return;
+        end
+        dti = dti + 1e-6;
+    end
+end
+
+function ok = electric_field_strength_is_valid(dti, voltage)
+    if dti == 0
+        ok = false;
+    elseif dti < 30e-6
+        ok = (voltage / dti) < 10e6;
+    elseif dti > 0.00075
+        ok = (voltage / dti) < 2e6;
+    else
+        ok = (voltage / dti) < (0.25 / (dti * 1000) + 1.667) * 1e6;
+    end
+end
+
+function delta = skin_depth_copper(freq)
+    mu0 = 4*pi*1e-7;
+    sigma = 5.8e7;
+    omega = 2*pi*freq;
+    delta = sqrt(2 / (omega * mu0 * sigma));
+end
+
+function table = ensure_table_array(table)
+    if iscell(table)
+        table = cell2mat(table);
+    end
+end
+
+function y = lookup_step(table, x)
+    if isempty(table)
+        y = 0;
+        return;
+    end
+    for i = 1:size(table, 1)
+        if x <= table(i, 1)
+            y = table(i, 2);
+            return;
+        end
+    end
+    y = table(end, 2);
+end
+
+function y = linear_table_interpolation(table, x)
+    if isempty(table)
+        y = 0;
+        return;
+    end
+    if x <= table(1, 1)
+        if size(table, 1) > 1
+            slope = (table(2, 2) - table(1, 2)) / (table(2, 1) - table(1, 1));
+            y = table(1, 2) + (x - table(1, 1)) * slope;
+        else
+            y = table(1, 2);
+        end
+        return;
+    end
+    if x >= table(end, 1)
+        if size(table, 1) > 1
+            slope = (table(end, 2) - table(end-1, 2)) / (table(end, 1) - table(end-1, 1));
+            y = table(end, 2) + (x - table(end, 1)) * slope;
+        else
+            y = table(end, 2);
+        end
+        return;
+    end
+    for i = 1:size(table, 1) - 1
+        if table(i, 1) <= x && x <= table(i+1, 1)
+            proportion = (x - table(i, 1)) / (table(i+1, 1) - table(i, 1));
+            y = table(i, 2) + proportion * (table(i+1, 2) - table(i, 2));
+            return;
+        end
+    end
+    y = table(end, 2);
+end
+
+function name = pick_fieldname(s, desired)
+    name = '';
+    if isempty(s) || ~isstruct(s)
+        return;
+    end
+    fields = fieldnames(s);
+    if isempty(fields)
+        return;
+    end
+    desired_norm = normalize_key(desired);
+    for i = 1:numel(fields)
+        if strcmp(normalize_key(fields{i}), desired_norm)
+            name = fields{i};
+            return;
+        end
+    end
+end
+
+function norm = normalize_key(s)
+    if ~ischar(s)
+        if local_isstring(s)
+            s = char(s);
+        else
+            norm = '';
+            return;
+        end
+    end
+    s = lower(s);
+    norm = regexprep(s, '[^a-z0-9]', '');
+end
+
+function tf = local_contains(str, pattern)
+    if ~ischar(str)
+        if local_isstring(str)
+            str = char(str);
+        else
+            tf = false;
+            return;
+        end
+    end
+    if ~ischar(pattern)
+        if local_isstring(pattern)
+            pattern = char(pattern);
+        else
+            tf = false;
+            return;
+        end
+    end
+    tf = ~isempty(strfind(lower(str), lower(pattern)));
+end
+
+function tf = local_isstring(val)
+    tf = false;
+    try
+        tf = isa(val, 'string');
+    catch
+        tf = false;
+    end
+end
+
+function order = parse_section_order(data)
+    order = [];
+    s = '';
+    if isfield(data, 'section_order')
+        s = data.section_order;
+    end
+    if local_isstring(s)
+        s = char(s);
+    end
+    if ~ischar(s)
+        s = '';
+    end
+
+    for i = 1:length(s)
+        c = s(i);
+        if isstrprop(c, 'digit')
+            v = str2double(c);
+            if v >= 1 && v <= data.n_windings
+                order(end+1) = v; %#ok<AGROW>
+            end
+        end
+    end
+
+    if isempty(order)
+        order = 1:data.n_windings;
+    end
+
+    % Ensure all windings appear at least once
+    for w = 1:data.n_windings
+        if ~any(order == w)
+            order(end+1) = w; %#ok<AGROW>
+        end
+    end
+end
+
+function [section_turns, section_windings] = build_section_plan(data, order)
+    n_w = data.n_windings;
+    counts = zeros(1, n_w);
+    for i = 1:length(order)
+        counts(order(i)) = counts(order(i)) + 1;
+    end
+
+    allocations = cell(1, n_w);
+    indices = ones(1, n_w);
+
+    for w = 1:n_w
+        n_turns = data.windings(w).n_turns;
+        c = counts(w);
+        if c <= 0
+            c = 1;
+        end
+        base = floor(n_turns / c);
+        rem = mod(n_turns, c);
+        arr = base * ones(1, c);
+        if rem > 0
+            arr(1:rem) = arr(1:rem) + 1;
+        end
+        allocations{w} = arr;
+    end
+
+    section_windings = order;
+    section_turns = zeros(1, length(order));
+    for i = 1:length(order)
+        w = order(i);
+        idx = indices(w);
+        if idx <= length(allocations{w})
+            section_turns(i) = allocations{w}(idx);
+        else
+            section_turns(i) = 0;
+        end
+        indices(w) = idx + 1;
+    end
+end
+
+function v = get_tape_layer_breakdown_v(data)
+    v = 0;
+    if ~isfield(data, 'tape_kv_per_mm') || ~isfield(data, 'tape_thickness')
+        return;
+    end
+    if data.tape_kv_per_mm <= 0 || data.tape_thickness <= 0
+        return;
+    end
+    thickness_mm = data.tape_thickness * 1e3;
+    v = data.tape_kv_per_mm * thickness_mm * 1e3;
+end
+
+function used = is_tiw_used(data, winding_a, winding_b)
+    used = false;
+    if winding_a >= 1 && winding_a <= data.n_windings
+        if isfield(data.windings(winding_a), 'wire_insulation') && ...
+                strcmpi(data.windings(winding_a).wire_insulation, 'tiw')
+            used = true;
+        end
+    end
+    if winding_b >= 1 && winding_b <= data.n_windings
+        if isfield(data.windings(winding_b), 'wire_insulation') && ...
+                strcmpi(data.windings(winding_b).wire_insulation, 'tiw')
+            used = true;
+        end
+    end
+end
+
+function options = build_wire_option_lists(wires)
+    wire_names = fieldnames(wires);
+    standards = {};
+    diameters = {};
+    coatings = {};
+
+    for i = 1:length(wire_names)
+        winfo = wires.(wire_names{i});
+        if isfield(winfo, 'standard')
+            standards{end+1} = winfo.standard; %#ok<AGROW>
+        end
+        if isfield(winfo, 'cond_diameter')
+            diameters{end+1} = winfo.cond_diameter; %#ok<AGROW>
+        end
+        if isfield(winfo, 'coating')
+            coatings{end+1} = winfo.coating; %#ok<AGROW>
+        end
+    end
+
+    standards = normalize_option_list(standards);
+    diameters = normalize_option_list(diameters);
+    coatings = normalize_option_list(coatings);
+
+    options.standards = standards;
+    options.cond_diameters = diameters;
+    options.coatings = coatings;
+end
+
+function list = normalize_option_list(list)
+    if isempty(list)
+        list = {'-'};
+        return;
+    end
+    out = {};
+    for i = 1:length(list)
+        v = list{i};
+        if iscell(v)
+            for j = 1:length(v)
+                s = normalize_option_value(v{j});
+                if ~isempty(s)
+                    out{end+1} = s; %#ok<AGROW>
+                end
+            end
+        else
+            s = normalize_option_value(v);
+            if ~isempty(s)
+                out{end+1} = s; %#ok<AGROW>
+            end
+        end
+    end
+    if isempty(out)
+        list = {'-'};
+    else
+        list = unique(out, 'stable');
+    end
+end
+
+function s = normalize_option_value(v)
+    if isempty(v)
+        s = '';
+    elseif ischar(v)
+        s = strtrim(v);
+    elseif isstring(v)
+        s = strtrim(char(v));
+    elseif isnumeric(v)
+        s = strtrim(num2str(v));
+    else
+        s = '';
+    end
+end
+
+function set_popup_value(handle, value)
+    if isempty(handle) || ~ishandle(handle)
+        return;
+    end
+    list = get(handle, 'String');
+    if ischar(list)
+        list = cellstr(list);
+    end
+    idx = find(strcmp(list, value), 1);
+    if isempty(idx)
+        idx = 1;
+    end
+    set(handle, 'Value', idx);
+end
+
+function gap = get_inter_winding_gap(data, winding_a, winding_b)
+    gap = data.gap_winding;
+    if winding_a < 1 || winding_b > data.n_windings
+        return;
+    end
+    % Physical inter-winding gap is set by tape stack only
+    if isfield(data, 'tape_thickness') && isfield(data, 'tape_layers')
+        gap = data.tape_thickness * max(0, data.tape_layers);
+    end
+end
+
+function is_foil = is_foil_wire(data, wire_type)
+    wire = data.api.get_wire_info(wire_type);
+    if isfield(wire, 'conductor_shape')
+        is_rect = strcmp(wire.conductor_shape, 'rectangular');
+    else
+        is_rect = false;
+    end
+    [vis_w, vis_h] = data.api.get_wire_visual_dims(wire_type);
+    bobbin_height = 0;
+    if isfield(data, 'selected_core') && isfield(data.cores, data.selected_core)
+        core = data.cores.(data.selected_core);
+        bobbin = data.layout_calc.get_bobbin_dimensions(core);
+        bobbin_height = bobbin.height;
+    end
+    is_foil = is_rect && (vis_w > 5 * vis_h) && (bobbin_height <= 0 || vis_w > bobbin_height * 0.3);
+end
+
+function layout = calculate_layout(data, wire_type, n_turns, pattern, n_filar)
+    if nargin < 5 || isempty(n_filar)
+        n_filar = 1;
+    end
+
+    edge_margin = 0;
+    if isfield(data, 'edge_margin')
+        edge_margin = data.edge_margin;
+    end
+
+    try
+        layout = data.layout_calc.calculate_winding_layout(...
+            data.selected_core, wire_type, n_turns, pattern, n_filar, edge_margin);
+        return;
+    catch err
+        if local_contains(err.message, 'too many inputs') || local_contains(err.message, 'Too many input')
+            % Legacy classdef without n_filar/edge_margin support
+            n_turns_eff = n_turns * max(1, n_filar);
+            layout = data.layout_calc.calculate_winding_layout(...
+                data.selected_core, wire_type, n_turns_eff, pattern);
+            layout.legacy_no_filar = true;
+            layout.edge_margin = edge_margin;
+            return;
+        end
+        rethrow(err);
+    end
+end
+
+% ===============================================================
+% CALLBACK: SUPPLIER CASCADE (Issue #4)
+% ===============================================================
+
+function select_supplier(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+
+    sup_list = get(src, 'String');
+    idx = get(src, 'Value');
+    data.selected_supplier = sup_list{idx};
+
+    % Update core shapes dropdown for this supplier
+    new_cores = data.api.get_cores_by_supplier(data.selected_supplier);
+    if isempty(new_cores)
+        new_cores = fieldnames(data.cores);
+    end
+
+    core_dd = findobj(fig, 'Tag', 'core_dropdown');
+    set(core_dd, 'String', new_cores, 'Value', 1);
+
+    if ~isempty(new_cores)
+        data.selected_core = new_cores{1};
+    end
+
+    % Update materials dropdown for this supplier
+    new_mats = data.api.get_materials_by_supplier(data.selected_supplier);
+    if isempty(new_mats)
+        new_mats = fieldnames(data.materials);
+    end
+
+    mat_dd = findobj(fig, 'Tag', 'material_dropdown');
+    set(mat_dd, 'String', new_mats, 'Value', 1);
+
+    if ~isempty(new_mats)
+        data.selected_material = new_mats{1};
+    end
+
+    % Update info displays
+    set(findobj(fig, 'Tag', 'core_info'), 'String', get_core_info_text(data));
+    set(findobj(fig, 'Tag', 'material_info'), 'String', get_material_info_text(data));
+
+    guidata(fig, data);
+    update_visualization(data);
 end
 
 function select_core(src, ~)
@@ -486,10 +1643,9 @@ function select_core(src, ~)
     idx = get(src, 'Value');
     data.selected_core = core_list{idx};
 
-    % Update core info display
     set(findobj(fig, 'Tag', 'core_info'), 'String', get_core_info_text(data));
-
     guidata(fig, data);
+    update_visualization(data);
 end
 
 function select_material(src, ~)
@@ -498,17 +1654,15 @@ function select_material(src, ~)
 
     mat_list = get(src, 'String');
     idx = get(src, 'Value');
+    data.selected_material = mat_list{idx};
 
-    % Update material info display
     set(findobj(fig, 'Tag', 'material_info'), 'String', get_material_info_text(data));
-
     guidata(fig, data);
 end
 
 function update_frequency(src, ~)
     fig = gcbf;
     data = guidata(fig);
-
     data.f = str2double(get(src, 'String')) * 1e3;
     guidata(fig, data);
 end
@@ -529,11 +1683,55 @@ function select_wire(src, ~, winding)
     data.height = h;
     data.windings(winding).wire_shape = shape;
 
-    % Update displays
-    set(findobj(fig, 'Tag', sprintf('wire_info_%d', winding)), ...
-        'String', get_wire_info_text(data, winding));
+    % Update wire info fields (Issue #3)
+    update_wire_info_fields(fig, data, winding);
     update_summary(fig, data, winding);
 
+    guidata(fig, data);
+    update_visualization(data);
+end
+
+function select_wire_attribute(src, ~, winding, field)
+    fig = gcbf;
+    data = guidata(fig);
+
+    list = get(src, 'String');
+    if ischar(list)
+        list = cellstr(list);
+    end
+    idx = get(src, 'Value');
+    if isempty(idx) || idx < 1 || idx > numel(list)
+        return;
+    end
+    selected_value = list{idx};
+
+    % Find wires matching this attribute
+    wire_names = fieldnames(data.wires);
+    matches = {};
+    for i = 1:length(wire_names)
+        wname = wire_names{i};
+        winfo = data.wires.(wname);
+        if isfield(winfo, field) && strcmp(winfo.(field), selected_value)
+            matches{end+1} = wname; %#ok<AGROW>
+        end
+    end
+
+    if isempty(matches)
+        update_wire_info_fields(fig, data, winding);
+        return;
+    end
+
+    current = data.windings(winding).wire_type;
+    if ~any(strcmp(matches, current))
+        data.windings(winding).wire_type = matches{1};
+        [w_dim, h_dim, shape] = data.api.wire_to_conductor_dims(data.windings(winding).wire_type);
+        data.width = w_dim;
+        data.height = h_dim;
+        data.windings(winding).wire_shape = shape;
+    end
+
+    update_wire_info_fields(fig, data, winding);
+    update_summary(fig, data, winding);
     guidata(fig, data);
     update_visualization(data);
 end
@@ -541,26 +1739,20 @@ end
 function switch_tab(~, ~, tab_num)
     fig = gcbf;
     data = guidata(fig);
-
-    % Hide all content panels
     for w = 1:data.n_windings
         set(findobj(fig, 'Tag', sprintf('content%d', w)), 'Visible', 'off');
     end
-
-    % Show selected panel
     set(findobj(fig, 'Tag', sprintf('content%d', tab_num)), 'Visible', 'on');
 end
 
 function adjust_turns(~, ~, winding, delta)
     fig = gcbf;
     data = guidata(fig);
-
     new_val = max(1, data.windings(winding).n_turns + delta);
     data.windings(winding).n_turns = new_val;
-
     set(findobj(fig, 'Tag', sprintf('turns_val_%d', winding)), 'String', num2str(new_val));
+    update_wire_info_fields(fig, data, winding);
     update_summary(fig, data, winding);
-
     guidata(fig, data);
     update_visualization(data);
 end
@@ -568,14 +1760,12 @@ end
 function adjust_filar(~, ~, winding, delta)
     fig = gcbf;
     data = guidata(fig);
-
     new_val = max(1, min(4, data.windings(winding).n_filar + delta));
     data.windings(winding).n_filar = new_val;
-
     set(findobj(fig, 'Tag', sprintf('filar_val_%d', winding)), 'String', num2str(new_val));
     set(findobj(fig, 'Tag', sprintf('filar_name_%d', winding)), 'String', get_filar_name(new_val));
+    update_wire_info_fields(fig, data, winding);
     update_summary(fig, data, winding);
-
     guidata(fig, data);
     update_visualization(data);
 end
@@ -583,14 +1773,11 @@ end
 function update_turns_manual(src, ~, winding)
     fig = gcbf;
     data = guidata(fig);
-
-    new_val = round(str2double(get(src, 'String')));
-    new_val = max(1, new_val);
-
+    new_val = max(1, round(str2double(get(src, 'String'))));
     data.windings(winding).n_turns = new_val;
     set(src, 'String', num2str(new_val));
+    update_wire_info_fields(fig, data, winding);
     update_summary(fig, data, winding);
-
     guidata(fig, data);
     update_visualization(data);
 end
@@ -598,15 +1785,12 @@ end
 function update_filar_manual(src, ~, winding)
     fig = gcbf;
     data = guidata(fig);
-
-    new_val = round(str2double(get(src, 'String')));
-    new_val = max(1, min(4, new_val));
-
+    new_val = max(1, min(4, round(str2double(get(src, 'String')))));
     data.windings(winding).n_filar = new_val;
     set(src, 'String', num2str(new_val));
     set(findobj(fig, 'Tag', sprintf('filar_name_%d', winding)), 'String', get_filar_name(new_val));
+    update_wire_info_fields(fig, data, winding);
     update_summary(fig, data, winding);
-
     guidata(fig, data);
     update_visualization(data);
 end
@@ -614,23 +1798,289 @@ end
 function update_current(src, ~, winding)
     fig = gcbf;
     data = guidata(fig);
-
     data.windings(winding).current = str2double(get(src, 'String'));
+    update_wire_info_fields(fig, data, winding);
     update_summary(fig, data, winding);
     guidata(fig, data);
+end
+
+function update_voltage(src, ~, winding)
+    fig = gcbf;
+    data = guidata(fig);
+    data.windings(winding).voltage = str2double(get(src, 'String'));
+    update_all_summaries(fig, data);
+    guidata(fig, data);
+    update_visualization(data);
 end
 
 function update_phase(src, ~, winding)
     fig = gcbf;
     data = guidata(fig);
-
     data.windings(winding).phase = str2double(get(src, 'String'));
     guidata(fig, data);
 end
 
+function update_insulation_class(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    list = get(src, 'String');
+    idx = get(src, 'Value');
+    if ischar(list)
+        list = cellstr(list);
+    end
+    if idx >= 1 && idx <= numel(list)
+        data.insulation_class = list{idx};
+    end
+    update_all_summaries(fig, data);
+    guidata(fig, data);
+    update_visualization(data);
+end
+
+function update_tape_thickness(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val_mm = str2double(get(src, 'String'));
+    if isnan(val_mm) || val_mm < 0
+        val_mm = 0;
+    end
+    data.tape_thickness = val_mm * 1e-3;
+    set(src, 'String', num2str(val_mm));
+    update_all_summaries(fig, data);
+    guidata(fig, data);
+    update_visualization(data);
+end
+
+function update_tape_layers(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val = round(str2double(get(src, 'String')));
+    if isnan(val) || val < 0
+        val = 0;
+    end
+    data.tape_layers = val;
+    set(src, 'String', num2str(val));
+    update_all_summaries(fig, data);
+    guidata(fig, data);
+    update_visualization(data);
+end
+
+function update_tape_strength(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val = str2double(get(src, 'String'));
+    if isnan(val) || val < 0
+        val = 0;
+    end
+    data.tape_kv_per_mm = val;
+    set(src, 'String', num2str(val));
+    update_all_summaries(fig, data);
+    guidata(fig, data);
+    update_visualization(data);
+end
+
+function update_tiw_kv(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val = str2double(get(src, 'String'));
+    if isnan(val) || val < 0
+        val = 0;
+    end
+    data.tiw_kv = val;
+    set(src, 'String', num2str(val));
+    update_all_summaries(fig, data);
+    guidata(fig, data);
+    update_visualization(data);
+end
+
+function update_edge_margin(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val_mm = str2double(get(src, 'String'));
+    if isnan(val_mm) || val_mm < 0
+        val_mm = 0;
+    end
+    data.edge_margin = val_mm * 1e-3;
+    set(src, 'String', num2str(val_mm));
+    update_all_summaries(fig, data);
+    guidata(fig, data);
+    update_visualization(data);
+end
+
+function update_data_mode(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    prev_data = data;
+    list = get(src, 'String');
+    idx = get(src, 'Value');
+    if ischar(list)
+        list = cellstr(list);
+    end
+    mode_label = 'Offline';
+    if idx >= 1 && idx <= numel(list)
+        mode_label = list{idx};
+    end
+
+    url = get(findobj(fig, 'Tag', 'server_url'), 'String');
+
+    if local_contains(mode_label, 'online')
+        ok = data.api.set_mode('online', url);
+    else
+        ok = data.api.set_mode('offline', url);
+    end
+
+    data.data_mode = data.api.get_mode();
+    data.online_url = url;
+    data = reload_databases(fig, data, prev_data);
+    guidata(fig, data);
+
+    % Update status + title
+    status_text = 'Status: Offline';
+    if strcmpi(data.data_mode, 'online') && ok
+        status_text = sprintf('Status: Online (%s)', url);
+        set(fig, 'Name', 'Interactive Transformer Design Tool [Online Mode]');
+        title_ctrl = findobj(fig, 'Tag', 'main_title');
+        if ~isempty(title_ctrl)
+            set(title_ctrl, 'String', 'Interactive Transformer Design Tool [Online Mode]');
+        end
+    else
+        set(fig, 'Name', 'Interactive Transformer Design Tool [Offline Mode]');
+        set(src, 'Value', 1);
+        title_ctrl = findobj(fig, 'Tag', 'main_title');
+        if ~isempty(title_ctrl)
+            set(title_ctrl, 'String', 'Interactive Transformer Design Tool [Offline Mode]');
+        end
+    end
+    set(findobj(fig, 'Tag', 'data_mode_status'), 'String', status_text);
+end
+
+function update_server_url(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    data.online_url = get(src, 'String');
+    guidata(fig, data);
+
+    % If already online, try reconnect
+    mode_ctrl = findobj(fig, 'Tag', 'data_mode');
+    if ~isempty(mode_ctrl) && get(mode_ctrl, 'Value') == 2
+        update_data_mode(mode_ctrl, []);
+    end
+end
+
+function data = reload_databases(fig, data, prev_data)
+    if nargin < 3
+        prev_data = data;
+    end
+    data.wires = data.api.get_wires();
+    data.cores = data.api.get_cores();
+    data.materials = data.api.get_materials();
+    data.suppliers = data.api.get_suppliers();
+    data.wire_options = build_wire_option_lists(data.wires);
+
+    supplier_list = data.suppliers;
+    if isempty(supplier_list)
+        supplier_list = {'TDK'};
+    end
+    sel_supplier = supplier_list{1};
+    if isfield(prev_data, 'selected_supplier') && any(strcmp(supplier_list, prev_data.selected_supplier))
+        sel_supplier = prev_data.selected_supplier;
+    end
+    data.selected_supplier = sel_supplier;
+    set(findobj(fig, 'Tag', 'supplier_dropdown'), 'String', supplier_list, ...
+        'Value', find(strcmp(supplier_list, sel_supplier), 1));
+
+    core_list = data.api.get_cores_by_supplier(data.selected_supplier);
+    if isempty(core_list)
+        core_list = fieldnames(data.cores);
+    end
+    if isempty(core_list)
+        core_list = {'None'};
+    end
+    sel_core = core_list{1};
+    if isfield(prev_data, 'selected_core') && any(strcmp(core_list, prev_data.selected_core))
+        sel_core = prev_data.selected_core;
+    end
+    data.selected_core = sel_core;
+    set(findobj(fig, 'Tag', 'core_dropdown'), 'String', core_list, ...
+        'Value', find(strcmp(core_list, sel_core), 1));
+
+    mat_list = data.api.get_materials_by_supplier(data.selected_supplier);
+    if isempty(mat_list)
+        mat_list = fieldnames(data.materials);
+    end
+    if isempty(mat_list)
+        mat_list = {'N87'};
+    end
+    sel_mat = mat_list{1};
+    if isfield(prev_data, 'selected_material') && any(strcmp(mat_list, prev_data.selected_material))
+        sel_mat = prev_data.selected_material;
+    end
+    data.selected_material = sel_mat;
+    set(findobj(fig, 'Tag', 'material_dropdown'), 'String', mat_list, ...
+        'Value', find(strcmp(mat_list, sel_mat), 1));
+
+    wire_list = fieldnames(data.wires);
+    if isempty(wire_list)
+        wire_list = {'AWG_22'};
+    end
+
+    for w = 1:data.n_windings
+        sel_wire = wire_list{1};
+        if isfield(prev_data, 'windings') && numel(prev_data.windings) >= w
+            prev_wire = prev_data.windings(w).wire_type;
+            if any(strcmp(wire_list, prev_wire))
+                sel_wire = prev_wire;
+            end
+        end
+        data.windings(w).wire_type = sel_wire;
+        set(findobj(fig, 'Tag', sprintf('wire_type_%d', w)), ...
+            'String', wire_list, 'Value', find(strcmp(wire_list, sel_wire), 1));
+
+        set(findobj(fig, 'Tag', sprintf('wire_std_%d', w)), ...
+            'String', data.wire_options.standards, 'Value', 1);
+        set(findobj(fig, 'Tag', sprintf('wire_diam_%d', w)), ...
+            'String', data.wire_options.cond_diameters, 'Value', 1);
+        set(findobj(fig, 'Tag', sprintf('wire_coat_%d', w)), ...
+            'String', data.wire_options.coatings, 'Value', 1);
+
+        update_wire_info_fields(fig, data, w);
+    end
+
+    set(findobj(fig, 'Tag', 'core_info'), 'String', get_core_info_text(data));
+    set(findobj(fig, 'Tag', 'material_info'), 'String', get_material_info_text(data));
+
+    update_all_summaries(fig, data);
+    update_visualization(data);
+end
+
+function update_wire_insulation(src, ~, winding)
+    fig = gcbf;
+    data = guidata(fig);
+    list = get(src, 'String');
+    idx = get(src, 'Value');
+    if ischar(list)
+        list = cellstr(list);
+    end
+    if idx >= 1 && idx <= numel(list)
+        if strcmpi(list{idx}, 'TIW')
+            data.windings(winding).wire_insulation = 'tiw';
+        else
+            data.windings(winding).wire_insulation = 'standard';
+        end
+    end
+    update_all_summaries(fig, data);
+    guidata(fig, data);
+    update_visualization(data);
+end
+
 function update_summary(fig, data, winding)
-    summary_str = get_winding_summary(data, winding);
-    set(findobj(fig, 'Tag', sprintf('summary_%d', winding)), 'String', summary_str);
+    set(findobj(fig, 'Tag', sprintf('summary_%d', winding)), ...
+        'String', get_winding_summary(data, winding));
+end
+
+function update_all_summaries(fig, data)
+    for w = 1:data.n_windings
+        update_summary(fig, data, w);
+    end
 end
 
 function change_vis_mode(~, ~)
@@ -645,32 +2095,38 @@ function change_packing(~, ~)
     update_visualization(data);
 end
 
+function update_section_order(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    data.section_order = get(src, 'String');
+    guidata(fig, data);
+    update_visualization(data);
+end
+
+% ===============================================================
+% VISUALIZATION
+% ===============================================================
+
 function update_visualization(data)
     fig = data.fig_gui;
     ax = findobj(fig, 'Tag', 'vis_axes');
-    vis_mode_ctrl = findobj(fig, 'Tag', 'vis_mode');
-    vis_mode = get(vis_mode_ctrl, 'Value');
+    vis_mode = get(findobj(fig, 'Tag', 'vis_mode'), 'Value');
 
     cla(ax);
 
     switch vis_mode
         case 1
-            % Schematic 2D view (original)
             visualize_schematic_2d(data, ax);
         case 2
-            % Core window fit view
             visualize_core_window(data, ax);
         case 3
-            % Loss analysis placeholder
-            visualize_schematic_2d(data, ax);
-            text(ax, 0, 0, 'Run Analysis to see loss distribution', ...
-                'HorizontalAlignment', 'center', 'FontSize', 10);
+            text(ax, 0.5, 0.5, 'Run Analysis to see loss distribution', ...
+                'HorizontalAlignment', 'center', 'FontSize', 10, ...
+                'Units', 'normalized');
     end
 end
 
 function visualize_schematic_2d(data, ax)
-    % Original 2D schematic visualization with proper wire shapes
-
     hold(ax, 'on');
     axis(ax, 'equal');
     grid(ax, 'on');
@@ -681,8 +2137,14 @@ function visualize_schematic_2d(data, ax)
     for w = 1:data.n_windings
         n_turns = data.windings(w).n_turns;
         n_filar = data.windings(w).n_filar;
+        wire_type = data.windings(w).wire_type;
 
-        [w_dim, h_dim, shape] = data.api.wire_to_conductor_dims(data.windings(w).wire_type);
+        [w_dim, h_dim, shape] = data.api.wire_to_conductor_dims(wire_type);
+        [vis_w, vis_h] = data.api.get_wire_visual_dims(wire_type);
+        if is_foil_wire(data, wire_type)
+            tmp = w_dim; w_dim = h_dim; h_dim = tmp;
+            tmp = vis_w; vis_w = vis_h; vis_h = tmp;
+        end
 
         x_pos = x_offset;
         y_offset = 0;
@@ -691,37 +2153,17 @@ function visualize_schematic_2d(data, ax)
             for strand = 1:n_filar
                 y_pos = y_offset + (strand - 1) * (h_dim + data.gap_filar);
 
-                % Draw based on wire shape
                 if strcmp(shape, 'round')
-                    % Draw circle for round wire
-                    r = w_dim / 2;
+                    r = vis_w / 2;
                     theta = linspace(0, 2*pi, 50);
-                    fill(ax, x_pos + r*cos(theta), y_pos + h_dim/2 + r*sin(theta), ...
+                    fill(ax, x_pos + r*cos(theta), y_pos + vis_h/2 + r*sin(theta), ...
                         data.winding_colors{w}, 'EdgeColor', 'k', 'LineWidth', 0.5);
                 else
-                    % Draw rectangle for rectangular/foil wire
-                    rectangle('Parent', ax, 'Position', [x_pos - w_dim/2, y_pos, w_dim, h_dim], ...
+                    rectangle('Parent', ax, ...
+                        'Position', [x_pos - vis_w/2, y_pos, vis_w, vis_h], ...
                         'FaceColor', data.winding_colors{w}, ...
                         'EdgeColor', 'k', 'LineWidth', 0.5);
                 end
-
-                if n_filar > 1 && strand > 1
-                    plot(ax, [x_pos + w_dim/2 + 0.05e-3, x_pos + w_dim/2 + 0.15e-3], ...
-                        [y_pos + h_dim/2, y_pos + h_dim/2], ...
-                        'Color', data.winding_colors{w}, 'LineWidth', 2);
-                end
-            end
-
-            turn_center_y = y_offset + (n_filar * h_dim + (n_filar-1) * data.gap_filar) / 2;
-            text(x_pos - w_dim/2 - 0.3e-3, turn_center_y, ...
-                sprintf('T%d', turn), 'FontSize', 7, 'Parent', ax, ...
-                'HorizontalAlignment', 'right', 'VerticalAlignment', 'middle');
-
-            if turn == 1 && n_filar > 1
-                text(x_pos + w_dim/2 + 0.25e-3, turn_center_y, ...
-                    sprintf('%dx', n_filar), 'FontSize', 7, 'Parent', ax, ...
-                    'HorizontalAlignment', 'left', 'VerticalAlignment', 'middle', ...
-                    'Color', data.winding_colors{w}, 'FontWeight', 'bold');
             end
 
             turn_height = n_filar * h_dim + (n_filar - 1) * data.gap_filar + data.gap_layer;
@@ -734,129 +2176,142 @@ function visualize_schematic_2d(data, ax)
             'HorizontalAlignment', 'center', 'FontWeight', 'bold', ...
             'FontSize', 10, 'Color', data.winding_colors{w});
 
-        info_str = sprintf('%d turns\n%s\n%s (%s)', n_turns, ...
-            get_filar_name(n_filar), data.windings(w).wire_type, shape);
-        text(x_pos, -1.5e-3, info_str, 'Parent', ax, ...
-            'HorizontalAlignment', 'center', 'FontSize', 7);
-
         if w < data.n_windings
-            x_offset = x_offset + w_dim/2 + data.gap_winding + w_dim/2;
+            gap_winding = get_inter_winding_gap(data, w, w+1);
+            x_offset = x_offset + max(vis_w, w_dim)/2 + gap_winding + max(vis_w, w_dim)/2;
         end
     end
 
-    ylim(ax, [-2e-3, max_y_all * 1.5]);
+    ylim(ax, [-2e-3, max_y_all * 1.3]);
     xlabel(ax, 'X Position (m)');
     ylabel(ax, 'Y Position (m)');
     title(ax, 'Winding Schematic');
     hold(ax, 'off');
 
-    % Update info text
     set(findobj(data.fig_gui, 'Tag', 'vis_info'), 'String', ...
         'Schematic view showing winding arrangement');
 end
 
 function visualize_core_window(data, ax)
-    % Show how windings fit in selected core's bobbin window
-    % Uses MAS-style section-based layout with IEC insulation gaps
+    % ISSUE #2 FIX: Draw correct shapes for foil/rect wire
 
     if strcmp(data.selected_core, 'None')
         text(ax, 0.5, 0.5, 'No core selected', ...
-            'HorizontalAlignment', 'center', 'FontSize', 12);
+            'HorizontalAlignment', 'center', 'FontSize', 12, ...
+            'Units', 'normalized');
         return;
     end
 
-    % Get packing pattern from GUI
-    packing_ctrl = findobj(data.fig_gui, 'Tag', 'packing_pattern');
-    packing_idx = get(packing_ctrl, 'Value');
+    packing_idx = get(findobj(data.fig_gui, 'Tag', 'packing_pattern'), 'Value');
     patterns = {'layered', 'orthocyclic', 'random'};
     pattern = patterns{packing_idx};
 
-    % Build winding definitions for multi-winding layout
-    winding_defs = cell(data.n_windings, 1);
-    for w = 1:data.n_windings
-        def = struct();
-        def.wire_type  = data.windings(w).wire_type;
-        def.n_turns    = data.windings(w).n_turns * data.windings(w).n_filar;
-        def.name       = data.windings(w).name;
-        % Voltage for IEC insulation calculation (default 0 if not set)
-        if isfield(data.windings(w), 'voltage')
-            def.voltage = data.windings(w).voltage;
-        else
-            def.voltage = 0;
-        end
-        % Insulation type (default basic for transformers)
-        if isfield(data.windings(w), 'insulation')
-            def.insulation = data.windings(w).insulation;
-        else
-            def.insulation = 'basic';
-        end
-        winding_defs{w} = def;
-    end
-
-    % Calculate section-based multi-winding layout
-    layouts = data.layout_calc.calculate_multi_winding_layout(...
-        data.selected_core, winding_defs, pattern);
-
-    % Draw
     hold(ax, 'on');
     axis(ax, 'equal');
 
-    bobbin = layouts{1}.bobbin;
+    core = data.cores.(data.selected_core);
+    bobbin = data.layout_calc.get_bobbin_dimensions(core);
 
-    % Bobbin outline
+    edge_margin = 0;
+    if isfield(data, 'edge_margin')
+        edge_margin = data.edge_margin;
+    end
+
+    % Draw bobbin window
     rectangle('Parent', ax, 'Position', [0, 0, bobbin.width, bobbin.height], ...
         'EdgeColor', 'k', 'LineWidth', 2, 'LineStyle', '--');
+    if edge_margin > 0
+        rectangle('Parent', ax, ...
+            'Position', [edge_margin, edge_margin, ...
+                         max(1e-6, bobbin.width - 2*edge_margin), ...
+                         max(1e-6, bobbin.height - 2*edge_margin)], ...
+            'EdgeColor', [0.5 0.5 0.5], 'LineStyle', ':', 'LineWidth', 1);
+    end
     text(bobbin.width/2, bobbin.height + 0.001, 'Bobbin Window', ...
         'Parent', ax, 'HorizontalAlignment', 'center', 'FontSize', 9, 'FontWeight', 'bold');
 
-    % Draw each winding
+    x_start = 0;
     total_fits = true;
-    for w = 1:length(layouts)
-        lay = layouts{w};
-        col = data.winding_colors{mod(w-1, length(data.winding_colors)) + 1};
+    x_origin = edge_margin;
+    available_width = bobbin.width - 2*edge_margin;
 
-        if isfield(lay, 'all_fit') && ~lay.all_fit
+    section_order = parse_section_order(data);
+    [section_turns, section_windings] = build_section_plan(data, section_order);
+
+    for s = 1:length(section_windings)
+        w = section_windings(s);
+        n_turns = section_turns(s);
+        if n_turns <= 0
+            continue;
+        end
+
+        wire_type = data.windings(w).wire_type;
+        n_filar = data.windings(w).n_filar;
+
+        layout = calculate_layout(data, wire_type, n_turns, pattern, n_filar);
+
+        if ~layout.fits
+            total_fits = false;
+        end
+        if (x_start + layout.required_width) > max(1e-9, available_width)
             total_fits = false;
         end
 
-        % Draw turns
-        for i = 1:size(lay.turn_positions, 1)
-            x = lay.turn_positions(i, 1);
-            y = lay.turn_positions(i, 2);
+        % Determine wire shape for drawing
+        is_rect = isfield(layout, 'wire_shape') && strcmp(layout.wire_shape, 'rectangular');
 
-            if isfield(lay, 'wire_shape') && ...
-                    (strcmp(lay.wire_shape, 'rectangular') || strcmp(lay.wire_shape, 'foil'))
-                tw = lay.turn_sizes(i, 1);
-                th = lay.turn_sizes(i, 2);
+        % Draw turns with correct shapes
+        for i = 1:size(layout.turn_positions, 1)
+            x = x_origin + x_start + layout.turn_positions(i, 1);
+            y = edge_margin + layout.turn_positions(i, 2);
+
+            if is_rect
+                % ISSUE #2 FIX: Draw rectangles for foil/rect
+                if isfield(layout, 'draw_w')
+                    vw = layout.draw_w;
+                    vh = layout.draw_h;
+                else
+                    vw = layout.wire_vis_w;
+                    vh = layout.wire_vis_h;
+                end
                 rectangle('Parent', ax, ...
-                    'Position', [x - tw/2, y - th/2, tw, th], ...
-                    'FaceColor', col, 'EdgeColor', 'k', 'LineWidth', 0.3);
-            else
-                r = lay.wire_od / 2;
-                theta = linspace(0, 2*pi, 30);
-                fill(ax, x + r*cos(theta), y + r*sin(theta), col, ...
+                    'Position', [x - vw/2, y - vh/2, vw, vh], ...
+                    'FaceColor', data.winding_colors{w}, ...
                     'EdgeColor', 'k', 'LineWidth', 0.3);
+            else
+                % Draw circles for round/litz wire
+                r = layout.wire_od / 2;
+                theta = linspace(0, 2*pi, 30);
+                fill(ax, x + r*cos(theta), y + r*sin(theta), ...
+                    data.winding_colors{w}, 'EdgeColor', 'k', 'LineWidth', 0.3);
             end
         end
 
-        % Section boundary (dotted gray)
-        if isfield(lay, 'section_x_offset') && isfield(lay, 'section_width')
-            rectangle('Parent', ax, ...
-                'Position', [lay.section_x_offset, 0, lay.section_width, bobbin.height], ...
-                'EdgeColor', [0.6 0.6 0.6], 'LineWidth', 0.5, 'LineStyle', ':');
+        % Label winding section
+        text(x_origin + x_start + layout.required_width/2, -0.0005, data.windings(w).name, ...
+            'Parent', ax, 'HorizontalAlignment', 'center', 'FontSize', 8, ...
+            'Color', data.winding_colors{w}, 'FontWeight', 'bold');
+
+        gap_winding = 0;
+        if s < length(section_windings)
+            if section_windings(s+1) ~= w
+                gap_winding = get_inter_winding_gap(data, w, section_windings(s+1));
+            end
         end
 
-        % Winding label
-        if isfield(lay, 'section_x_offset') && isfield(lay, 'section_width')
-            label_x = lay.section_x_offset + lay.section_width / 2;
-        else
-            label_x = mean(lay.turn_positions(:,1));
+        if gap_winding > 0
+            tape_y = edge_margin;
+            tape_h = max(1e-6, bobbin.height - 2*edge_margin);
+            rect = rectangle('Parent', ax, ...
+                'Position', [x_origin + x_start + layout.required_width, tape_y, ...
+                             gap_winding, tape_h], ...
+                'FaceColor', [0.95 0.85 0.4], 'EdgeColor', 'none');
+            if isprop(rect, 'FaceAlpha')
+                set(rect, 'FaceAlpha', 0.35);
+            end
         end
-        wname = 'Winding';
-        if isfield(lay, 'winding_name'); wname = lay.winding_name; end
-        text(label_x, -0.0005, wname, ...
-            'Parent', ax, 'HorizontalAlignment', 'center', 'FontSize', 8, ...
-            'Color', col, 'FontWeight', 'bold');
+
+        x_start = x_start + layout.required_width + gap_winding;
     end
 
     xlim(ax, [-0.001, bobbin.width + 0.001]);
@@ -866,20 +2321,20 @@ function visualize_core_window(data, ax)
     title(ax, sprintf('%s packing in %s', pattern, data.selected_core));
     hold(ax, 'off');
 
-    % Update info text
     if total_fits
-        info_str = sprintf('[OK] All windings FIT in core\nPattern: %s', pattern);
+        info_str = sprintf('All windings FIT in core\nPattern: %s', pattern);
         color = [0.8 1.0 0.8];
     else
-        info_str = sprintf('[WARN] Windings DO NOT FIT\nTry smaller wire or fewer turns');
+        info_str = sprintf('Windings DO NOT FIT\nTry smaller wire or fewer turns');
         color = [1.0 0.8 0.8];
     end
 
-    info_ctrl = findobj(data.fig_gui, 'Tag', 'vis_info');
-    if ~isempty(info_ctrl)
-        set(info_ctrl, 'String', info_str, 'BackgroundColor', color);
-    end
+    set(findobj(data.fig_gui, 'Tag', 'vis_info'), 'String', info_str, 'BackgroundColor', color);
 end
+
+% ===============================================================
+% RUN ANALYSIS (Issue #1 FIX: use layout positions)
+% ===============================================================
 
 function run_analysis(~, ~)
     fig = gcbf;
@@ -887,45 +2342,88 @@ function run_analysis(~, ~)
 
     fprintf('\n=== RUNNING ANALYSIS ===\n');
 
-    % Build conductors for all windings
+    % Get packing pattern from GUI
+    packing_idx = get(findobj(fig, 'Tag', 'packing_pattern'), 'Value');
+    patterns = {'layered', 'orthocyclic', 'random'};
+    pattern = patterns{packing_idx};
+
+    % ISSUE #1 FIX: Build conductors from LAYOUT POSITIONS
+    % This ensures analysis geometry matches visualization
     all_conductors = [];
     all_winding_map = [];
     all_wire_shapes = {};
-    x_offset = 0;
+    x_start = 0;
+    edge_margin = 0;
+    if isfield(data, 'edge_margin')
+        edge_margin = data.edge_margin;
+    end
 
-    for w = 1:data.n_windings
-        % Get wire dimensions for this winding
-        [w_dim, h_dim, shape] = data.api.wire_to_conductor_dims(data.windings(w).wire_type);
+    section_order = parse_section_order(data);
+    [section_turns, section_windings] = build_section_plan(data, section_order);
 
-        cfg = struct();
-        cfg.n_filar = data.windings(w).n_filar;
-        cfg.n_turns = data.windings(w).n_turns;
-        cfg.n_windings = 1;
-        cfg.width = w_dim;
-        cfg.height = h_dim;
-        cfg.gap_layer = data.gap_layer;
-        cfg.gap_filar = data.gap_filar;
-        cfg.currents = data.windings(w).current;
-        cfg.phases = data.windings(w).phase;
-        cfg.x_offset = x_offset;
-        cfg.wire_shape = shape;
-
-        fprintf('Building winding %d (%s) with %s wire (%s)...\n', ...
-            w, data.windings(w).name, data.windings(w).wire_type, shape);
-        [cond, map, shapes] = build_multifilar_winding(cfg);
-
-        all_conductors = [all_conductors; cond];
-        all_winding_map = [all_winding_map; map + (w-1)];
-        all_wire_shapes = [all_wire_shapes, shapes];
-
-        % Update x_offset
-        if w < data.n_windings
-            x_offset = x_offset + w_dim/2 + data.gap_winding + w_dim/2;
+    for s = 1:length(section_windings)
+        w = section_windings(s);
+        n_turns = section_turns(s);
+        if n_turns <= 0
+            continue;
         end
+
+        wire_type = data.windings(w).wire_type;
+        [w_dim, h_dim, shape] = data.api.wire_to_conductor_dims(wire_type);
+        if is_foil_wire(data, wire_type)
+            tmp = w_dim; w_dim = h_dim; h_dim = tmp;
+        end
+
+        n_filar = data.windings(w).n_filar;
+        total_conds = n_turns * n_filar;
+
+        fprintf('Building winding %d (%s): %s wire (%s), %d turns x %d filar\n', ...
+            w, data.windings(w).name, wire_type, shape, n_turns, n_filar);
+
+        % Use SAME layout calculator as visualization
+        if ~strcmp(data.selected_core, 'None')
+            layout = calculate_layout(data, wire_type, n_turns, pattern, n_filar);
+        else
+            % Fallback: simple vertical stack if no core selected
+            layout = struct();
+            positions = zeros(total_conds, 2);
+            for t = 1:total_conds
+                positions(t, :) = [0, (t-0.5) * max(w_dim, h_dim)];
+            end
+            layout.turn_positions = positions;
+            layout.required_width = max(w_dim, h_dim);
+        end
+
+        % Current assignment
+        I_per_strand = data.windings(w).current / n_filar;
+        phase = data.windings(w).phase;
+
+        % Build conductor array from layout positions
+        for t = 1:total_conds
+            x = edge_margin + x_start + layout.turn_positions(t, 1);
+            y = edge_margin + layout.turn_positions(t, 2);
+
+            all_conductors = [all_conductors; x, y, w_dim, h_dim, I_per_strand, phase];
+            all_winding_map = [all_winding_map; w];
+            all_wire_shapes{end+1} = shape;
+        end
+
+        fprintf('  %d conductors at layout positions (pattern: %s)\n', total_conds, pattern);
+
+        gap_winding = 0;
+        if s < length(section_windings)
+            if section_windings(s+1) ~= w
+                gap_winding = get_inter_winding_gap(data, w, section_windings(s+1));
+            end
+        end
+        x_start = x_start + layout.required_width + gap_winding;
     end
 
     fprintf('\nBuilding PEEC geometry with wire shapes...\n');
-    geom = peec_build_geometry(all_conductors, data.sigma, data.mu0, data.Nx, data.Ny, all_winding_map, all_wire_shapes);
+    fprintf('  Total conductors: %d\n', size(all_conductors, 1));
+
+    geom = peec_build_geometry(all_conductors, data.sigma, data.mu0, ...
+        data.Nx, data.Ny, all_winding_map, all_wire_shapes);
 
     fprintf('  Wire shapes: %d conductors\n', length(geom.wire_shapes));
     for i = 1:min(3, length(geom.wire_shapes))
@@ -937,6 +2435,10 @@ function run_analysis(~, ~)
 
     display_results(data, geom, all_conductors, all_winding_map, results);
 end
+
+% ===============================================================
+% DISPLAY RESULTS
+% ===============================================================
 
 function display_results(data, geom, conductors, winding_map, results)
     if isempty(data.fig_results) || ~ishandle(data.fig_results)
@@ -959,7 +2461,9 @@ function display_results(data, geom, conductors, winding_map, results)
         for c = 1:n_cond_in_winding
             idx_start = (cond_offset + c - 1) * fils_per_cond + 1;
             idx_end = (cond_offset + c) * fils_per_cond;
-            winding_losses(w) = winding_losses(w) + sum(results.P_fil(idx_start:idx_end));
+            if idx_end <= length(results.P_fil)
+                winding_losses(w) = winding_losses(w) + sum(results.P_fil(idx_start:idx_end));
+            end
         end
 
         cond_offset = cond_offset + n_cond_in_winding;
@@ -993,7 +2497,7 @@ function display_results(data, geom, conductors, winding_map, results)
     grid on;
 
     subplot(2,3,4);
-    rac_rdc = winding_losses ./ winding_Pdc;
+    rac_rdc = winding_losses ./ max(winding_Pdc, 1e-12);
     bar(rac_rdc);
     set(gca, 'XTickLabel', {data.windings.name});
     ylabel('R_{AC}/R_{DC}');
@@ -1002,7 +2506,6 @@ function display_results(data, geom, conductors, winding_map, results)
 
     subplot(2,3,5);
     axis off;
-
     text(0.05, 0.95, 'Loss Summary', 'FontSize', 12, 'FontWeight', 'bold');
     y_pos = 0.85;
 
@@ -1028,13 +2531,12 @@ function display_results(data, geom, conductors, winding_map, results)
         y_pos = y_pos - 0.12;
     end
 
-    text(0.05, y_pos, sprintf('Total Loss: %.4f W', results.P_total), ...
+    text(0.05, y_pos, sprintf('PEEC Total Loss: %.4f W', results.P_total), ...
         'FontSize', 11, 'FontWeight', 'bold');
 
     subplot(2,3,6);
     axis off;
     text(0.05, 0.95, 'Core & Configuration', 'FontSize', 12, 'FontWeight', 'bold');
-
     text(0.05, 0.85, sprintf('Core: %s', data.selected_core), 'FontSize', 9);
     text(0.05, 0.75, sprintf('Frequency: %.0f kHz', data.f/1e3), 'FontSize', 9);
 
@@ -1047,8 +2549,19 @@ function display_results(data, geom, conductors, winding_map, results)
         y_pos = y_pos - 0.08;
     end
 
+    text(0.05, y_pos - 0.05, 'Data: Offline database', 'FontSize', 8, ...
+        'Color', [0.5 0.5 0.5]);
+
     fprintf('\n=== ANALYSIS COMPLETE ===\n');
+
+    % Store results figure handle
+    data.fig_results = gcf;
+    guidata(data.fig_gui, data);
 end
+
+% ===============================================================
+% UTILITY
+% ===============================================================
 
 function reset_defaults(~, ~)
     close all;
@@ -1057,5 +2570,9 @@ end
 
 function name = get_filar_name(n)
     names = {'Single-filar', 'Bi-filar', 'Tri-filar', 'Quad-filar'};
-    name = names{n};
+    if n >= 1 && n <= 4
+        name = names{n};
+    else
+        name = sprintf('%d-filar', n);
+    end
 end
