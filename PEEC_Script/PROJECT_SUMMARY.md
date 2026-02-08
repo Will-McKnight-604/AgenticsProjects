@@ -413,6 +413,141 @@ interactive_winding_designer.m (MAIN)
             └──> plot_loss_density.m
 ```
 
+### Detailed Dependency Analysis
+
+#### External File Dependencies (8 total)
+
+**Custom MATLAB Files (6):**
+
+1. **openmagnetics_api_interface.m**
+   - Methods used: `get_wires()`, `get_cores()`, `get_materials()`, `get_suppliers()`, `get_cores_by_supplier()`, `get_materials_by_supplier()`, `wire_to_conductor_dims()`, `get_wire_info()`, `get_wire_visual_dims()`, `set_mode()`, `get_mode()`
+   - Called: During initialization and when switching data modes
+
+2. **openmagnetics_winding_layout.m**
+   - Methods used: `calculate_winding_layout(core, wire_type, n_turns, pattern, n_filar, edge_margin)`, `get_bobbin_dimensions(core)`
+   - Called: During winding configuration updates and fit validation
+
+3. **peec_build_geometry.m**
+   - Function signature: `geom = peec_build_geometry(all_conductors, sigma, mu0, Nx, Ny, all_winding_map, all_wire_shapes)`
+   - Called from: `run_analysis()` (line 2425)
+
+4. **peec_solve_frequency.m**
+   - Function signature: `results = peec_solve_frequency(geom, all_conductors, f, sigma, mu0)`
+   - Called from: `run_analysis()` (line 2434)
+
+5. **plot_current_density.m**
+   - Function signature: `plot_current_density(geom, results)`
+   - Called from: `display_results()` (line 2484)
+
+6. **plot_loss_density.m**
+   - Function signature: `plot_loss_density(geom, results)`
+   - Called from: `display_results()` (line 2488)
+
+**Data Files (2):**
+
+7. **IEC_60664-1.json**
+   - Purpose: IEC 60664 Part 1 insulation standards (clearance and creepage requirements)
+   - Search paths: `{script_dir}\insulation_standards\` or `C:\Users\Will\Downloads\MKF-main\src\data\insulation_standards\`
+   - Loaded by: `iec60664_tables()` internal function
+
+8. **IEC_60664-4.json**
+   - Purpose: IEC 60664 Part 4 standards (frequency-dependent adjustments >30kHz)
+   - Search paths: Same as above
+   - Loaded by: `iec60664_tables()` internal function
+
+#### Internal Functions in interactive_winding_designer.m (41 total)
+
+**GUI Management (5):**
+- `build_gui()` - Main GUI constructor
+- `switch_tab()` - Tab switching handler
+- `change_vis_mode()` - Visualization mode switcher
+- `change_packing()` - Packing pattern switcher
+- `reset_defaults()` - Reset to default values
+
+**Wire Configuration (10):**
+- `build_wire_option_lists()` - Builds wire dropdown options
+- `update_wire_info_fields()` - Updates wire information display
+- `select_wire()` - Wire selection callback
+- `select_wire_attribute()` - Wire attribute selection
+- `is_foil_wire()` - Detects foil/rectangular wire types
+- `calculate_layout()` - Calculates winding layout
+- `adjust_turns()` - Turn count adjustment (+/-)
+- `adjust_filar()` - Filar count adjustment (+/-)
+- `update_turns_manual()` - Manual turn entry
+- `update_filar_manual()` - Manual filar entry
+
+**Core and Material (6):**
+- `select_supplier()` - Supplier selection with cascading updates
+- `select_core()` - Core selection callback
+- `select_material()` - Material selection callback
+- `get_core_info_text()` - Core information formatter
+- `get_material_info_text()` - Material information formatter
+- `reload_databases()` - Reloads data from API/offline mode
+
+**Winding Parameters (5):**
+- `update_current()` - Current value update
+- `update_voltage()` - Voltage value update
+- `update_phase()` - Phase angle update
+- `update_wire_insulation()` - Wire insulation type
+- `update_frequency()` - Operating frequency update
+
+**Insulation & Safety Calculations (14):**
+- `compute_insulation_requirements()` - Main insulation calculator (IEC 60664 compliance)
+- `get_isolation_summary()` - Isolation summary text
+- `get_isolation_summary_legacy()` - Legacy isolation summary
+- `update_insulation_class()` - Insulation class updates
+- `update_tape_thickness()`, `update_tape_layers()`, `update_tape_strength()` - Tape parameter updates
+- `update_edge_margin()` - Edge margin adjustment
+- `update_tiw_kv()` - TIW (Triple Insulated Wire) kV rating update
+- `get_tape_layer_breakdown_v()` - Tape breakdown voltage calculation
+- `is_tiw_used()` - Detects TIW usage between windings
+- `get_inter_winding_gap()` - Inter-winding gap calculation
+- `iec60664_requirements()` - IEC 60664 calculation dispatcher
+- `iec60664_tables()` - Loads IEC standard tables from JSON
+
+**Visualization (3):**
+- `update_visualization()` - Main visualization dispatcher
+- `visualize_schematic_2d()` - 2D schematic renderer
+- `visualize_core_window()` - Core window packing view
+
+**Analysis Execution (3):**
+- `run_analysis()` - Executes PEEC electromagnetic analysis
+- `display_results()` - Results visualization in separate figure
+- `get_winding_summary()` - Generates winding summary text
+- `update_summary()` - Updates winding summary display
+- `update_all_summaries()` - Updates all winding summaries
+
+**Utility & Helper Functions (6):**
+- `get_filar_name()` - Converts filar count to name (e.g., "bi-filar")
+- `normalize_option_list()` - Normalizes dropdown list options
+- `skin_depth_copper()` - Skin depth calculator for copper
+- `parse_section_order()` - Parses section order string
+- `build_section_plan()` - Plans winding section layout
+- `update_section_order()` - Updates section order configuration
+
+### Call Sequence During Analysis
+
+**Initialization:**
+1. User launches `interactive_winding_designer`
+2. Creates `openmagnetics_api_interface` object → loads databases
+3. Creates `openmagnetics_winding_layout` object → layout calculator ready
+4. Calls `build_gui()` → constructs 3-panel interface
+5. Loads IEC 60664 JSON files for insulation calculations
+
+**User Configuration:**
+- Wire/core/material selection → triggers `update_visualization()`
+- Parameter changes → updates summaries via `update_summary()`
+- Fit validation → calls layout calculator methods
+- Insulation requirements → computed via `compute_insulation_requirements()`
+
+**Analysis Execution:**
+1. User clicks "Run Analysis" button
+2. `run_analysis()` extracts configuration from GUI
+3. → `peec_build_geometry()` creates PEEC model (filament discretization)
+4. → `peec_solve_frequency()` solves impedance matrix at operating frequency
+5. → `display_results()` opens new figure window
+6. → `plot_current_density()` and `plot_loss_density()` generate visualizations
+
 ### Non-Essential Files (Not Used by Main Application)
 
 These are standalone test/example/comparison scripts:
