@@ -45,6 +45,23 @@ classdef openmagnetics_winding_layout < handle
 
             % Get visual dimensions for layout
             [vis_w, vis_h] = obj.api.get_wire_visual_dims(wire_type);
+
+            % For foil wires: width is NOT a wire property - it's the core window height
+            % OpenMagnetics foil wires only specify thickness (conductingWidth)
+            % The width (conductingHeight) is null because foil is cut to match the core
+            if strcmp(wire_shape, 'rectangular')
+                wire_type_field = '';
+                if isfield(wire, 'type')
+                    wire_type_field = wire.type;
+                    if iscell(wire_type_field); wire_type_field = wire_type_field{1}; end
+                end
+                if strcmpi(wire_type_field, 'foil') || (vis_w > 10 * vis_h)
+                    % Foil wire: set width = bobbin height (foil fills the window)
+                    vis_w = bobbin_eff.height;
+                    fprintf('  Foil wire: setting width to bobbin height = %.3f mm\n', vis_w*1e3);
+                end
+            end
+
             wire_od = max(vis_w, vis_h);  % For round, this is OD
 
             fprintf('=== WINDING LAYOUT ===\n');

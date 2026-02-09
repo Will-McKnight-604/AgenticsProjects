@@ -1,0 +1,1638 @@
+{
+  "15": {
+    "name": "15",
+    "manufacturer": "Fair-Rite"
+  },
+  "20": {
+    "name": "20",
+    "manufacturer": "Fair-Rite"
+  },
+  "31": {
+    "name": "31",
+    "manufacturer": "Fair-Rite"
+  },
+  "3C90": {
+    "name": "3C90",
+    "manufacturer": "Ferroxcube"
+  },
+  "3C91": {
+    "name": "3C91",
+    "manufacturer": "Ferroxcube"
+  },
+  "3C92": {
+    "name": "3C92",
+    "manufacturer": "Ferroxcube"
+  },
+  "3C92A": {
+    "name": "3C92A",
+    "manufacturer": "Ferroxcube"
+  },
+  "3C94": {
+    "name": "3C94",
+    "manufacturer": "Ferroxcube"
+  },
+  "3C95": {
+    "name": "3C95",
+    "manufacturer": "Ferroxcube"
+  },
+  "3C95A": {
+    "name": "3C95A",
+    "manufacturer": "Ferroxcube"
+  },
+  "3C95F": {
+    "name": "3C95F",
+    "manufacturer": "Ferroxcube"
+  },
+  "3C96": {
+    "name": "3C96",
+    "manufacturer": "Ferroxcube"
+  },
+  "3C97": {
+    "name": "3C97",
+    "manufacturer": "Ferroxcube"
+  },
+  "3C98": {
+    "name": "3C98",
+    "manufacturer": "Ferroxcube"
+  },
+  "3C99": {
+    "name": "3C99",
+    "manufacturer": "Ferroxcube"
+  },
+  "3E6": {
+    "name": "3E6",
+    "manufacturer": "Ferroxcube"
+  },
+  "3F3": {
+    "name": "3F3",
+    "manufacturer": "Ferroxcube"
+  },
+  "3F36": {
+    "name": "3F36",
+    "manufacturer": "Ferroxcube"
+  },
+  "3F4": {
+    "name": "3F4",
+    "manufacturer": "Ferroxcube"
+  },
+  "3F46": {
+    "name": "3F46",
+    "manufacturer": "Ferroxcube"
+  },
+  "43": {
+    "name": "43",
+    "manufacturer": "Fair-Rite"
+  },
+  "44": {
+    "name": "44",
+    "manufacturer": "Fair-Rite"
+  },
+  "46": {
+    "name": "46",
+    "manufacturer": "Fair-Rite"
+  },
+  "4F1": {
+    "name": "4F1",
+    "manufacturer": "Ferroxcube"
+  },
+  "51": {
+    "name": "51",
+    "manufacturer": "Fair-Rite"
+  },
+  "52": {
+    "name": "52",
+    "manufacturer": "Fair-Rite"
+  },
+  "61": {
+    "name": "61",
+    "manufacturer": "Fair-Rite"
+  },
+  "67": {
+    "name": "67",
+    "manufacturer": "Fair-Rite"
+  },
+  "68": {
+    "name": "68",
+    "manufacturer": "Fair-Rite"
+  },
+  "73": {
+    "name": "73",
+    "manufacturer": "Fair-Rite"
+  },
+  "75": {
+    "name": "75",
+    "manufacturer": "Fair-Rite"
+  },
+  "75_Series_26": {
+    "name": "75-Series 26",
+    "manufacturer": "Magnetics"
+  },
+  "75_Series_40": {
+    "name": "75-Series 40",
+    "manufacturer": "Magnetics"
+  },
+  "75_Series_60": {
+    "name": "75-Series 60",
+    "manufacturer": "Magnetics"
+  },
+  "76": {
+    "name": "76",
+    "manufacturer": "Fair-Rite"
+  },
+  "77": {
+    "name": "77",
+    "manufacturer": "Fair-Rite"
+  },
+  "78": {
+    "name": "78",
+    "manufacturer": "Fair-Rite"
+  },
+  "79": {
+    "name": "79",
+    "manufacturer": "Fair-Rite"
+  },
+  "80": {
+    "name": "80",
+    "manufacturer": "Fair-Rite"
+  },
+  "95": {
+    "name": "95",
+    "manufacturer": "Fair-Rite"
+  },
+  "96": {
+    "name": "96",
+    "manufacturer": "Fair-Rite"
+  },
+  "97": {
+    "name": "97",
+    "manufacturer": "Fair-Rite"
+  },
+  "98": {
+    "name": "98",
+    "manufacturer": "Fair-Rite"
+  },
+  "A043": {
+    "name": "A043",
+    "manufacturer": "ACME"
+  },
+  "A044": {
+    "name": "A044",
+    "manufacturer": "ACME"
+  },
+  "A05": {
+    "name": "A05",
+    "manufacturer": "ACME"
+  },
+  "A06": {
+    "name": "A06",
+    "manufacturer": "ACME"
+  },
+  "A061": {
+    "name": "A061",
+    "manufacturer": "ACME"
+  },
+  "A062": {
+    "name": "A062",
+    "manufacturer": "ACME"
+  },
+  "A064": {
+    "name": "A064",
+    "manufacturer": "ACME"
+  },
+  "A07": {
+    "name": "A07",
+    "manufacturer": "ACME"
+  },
+  "A071": {
+    "name": "A071",
+    "manufacturer": "ACME"
+  },
+  "A072": {
+    "name": "A072",
+    "manufacturer": "ACME"
+  },
+  "A10": {
+    "name": "A10",
+    "manufacturer": "ACME"
+  },
+  "A102": {
+    "name": "A102",
+    "manufacturer": "ACME"
+  },
+  "A103": {
+    "name": "A103",
+    "manufacturer": "ACME"
+  },
+  "A104": {
+    "name": "A104",
+    "manufacturer": "ACME"
+  },
+  "A121": {
+    "name": "A121",
+    "manufacturer": "ACME"
+  },
+  "A13": {
+    "name": "A13",
+    "manufacturer": "ACME"
+  },
+  "A151": {
+    "name": "A151",
+    "manufacturer": "ACME"
+  },
+  "ACME_D27": {
+    "name": "ACME D27",
+    "manufacturer": "ACME"
+  },
+  "ACME_K10": {
+    "name": "ACME K10",
+    "manufacturer": "ACME"
+  },
+  "AF": {
+    "name": "AF",
+    "manufacturer": "Gaotune"
+  },
+  "AN": {
+    "name": "AN",
+    "manufacturer": "Gaotune"
+  },
+  "C350": {
+    "name": "C350",
+    "manufacturer": "TDK"
+  },
+  "C351": {
+    "name": "C351",
+    "manufacturer": "TDK"
+  },
+  "D1C": {
+    "name": "D1C",
+    "manufacturer": "ACME"
+  },
+  "D25": {
+    "name": "D25",
+    "manufacturer": "ACME"
+  },
+  "D28": {
+    "name": "D28",
+    "manufacturer": "ACME"
+  },
+  "D30": {
+    "name": "D30",
+    "manufacturer": "ACME"
+  },
+  "D35": {
+    "name": "D35",
+    "manufacturer": "ACME"
+  },
+  "D37": {
+    "name": "D37",
+    "manufacturer": "ACME"
+  },
+  "D40": {
+    "name": "D40",
+    "manufacturer": "ACME"
+  },
+  "DMR24": {
+    "name": "DMR24",
+    "manufacturer": "DMEGC"
+  },
+  "DMR25": {
+    "name": "DMR25",
+    "manufacturer": "DMEGC"
+  },
+  "DMR28": {
+    "name": "DMR28",
+    "manufacturer": "DMEGC"
+  },
+  "DMR40": {
+    "name": "DMR40",
+    "manufacturer": "DMEGC"
+  },
+  "DMR40B": {
+    "name": "DMR40B",
+    "manufacturer": "DMEGC"
+  },
+  "DMR44": {
+    "name": "DMR44",
+    "manufacturer": "DMEGC"
+  },
+  "DMR47": {
+    "name": "DMR47",
+    "manufacturer": "DMEGC"
+  },
+  "DMR50": {
+    "name": "DMR50",
+    "manufacturer": "DMEGC"
+  },
+  "DMR50B": {
+    "name": "DMR50B",
+    "manufacturer": "DMEGC"
+  },
+  "DMR51": {
+    "name": "DMR51",
+    "manufacturer": "DMEGC"
+  },
+  "DMR51W": {
+    "name": "DMR51W",
+    "manufacturer": "DMEGC"
+  },
+  "DMR52": {
+    "name": "DMR52",
+    "manufacturer": "DMEGC"
+  },
+  "DMR52W": {
+    "name": "DMR52W",
+    "manufacturer": "DMEGC"
+  },
+  "DMR53": {
+    "name": "DMR53",
+    "manufacturer": "DMEGC"
+  },
+  "DMR55": {
+    "name": "DMR55",
+    "manufacturer": "DMEGC"
+  },
+  "DMR70": {
+    "name": "DMR70",
+    "manufacturer": "DMEGC"
+  },
+  "DMR71": {
+    "name": "DMR71",
+    "manufacturer": "DMEGC"
+  },
+  "DMR73": {
+    "name": "DMR73",
+    "manufacturer": "DMEGC"
+  },
+  "DMR90": {
+    "name": "DMR90",
+    "manufacturer": "DMEGC"
+  },
+  "DMR91": {
+    "name": "DMR91",
+    "manufacturer": "DMEGC"
+  },
+  "DMR95": {
+    "name": "DMR95",
+    "manufacturer": "DMEGC"
+  },
+  "DMR95B": {
+    "name": "DMR95B",
+    "manufacturer": "DMEGC"
+  },
+  "DMR96": {
+    "name": "DMR96",
+    "manufacturer": "DMEGC"
+  },
+  "DMR96A": {
+    "name": "DMR96A",
+    "manufacturer": "DMEGC"
+  },
+  "DN100H": {
+    "name": "DN100H",
+    "manufacturer": "DMEGC"
+  },
+  "DN150H": {
+    "name": "DN150H",
+    "manufacturer": "DMEGC"
+  },
+  "DN15P": {
+    "name": "DN15P",
+    "manufacturer": "DMEGC"
+  },
+  "DN200L": {
+    "name": "DN200L",
+    "manufacturer": "DMEGC"
+  },
+  "DN20F": {
+    "name": "DN20F",
+    "manufacturer": "DMEGC"
+  },
+  "DN2S": {
+    "name": "DN2S",
+    "manufacturer": "DMEGC"
+  },
+  "DN30B": {
+    "name": "DN30B",
+    "manufacturer": "DMEGC"
+  },
+  "DN33L": {
+    "name": "DN33L",
+    "manufacturer": "DMEGC"
+  },
+  "DN40B": {
+    "name": "DN40B",
+    "manufacturer": "DMEGC"
+  },
+  "DN50B": {
+    "name": "DN50B",
+    "manufacturer": "DMEGC"
+  },
+  "DN85H": {
+    "name": "DN85H",
+    "manufacturer": "DMEGC"
+  },
+  "Edge_125": {
+    "name": "Edge 125",
+    "manufacturer": "Magnetics"
+  },
+  "Edge_14": {
+    "name": "Edge 14",
+    "manufacturer": "Magnetics"
+  },
+  "Edge_19": {
+    "name": "Edge 19",
+    "manufacturer": "Magnetics"
+  },
+  "Edge_26": {
+    "name": "Edge 26",
+    "manufacturer": "Magnetics"
+  },
+  "Edge_40": {
+    "name": "Edge 40",
+    "manufacturer": "Magnetics"
+  },
+  "Edge_60": {
+    "name": "Edge 60",
+    "manufacturer": "Magnetics"
+  },
+  "Edge_75": {
+    "name": "Edge 75",
+    "manufacturer": "Magnetics"
+  },
+  "Edge_90": {
+    "name": "Edge 90",
+    "manufacturer": "Magnetics"
+  },
+  "FS_14": {
+    "name": "FS 14",
+    "manufacturer": "Micrometals"
+  },
+  "FS_26": {
+    "name": "FS 26",
+    "manufacturer": "Micrometals"
+  },
+  "FS_40": {
+    "name": "FS 40",
+    "manufacturer": "Micrometals"
+  },
+  "FS_60": {
+    "name": "FS 60",
+    "manufacturer": "Micrometals"
+  },
+  "FS_75": {
+    "name": "FS 75",
+    "manufacturer": "Micrometals"
+  },
+  "FS_90": {
+    "name": "FS 90",
+    "manufacturer": "Micrometals"
+  },
+  "Finemet": {
+    "name": "Finemet",
+    "manufacturer": "Proterial"
+  },
+  "GX_125": {
+    "name": "GX 125",
+    "manufacturer": "Micrometals"
+  },
+  "GX_60": {
+    "name": "GX 60",
+    "manufacturer": "Micrometals"
+  },
+  "HF_125": {
+    "name": "HF 125",
+    "manufacturer": "Micrometals"
+  },
+  "HF_14": {
+    "name": "HF 14",
+    "manufacturer": "Micrometals"
+  },
+  "HF_147": {
+    "name": "HF 147",
+    "manufacturer": "Micrometals"
+  },
+  "HF_160": {
+    "name": "HF 160",
+    "manufacturer": "Micrometals"
+  },
+  "HF_26": {
+    "name": "HF 26",
+    "manufacturer": "Micrometals"
+  },
+  "HF_40": {
+    "name": "HF 40",
+    "manufacturer": "Micrometals"
+  },
+  "HF_60": {
+    "name": "HF 60",
+    "manufacturer": "Micrometals"
+  },
+  "HF_75": {
+    "name": "HF 75",
+    "manufacturer": "Micrometals"
+  },
+  "High_DC_Bias_Edge_26": {
+    "name": "High DC Bias Edge 26",
+    "manufacturer": "Magnetics"
+  },
+  "High_DC_Bias_Edge_60": {
+    "name": "High DC Bias Edge 60",
+    "manufacturer": "Magnetics"
+  },
+  "High_DC_Bias_XFlux_26": {
+    "name": "High DC Bias XFlux 26",
+    "manufacturer": "Magnetics"
+  },
+  "High_DC_Bias_XFlux_40": {
+    "name": "High DC Bias XFlux 40",
+    "manufacturer": "Magnetics"
+  },
+  "High_DC_Bias_XFlux_60": {
+    "name": "High DC Bias XFlux 60",
+    "manufacturer": "Magnetics"
+  },
+  "High_Flux_125": {
+    "name": "High Flux 125",
+    "manufacturer": "Magnetics"
+  },
+  "High_Flux_14": {
+    "name": "High Flux 14",
+    "manufacturer": "Magnetics"
+  },
+  "High_Flux_147": {
+    "name": "High Flux 147",
+    "manufacturer": "Magnetics"
+  },
+  "High_Flux_160": {
+    "name": "High Flux 160",
+    "manufacturer": "Magnetics"
+  },
+  "High_Flux_26": {
+    "name": "High Flux 26",
+    "manufacturer": "Magnetics"
+  },
+  "High_Flux_40": {
+    "name": "High Flux 40",
+    "manufacturer": "Magnetics"
+  },
+  "High_Flux_60": {
+    "name": "High Flux 60",
+    "manufacturer": "Magnetics"
+  },
+  "High_Flux_75": {
+    "name": "High Flux 75",
+    "manufacturer": "Magnetics"
+  },
+  "JNP44": {
+    "name": "JNP44",
+    "manufacturer": "Shandong Jianuo"
+  },
+  "JNP95": {
+    "name": "JNP95",
+    "manufacturer": "Shandong Jianuo"
+  },
+  "JNP96": {
+    "name": "JNP96",
+    "manufacturer": "Shandong Jianuo"
+  },
+  "JNP96A": {
+    "name": "JNP96A",
+    "manufacturer": "Shandong Jianuo"
+  },
+  "K081": {
+    "name": "K081",
+    "manufacturer": "ACME"
+  },
+  "K1": {
+    "name": "K1",
+    "manufacturer": "TDK"
+  },
+  "K10": {
+    "name": "K10",
+    "manufacturer": "TDK"
+  },
+  "K12": {
+    "name": "K12",
+    "manufacturer": "ACME"
+  },
+  "K13": {
+    "name": "K13",
+    "manufacturer": "ACME"
+  },
+  "K15": {
+    "name": "K15",
+    "manufacturer": "ACME"
+  },
+  "K151": {
+    "name": "K151",
+    "manufacturer": "ACME"
+  },
+  "K20": {
+    "name": "K20",
+    "manufacturer": "ACME"
+  },
+  "K25": {
+    "name": "K25",
+    "manufacturer": "ACME"
+  },
+  "Kool_M\u00b5_125": {
+    "name": "Kool M\u00b5 125",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_14": {
+    "name": "Kool M\u00b5 14",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_26": {
+    "name": "Kool M\u00b5 26",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_40": {
+    "name": "Kool M\u00b5 40",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_60": {
+    "name": "Kool M\u00b5 60",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_75": {
+    "name": "Kool M\u00b5 75",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_90": {
+    "name": "Kool M\u00b5 90",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_H\u0192_125": {
+    "name": "Kool M\u00b5 H\u0192 125",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_H\u0192_26": {
+    "name": "Kool M\u00b5 H\u0192 26",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_H\u0192_40": {
+    "name": "Kool M\u00b5 H\u0192 40",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_H\u0192_60": {
+    "name": "Kool M\u00b5 H\u0192 60",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_H\u0192_75": {
+    "name": "Kool M\u00b5 H\u0192 75",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_MAX_14": {
+    "name": "Kool M\u00b5 MAX 14",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_MAX_19": {
+    "name": "Kool M\u00b5 MAX 19",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_MAX_26": {
+    "name": "Kool M\u00b5 MAX 26",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_MAX_40": {
+    "name": "Kool M\u00b5 MAX 40",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_MAX_60": {
+    "name": "Kool M\u00b5 MAX 60",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_MAX_75": {
+    "name": "Kool M\u00b5 MAX 75",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_MAX_90": {
+    "name": "Kool M\u00b5 MAX 90",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_Ultra_26": {
+    "name": "Kool M\u00b5 Ultra 26",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_Ultra_40": {
+    "name": "Kool M\u00b5 Ultra 40",
+    "manufacturer": "Magnetics"
+  },
+  "Kool_M\u00b5_Ultra_60": {
+    "name": "Kool M\u00b5 Ultra 60",
+    "manufacturer": "Magnetics"
+  },
+  "M33": {
+    "name": "M33",
+    "manufacturer": "TDK"
+  },
+  "MP_125": {
+    "name": "MP 125",
+    "manufacturer": "Micrometals"
+  },
+  "MP_14": {
+    "name": "MP 14",
+    "manufacturer": "Micrometals"
+  },
+  "MP_147": {
+    "name": "MP 147",
+    "manufacturer": "Micrometals"
+  },
+  "MP_160": {
+    "name": "MP 160",
+    "manufacturer": "Micrometals"
+  },
+  "MP_173": {
+    "name": "MP 173",
+    "manufacturer": "Micrometals"
+  },
+  "MP_205": {
+    "name": "MP 205",
+    "manufacturer": "Micrometals"
+  },
+  "MP_26": {
+    "name": "MP 26",
+    "manufacturer": "Micrometals"
+  },
+  "MP_60": {
+    "name": "MP 60",
+    "manufacturer": "Micrometals"
+  },
+  "MPP_125": {
+    "name": "MPP 125",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_14": {
+    "name": "MPP 14",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_147": {
+    "name": "MPP 147",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_160": {
+    "name": "MPP 160",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_173": {
+    "name": "MPP 173",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_19": {
+    "name": "MPP 19",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_200": {
+    "name": "MPP 200",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_26": {
+    "name": "MPP 26",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_300": {
+    "name": "MPP 300",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_40": {
+    "name": "MPP 40",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_550": {
+    "name": "MPP 550",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_60": {
+    "name": "MPP 60",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_75": {
+    "name": "MPP 75",
+    "manufacturer": "Magnetics"
+  },
+  "MPP_90": {
+    "name": "MPP 90",
+    "manufacturer": "Magnetics"
+  },
+  "MS_125": {
+    "name": "MS 125",
+    "manufacturer": "Micrometals"
+  },
+  "MS_14": {
+    "name": "MS 14",
+    "manufacturer": "Micrometals"
+  },
+  "MS_147": {
+    "name": "MS 147",
+    "manufacturer": "Micrometals"
+  },
+  "MS_160": {
+    "name": "MS 160",
+    "manufacturer": "Micrometals"
+  },
+  "MS_26": {
+    "name": "MS 26",
+    "manufacturer": "Micrometals"
+  },
+  "MS_40": {
+    "name": "MS 40",
+    "manufacturer": "Micrometals"
+  },
+  "MS_60": {
+    "name": "MS 60",
+    "manufacturer": "Micrometals"
+  },
+  "MS_75": {
+    "name": "MS 75",
+    "manufacturer": "Micrometals"
+  },
+  "MS_90": {
+    "name": "MS 90",
+    "manufacturer": "Micrometals"
+  },
+  "Metglas": {
+    "name": "Metglas",
+    "manufacturer": "Proterial"
+  },
+  "Mix_1": {
+    "name": "Mix 1",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_10": {
+    "name": "Mix 10",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_12": {
+    "name": "Mix 12",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_125": {
+    "name": "Mix 125",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_14": {
+    "name": "Mix 14",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_15": {
+    "name": "Mix 15",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_17": {
+    "name": "Mix 17",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_18": {
+    "name": "Mix 18",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_19": {
+    "name": "Mix 19",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_2": {
+    "name": "Mix 2",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_26": {
+    "name": "Mix 26",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_3": {
+    "name": "Mix 3",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_30": {
+    "name": "Mix 30",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_34": {
+    "name": "Mix 34",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_35": {
+    "name": "Mix 35",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_38": {
+    "name": "Mix 38",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_40": {
+    "name": "Mix 40",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_45": {
+    "name": "Mix 45",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_5": {
+    "name": "Mix 5",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_52": {
+    "name": "Mix 52",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_6": {
+    "name": "Mix 6",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_60": {
+    "name": "Mix 60",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_61": {
+    "name": "Mix 61",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_63": {
+    "name": "Mix 63",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_65": {
+    "name": "Mix 65",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_66": {
+    "name": "Mix 66",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_7": {
+    "name": "Mix 7",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_70": {
+    "name": "Mix 70",
+    "manufacturer": "Micrometals"
+  },
+  "Mix_8": {
+    "name": "Mix 8",
+    "manufacturer": "Micrometals"
+  },
+  "N07": {
+    "name": "N07",
+    "manufacturer": "ACME"
+  },
+  "N10": {
+    "name": "N10",
+    "manufacturer": "ACME"
+  },
+  "N22": {
+    "name": "N22",
+    "manufacturer": "TDK"
+  },
+  "N27": {
+    "name": "N27",
+    "manufacturer": "TDK"
+  },
+  "N30": {
+    "name": "N30",
+    "manufacturer": "TDK"
+  },
+  "N4": {
+    "name": "N4",
+    "manufacturer": "ACME"
+  },
+  "N41": {
+    "name": "N41",
+    "manufacturer": "TDK"
+  },
+  "N42": {
+    "name": "N42",
+    "manufacturer": "ACME"
+  },
+  "N43": {
+    "name": "N43",
+    "manufacturer": "ACME"
+  },
+  "N45": {
+    "name": "N45",
+    "manufacturer": "TDK"
+  },
+  "N48": {
+    "name": "N48",
+    "manufacturer": "TDK"
+  },
+  "N49": {
+    "name": "N49",
+    "manufacturer": "TDK"
+  },
+  "N5": {
+    "name": "N5",
+    "manufacturer": "ACME"
+  },
+  "N51": {
+    "name": "N51",
+    "manufacturer": "TDK"
+  },
+  "N72": {
+    "name": "N72",
+    "manufacturer": "TDK"
+  },
+  "N87": {
+    "name": "N87",
+    "manufacturer": "TDK"
+  },
+  "N88": {
+    "name": "N88",
+    "manufacturer": "TDK"
+  },
+  "N92": {
+    "name": "N92",
+    "manufacturer": "TDK"
+  },
+  "N95": {
+    "name": "N95",
+    "manufacturer": "TDK"
+  },
+  "N96": {
+    "name": "N96",
+    "manufacturer": "TDK"
+  },
+  "N97": {
+    "name": "N97",
+    "manufacturer": "TDK"
+  },
+  "NPF_26": {
+    "name": "NPF 26",
+    "manufacturer": "Poco"
+  },
+  "NPF_40": {
+    "name": "NPF 40",
+    "manufacturer": "Poco"
+  },
+  "NPF_60": {
+    "name": "NPF 60",
+    "manufacturer": "Poco"
+  },
+  "NPF_75": {
+    "name": "NPF 75",
+    "manufacturer": "Poco"
+  },
+  "NPF_90": {
+    "name": "NPF 90",
+    "manufacturer": "Poco"
+  },
+  "Nanoperm_1000": {
+    "name": "Nanoperm 1000",
+    "manufacturer": "Magnetec"
+  },
+  "Nanoperm_2000": {
+    "name": "Nanoperm 2000",
+    "manufacturer": "Magnetec"
+  },
+  "Nanoperm_30000": {
+    "name": "Nanoperm 30000",
+    "manufacturer": "Magnetec"
+  },
+  "Nanoperm_4000": {
+    "name": "Nanoperm 4000",
+    "manufacturer": "Magnetec"
+  },
+  "Nanoperm_8000": {
+    "name": "Nanoperm 8000",
+    "manufacturer": "Magnetec"
+  },
+  "Nanoperm_80000": {
+    "name": "Nanoperm 80000",
+    "manufacturer": "Magnetec"
+  },
+  "Nanoperm_90000": {
+    "name": "Nanoperm 90000",
+    "manufacturer": "Magnetec"
+  },
+  "OC_125": {
+    "name": "OC 125",
+    "manufacturer": "Micrometals"
+  },
+  "OC_26": {
+    "name": "OC 26",
+    "manufacturer": "Micrometals"
+  },
+  "OC_40": {
+    "name": "OC 40",
+    "manufacturer": "Micrometals"
+  },
+  "OC_60": {
+    "name": "OC 60",
+    "manufacturer": "Micrometals"
+  },
+  "OC_90": {
+    "name": "OC 90",
+    "manufacturer": "Micrometals"
+  },
+  "OD_26": {
+    "name": "OD 26",
+    "manufacturer": "Micrometals"
+  },
+  "OD_40": {
+    "name": "OD 40",
+    "manufacturer": "Micrometals"
+  },
+  "OD_60": {
+    "name": "OD 60",
+    "manufacturer": "Micrometals"
+  },
+  "OD_90": {
+    "name": "OD 90",
+    "manufacturer": "Micrometals"
+  },
+  "OE_26": {
+    "name": "OE 26",
+    "manufacturer": "Micrometals"
+  },
+  "OE_40": {
+    "name": "OE 40",
+    "manufacturer": "Micrometals"
+  },
+  "OE_60": {
+    "name": "OE 60",
+    "manufacturer": "Micrometals"
+  },
+  "OE_75": {
+    "name": "OE 75",
+    "manufacturer": "Micrometals"
+  },
+  "OE_90": {
+    "name": "OE 90",
+    "manufacturer": "Micrometals"
+  },
+  "OP_125": {
+    "name": "OP 125",
+    "manufacturer": "Micrometals"
+  },
+  "OP_14": {
+    "name": "OP 14",
+    "manufacturer": "Micrometals"
+  },
+  "OP_26": {
+    "name": "OP 26",
+    "manufacturer": "Micrometals"
+  },
+  "OP_40": {
+    "name": "OP 40",
+    "manufacturer": "Micrometals"
+  },
+  "OP_60": {
+    "name": "OP 60",
+    "manufacturer": "Micrometals"
+  },
+  "OP_75": {
+    "name": "OP 75",
+    "manufacturer": "Micrometals"
+  },
+  "OP_90": {
+    "name": "OP 90",
+    "manufacturer": "Micrometals"
+  },
+  "P4": {
+    "name": "P4",
+    "manufacturer": "ACME"
+  },
+  "P41": {
+    "name": "P41",
+    "manufacturer": "ACME"
+  },
+  "P42": {
+    "name": "P42",
+    "manufacturer": "ACME"
+  },
+  "P45": {
+    "name": "P45",
+    "manufacturer": "ACME"
+  },
+  "P451": {
+    "name": "P451",
+    "manufacturer": "ACME"
+  },
+  "P452": {
+    "name": "P452",
+    "manufacturer": "ACME"
+  },
+  "P47": {
+    "name": "P47",
+    "manufacturer": "ACME"
+  },
+  "P48": {
+    "name": "P48",
+    "manufacturer": "ACME"
+  },
+  "P49": {
+    "name": "P49",
+    "manufacturer": "ACME"
+  },
+  "P491": {
+    "name": "P491",
+    "manufacturer": "ACME"
+  },
+  "P492": {
+    "name": "P492",
+    "manufacturer": "ACME"
+  },
+  "P5": {
+    "name": "P5",
+    "manufacturer": "ACME"
+  },
+  "P51": {
+    "name": "P51",
+    "manufacturer": "ACME"
+  },
+  "P52": {
+    "name": "P52",
+    "manufacturer": "ACME"
+  },
+  "P53": {
+    "name": "P53",
+    "manufacturer": "ACME"
+  },
+  "P61": {
+    "name": "P61",
+    "manufacturer": "ACME"
+  },
+  "P63": {
+    "name": "P63",
+    "manufacturer": "ACME"
+  },
+  "PC200": {
+    "name": "PC200",
+    "manufacturer": "TDK"
+  },
+  "PC47": {
+    "name": "PC47",
+    "manufacturer": "TDK"
+  },
+  "PC95": {
+    "name": "PC95",
+    "manufacturer": "TDK"
+  },
+  "R10K": {
+    "name": "R10K",
+    "manufacturer": "DMEGC"
+  },
+  "R10KC": {
+    "name": "R10KC",
+    "manufacturer": "DMEGC"
+  },
+  "R10KZ": {
+    "name": "R10KZ",
+    "manufacturer": "DMEGC"
+  },
+  "R12K": {
+    "name": "R12K",
+    "manufacturer": "DMEGC"
+  },
+  "R12KZ": {
+    "name": "R12KZ",
+    "manufacturer": "DMEGC"
+  },
+  "R15K": {
+    "name": "R15K",
+    "manufacturer": "DMEGC"
+  },
+  "R15KZ": {
+    "name": "R15KZ",
+    "manufacturer": "DMEGC"
+  },
+  "R5K": {
+    "name": "R5K",
+    "manufacturer": "DMEGC"
+  },
+  "R5KC": {
+    "name": "R5KC",
+    "manufacturer": "DMEGC"
+  },
+  "R5KZ": {
+    "name": "R5KZ",
+    "manufacturer": "DMEGC"
+  },
+  "R7K": {
+    "name": "R7K",
+    "manufacturer": "DMEGC"
+  },
+  "R7KC": {
+    "name": "R7KC",
+    "manufacturer": "DMEGC"
+  },
+  "SH_10": {
+    "name": "SH 10",
+    "manufacturer": "Micrometals"
+  },
+  "SH_125": {
+    "name": "SH 125",
+    "manufacturer": "Micrometals"
+  },
+  "SH_26": {
+    "name": "SH 26",
+    "manufacturer": "Micrometals"
+  },
+  "SH_60": {
+    "name": "SH 60",
+    "manufacturer": "Micrometals"
+  },
+  "SM_26": {
+    "name": "SM 26",
+    "manufacturer": "Micrometals"
+  },
+  "SM_40": {
+    "name": "SM 40",
+    "manufacturer": "Micrometals"
+  },
+  "SM_60": {
+    "name": "SM 60",
+    "manufacturer": "Micrometals"
+  },
+  "SMP44": {
+    "name": "SMP44",
+    "manufacturer": "Sinomag"
+  },
+  "SMP47": {
+    "name": "SMP47",
+    "manufacturer": "Sinomag"
+  },
+  "SMP50": {
+    "name": "SMP50",
+    "manufacturer": "Sinomag"
+  },
+  "SMP51": {
+    "name": "SMP51",
+    "manufacturer": "Sinomag"
+  },
+  "SMP53": {
+    "name": "SMP53",
+    "manufacturer": "Sinomag"
+  },
+  "SMP95": {
+    "name": "SMP95",
+    "manufacturer": "Sinomag"
+  },
+  "SMP96": {
+    "name": "SMP96",
+    "manufacturer": "Sinomag"
+  },
+  "SMP97": {
+    "name": "SMP97",
+    "manufacturer": "Sinomag"
+  },
+  "SP_26": {
+    "name": "SP 26",
+    "manufacturer": "Micrometals"
+  },
+  "SP_60": {
+    "name": "SP 60",
+    "manufacturer": "Micrometals"
+  },
+  "SP_90": {
+    "name": "SP 90",
+    "manufacturer": "Micrometals"
+  },
+  "T35": {
+    "name": "T35",
+    "manufacturer": "TDK"
+  },
+  "T36": {
+    "name": "T36",
+    "manufacturer": "TDK"
+  },
+  "T37": {
+    "name": "T37",
+    "manufacturer": "TDK"
+  },
+  "T38": {
+    "name": "T38",
+    "manufacturer": "TDK"
+  },
+  "T46": {
+    "name": "T46",
+    "manufacturer": "TDK"
+  },
+  "T57": {
+    "name": "T57",
+    "manufacturer": "TDK"
+  },
+  "T65": {
+    "name": "T65",
+    "manufacturer": "TDK"
+  },
+  "T66": {
+    "name": "T66",
+    "manufacturer": "TDK"
+  },
+  "TMF_26": {
+    "name": "TMF 26",
+    "manufacturer": "TDG"
+  },
+  "TMF_40": {
+    "name": "TMF 40",
+    "manufacturer": "TDG"
+  },
+  "TMF_60": {
+    "name": "TMF 60",
+    "manufacturer": "TDG"
+  },
+  "TMF_75": {
+    "name": "TMF 75",
+    "manufacturer": "TDG"
+  },
+  "TMF_90": {
+    "name": "TMF 90",
+    "manufacturer": "TDG"
+  },
+  "TMFA_60": {
+    "name": "TMFA 60",
+    "manufacturer": "TDG"
+  },
+  "TMFA_90": {
+    "name": "TMFA 90",
+    "manufacturer": "TDG"
+  },
+  "TMFB_26": {
+    "name": "TMFB 26",
+    "manufacturer": "TDG"
+  },
+  "TMFB_60": {
+    "name": "TMFB 60",
+    "manufacturer": "TDG"
+  },
+  "TMFC_26": {
+    "name": "TMFC 26",
+    "manufacturer": "TDG"
+  },
+  "TMFC_60": {
+    "name": "TMFC 60",
+    "manufacturer": "TDG"
+  },
+  "TMFD": {
+    "name": "TMFD",
+    "manufacturer": "TDG"
+  },
+  "TMH_125": {
+    "name": "TMH 125",
+    "manufacturer": "TDG"
+  },
+  "TMH_147": {
+    "name": "TMH 147",
+    "manufacturer": "TDG"
+  },
+  "TMH_160": {
+    "name": "TMH 160",
+    "manufacturer": "TDG"
+  },
+  "TMH_26": {
+    "name": "TMH 26",
+    "manufacturer": "TDG"
+  },
+  "TMH_40": {
+    "name": "TMH 40",
+    "manufacturer": "TDG"
+  },
+  "TMH_60": {
+    "name": "TMH 60",
+    "manufacturer": "TDG"
+  },
+  "TMH_75": {
+    "name": "TMH 75",
+    "manufacturer": "TDG"
+  },
+  "TMH_90": {
+    "name": "TMH 90",
+    "manufacturer": "TDG"
+  },
+  "TMHA_60": {
+    "name": "TMHA 60",
+    "manufacturer": "TDG"
+  },
+  "TMHA_75": {
+    "name": "TMHA 75",
+    "manufacturer": "TDG"
+  },
+  "TMHA_90": {
+    "name": "TMHA 90",
+    "manufacturer": "TDG"
+  },
+  "TMHB_26": {
+    "name": "TMHB 26",
+    "manufacturer": "TDG"
+  },
+  "TMHB_40": {
+    "name": "TMHB 40",
+    "manufacturer": "TDG"
+  },
+  "TMHB_60": {
+    "name": "TMHB 60",
+    "manufacturer": "TDG"
+  },
+  "TMHB_75": {
+    "name": "TMHB 75",
+    "manufacturer": "TDG"
+  },
+  "TMHB_90": {
+    "name": "TMHB 90",
+    "manufacturer": "TDG"
+  },
+  "TMHG_60": {
+    "name": "TMHG 60",
+    "manufacturer": "TDG"
+  },
+  "TMM_26": {
+    "name": "TMM 26",
+    "manufacturer": "TDG"
+  },
+  "TMM_60": {
+    "name": "TMM 60",
+    "manufacturer": "TDG"
+  },
+  "TMSA_125": {
+    "name": "TMSA 125",
+    "manufacturer": "TDG"
+  },
+  "TMSA_19": {
+    "name": "TMSA 19",
+    "manufacturer": "TDG"
+  },
+  "TMSA_26": {
+    "name": "TMSA 26",
+    "manufacturer": "TDG"
+  },
+  "TMSA_40": {
+    "name": "TMSA 40",
+    "manufacturer": "TDG"
+  },
+  "TMSA_60": {
+    "name": "TMSA 60",
+    "manufacturer": "TDG"
+  },
+  "TMSA_75": {
+    "name": "TMSA 75",
+    "manufacturer": "TDG"
+  },
+  "TMSA_90": {
+    "name": "TMSA 90",
+    "manufacturer": "TDG"
+  },
+  "TMSC_26": {
+    "name": "TMSC 26",
+    "manufacturer": "TDG"
+  },
+  "TMSC_60": {
+    "name": "TMSC 60",
+    "manufacturer": "TDG"
+  },
+  "TP4A": {
+    "name": "TP4A",
+    "manufacturer": "TDG"
+  },
+  "TP5": {
+    "name": "TP5",
+    "manufacturer": "TDG"
+  },
+  "TS5": {
+    "name": "TS5",
+    "manufacturer": "TDG"
+  },
+  "TS7": {
+    "name": "TS7",
+    "manufacturer": "TDG"
+  },
+  "X_Indmix_A": {
+    "name": "X-Indmix A",
+    "manufacturer": "H\u00f6gan\u00e4s"
+  },
+  "XFlux_125": {
+    "name": "XFlux 125",
+    "manufacturer": "Magnetics"
+  },
+  "XFlux_19": {
+    "name": "XFlux 19",
+    "manufacturer": "Magnetics"
+  },
+  "XFlux_26": {
+    "name": "XFlux 26",
+    "manufacturer": "Magnetics"
+  },
+  "XFlux_40": {
+    "name": "XFlux 40",
+    "manufacturer": "Magnetics"
+  },
+  "XFlux_60": {
+    "name": "XFlux 60",
+    "manufacturer": "Magnetics"
+  },
+  "XFlux_75": {
+    "name": "XFlux 75",
+    "manufacturer": "Magnetics"
+  },
+  "XFlux_90": {
+    "name": "XFlux 90",
+    "manufacturer": "Magnetics"
+  },
+  "XFlux_Ultra_26": {
+    "name": "XFlux Ultra 26",
+    "manufacturer": "Magnetics"
+  },
+  "XFlux_Ultra_60": {
+    "name": "XFlux Ultra 60",
+    "manufacturer": "Magnetics"
+  }
+}

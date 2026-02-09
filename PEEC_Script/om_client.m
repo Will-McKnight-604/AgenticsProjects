@@ -58,6 +58,19 @@ classdef om_client < handle
             % Get all wires from MKF database
             % Returns struct with wire names as fields
             resp = obj.http_get('/wires');
+
+            % DEBUG: Log sample wire structure
+            fprintf('\n[DEBUG get_wires] API Response Structure:\n');
+            wire_names = fieldnames(resp);
+            if ~isempty(wire_names)
+                sample_name = wire_names{1};
+                fprintf('  Sample wire: %s\n', sample_name);
+                sample_wire = resp.(sample_name);
+                if isstruct(sample_wire)
+                    fprintf('  Fields: %s\n', strjoin(fieldnames(sample_wire), ', '));
+                end
+            end
+
             wires = resp;
         end
 
@@ -78,14 +91,31 @@ classdef om_client < handle
         function wire = find_wire(obj, name)
             % Find a specific wire by name
             % Input: name - e.g. 'Round 0.64 - Grade 1'
-            resp = obj.http_get(sprintf('/wire/%s', urlencode(name)));
+            encoded_name = obj.url_encode(name);
+            resp = obj.http_get(sprintf('/wire/%s', encoded_name));
+
+            % DEBUG: Log detailed wire structure
+            fprintf('\n[DEBUG find_wire] Detailed wire data for: %s\n', name);
+            if isstruct(resp)
+                fprintf('  Fields: %s\n', strjoin(fieldnames(resp), ', '));
+                % Log dimensional fields if present
+                dim_fields = {'foil_width', 'foil_thickness', 'rect_width', 'rect_height', 'width', 'thickness', 'outer_diameter'};
+                for i = 1:length(dim_fields)
+                    if isfield(resp, dim_fields{i})
+                        val = resp.(dim_fields{i});
+                        fprintf('  %s = %s\n', dim_fields{i}, mat2str(val));
+                    end
+                end
+            end
+
             wire = resp;
         end
 
         function core = find_core(obj, name)
             % Find a specific core by name
             % Input: name - e.g. 'ETD 29/16/10'
-            resp = obj.http_get(sprintf('/core/%s', urlencode(name)));
+            encoded_name = obj.url_encode(name);
+            resp = obj.http_get(sprintf('/core/%s', encoded_name));
             core = resp;
         end
 
@@ -402,6 +432,22 @@ classdef om_client < handle
             else
                 json = 'null';
             end
+        end
+
+        function encoded = url_encode(obj, str)
+            % Simple URL encoding for wire names
+            % Replaces spaces and special characters with percent-encoded values
+            encoded = str;
+            encoded = strrep(encoded, ' ', '%20');
+            encoded = strrep(encoded, '/', '%2F');
+            encoded = strrep(encoded, '?', '%3F');
+            encoded = strrep(encoded, '#', '%23');
+            encoded = strrep(encoded, '&', '%26');
+            encoded = strrep(encoded, '=', '%3D');
+            encoded = strrep(encoded, '+', '%2B');
+            encoded = strrep(encoded, ':', '%3A');
+            encoded = strrep(encoded, ';', '%3B');
+            encoded = strrep(encoded, ',', '%2C');
         end
 
         function parse_svg_basic(obj, svg_str, ax)

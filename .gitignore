@@ -1,0 +1,8 @@
+# Windows reserved device names
+nul
+
+# Temp files
+*.tmp.*
+
+# Projects folder
+Projects/

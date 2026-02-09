@@ -1,0 +1,63 @@
+<svg height="1058.0" viewBox="-10.0 -529.0 533.0 1058.0" width="533.0" xmlns="http://www.w3.org/2000/svg">
+	<style type="text/css">
+		<![CDATA[
+			.bobbin {
+				fill: #539796;
+			}
+			.bobbin_translucent {
+				fill: #539796;
+				opacity: 0.5;
+			}
+			.copper {
+				fill: #b87333;
+			}
+			.copper_translucent {
+				fill: #b87333;
+				opacity: 0.5;
+			}
+			.current_density {
+				fill: #0892D0;
+			}
+			.ferrite {
+				fill: #7b7c7d;
+			}
+			.fr4 {
+				fill: #008000;
+			}
+			.fr4_translucent {
+				fill: #008000;
+				opacity: 0.5;
+			}
+			.insulation {
+				fill: #fff05b;
+			}
+			.insulation_translucent {
+				fill: #fff05b;
+				opacity: 0.5;
+			}
+			.margin {
+				fill: #fff05b;
+			}
+			.margin_translucent {
+				fill: #fff05b;
+				opacity: 0.5;
+			}
+			.point {
+				fill: #ff0000;
+			}
+			.spacer {
+				fill: #3b3b3b;
+			}
+			.text {
+				fill: #000000;
+			}
+			.white {
+				fill: #ffffff;
+			}
+		]]>
+	</style>
+	<g>
+		<polygon class="ferrite" points="0.0,-519.0 513.0,-519.0 513.0,-15.0 394.5,-15.0 394.5,-363.0 162.0,-363.0 162.0,-15.0 0.0,-15.0 " />
+		<polygon class="ferrite" points="0.0,519.0 513.0,519.0 513.0,15.0 394.5,15.0 394.5,363.0 162.0,363.0 162.0,15.0 0.0,15.0 " />
+	</g>
+</svg>

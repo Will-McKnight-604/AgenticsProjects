@@ -1,0 +1,75 @@
+<svg height="192.2" viewBox="-2.0 -90.1 196.2 180.2" width="176.2" xmlns="http://www.w3.org/2000/svg">
+	<style type="text/css">
+		<![CDATA[
+			.DUoVmjJa {
+				fill: #c63032;
+				opacity: 1.0;
+			}
+			.bobbin {
+				fill: #539796;
+			}
+			.bobbin_translucent {
+				fill: #539796;
+				opacity: 0.5;
+			}
+			.copper {
+				fill: #b87333;
+			}
+			.copper_translucent {
+				fill: #b87333;
+				opacity: 0.5;
+			}
+			.current_density {
+				fill: #0892D0;
+			}
+			.ferrite {
+				fill: #7b7c7d;
+			}
+			.fr4 {
+				fill: #008000;
+			}
+			.fr4_translucent {
+				fill: #008000;
+				opacity: 0.5;
+			}
+			.insulation {
+				fill: #fff05b;
+			}
+			.insulation_translucent {
+				fill: #fff05b;
+				opacity: 0.5;
+			}
+			.margin {
+				fill: #fff05b;
+			}
+			.margin_translucent {
+				fill: #fff05b;
+				opacity: 0.5;
+			}
+			.point {
+				fill: #ff0000;
+			}
+			.spacer {
+				fill: #3b3b3b;
+			}
+			.text {
+				fill: #000000;
+			}
+			.white {
+				fill: #ffffff;
+			}
+			.zsoBxRMh {
+				fill: none;
+				opacity: 1.0;
+				stroke: #010000;
+				stroke-width: 0.3;
+			}
+		]]>
+	</style>
+	<g>
+		<circle class="DUoVmjJa" cx="88.1" cy="-0.0" r="80.1" />
+		<circle class="copper" cx="88.1" cy="-0.0" r="75.0" />
+		<circle class="zsoBxRMh" cx="88.1" cy="-0.0" r="75.0" />
+		<circle class="zsoBxRMh" cx="88.1" cy="-0.0" r="80.1" />
+	</g>
+</svg>

@@ -7,7 +7,27 @@
       "Bash(echo:*)",
       "Bash(else)",
       "Bash(fi)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(grep:*)",
+      "Read(//c/Users/Will/**)",
+      "Bash(ls:*)",
+      "Bash(matlab -batch:*)",
+      "Bash(octave --quiet --eval:*)",
+      "Bash(octave --no-gui --eval:*)",
+      "Bash(python inspect_cache.py:*)",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(pip show:*)",
+      "Bash(findstr:*)",
+      "Bash(pip install:*)",
+      "Bash(where:*)",
+      "Bash(\"C:/Program Files/GNU Octave/Octave-7.1.0/mingw64/bin/octave-cli.exe\" --no-gui --eval \"d = jsondecode\\(''{\"\"a\"\": null, \"\"b\"\": 5e-06}''\\); disp\\(d\\); disp\\(class\\(d.a\\)\\); disp\\(isnumeric\\(d.a\\)\\); disp\\(isempty\\(d.a\\)\\)\")",
+      "Bash(\"C:/Program Files/GNU Octave/Octave-7.1.0/mingw64/bin/octave-cli.exe\" --no-gui --eval \"\ncd\\(''c:/Users/Will/proximity_loss/Claude/PEEC_Script''\\);\ntry\n    raw = fileread\\(''openmagnetics_wire_database.json''\\);\n    data = jsondecode\\(raw\\);\n    names = fieldnames\\(data\\);\n    fprintf\\(''Loaded %d wires from JSON\\\\n'', length\\(names\\)\\);\n\n    % Check first wire\n    w = data.\\(names{1}\\);\n    fprintf\\(''First wire: %s\\\\n'', w.name\\);\n    fprintf\\(''  type: %s\\\\n'', w.type\\);\n    fprintf\\(''  conductingWidth: %g\\\\n'', w.conductingWidth\\);\n    fprintf\\(''  conductingHeight class: %s, empty: %d\\\\n'', class\\(w.conductingHeight\\), isempty\\(w.conductingHeight\\)\\);\ncatch ME\n    fprintf\\(''ERROR: %s\\\\n'', ME.message\\);\nend\n\")",
+      "Bash(\"C:/Program Files/GNU Octave/Octave-7.1.0/mingw64/bin/octave-cli.exe\" --no-gui --eval \"\ncd\\(''c:/Users/Will/proximity_loss/Claude/PEEC_Script''\\);\napi = openmagnetics_api_interface\\(\\);\n\n% Check foil wires\nwires = api.get_wires\\(\\);\nnames = fieldnames\\(wires\\);\nfoils = {};\nfor i = 1:length\\(names\\)\n    if ~isempty\\(strfind\\(lower\\(names{i}\\), ''foil''\\)\\)\n        foils{end+1} = names{i};\n    end\nend\nfprintf\\(''\\\\nFound %d foil wires in database\\\\n'', length\\(foils\\)\\);\n\n% Check dimensions for a few foil wires\nfor i = 1:min\\(5, length\\(foils\\)\\)\n    name = foils{i};\n    w = wires.\\(name\\);\n    fprintf\\(''\\\\n%s:\\\\n'', name\\);\n    if isfield\\(w, ''conductor_shape''\\)\n        fprintf\\(''  conductor_shape: %s\\\\n'', w.conductor_shape\\);\n    end\n    if isfield\\(w, ''foil_thickness''\\)\n        fprintf\\(''  foil_thickness: %.6f mm\\\\n'', w.foil_thickness*1e3\\);\n    end\n    if isfield\\(w, ''foil_width''\\)\n        fprintf\\(''  foil_width: %.3f mm\\\\n'', w.foil_width*1e3\\);\n    end\nend\n\")",
+      "Bash(\"C:/Program Files/GNU Octave/Octave-7.1.0/mingw64/bin/octave-cli.exe\" --no-gui --eval:*)",
+      "Bash(\"C:/Program Files/GNU Octave/Octave-7.1.0/mingw64/bin/octave-cli.exe\" --no-gui --eval \"cd\\(''c:/Users/Will/proximity_loss/Claude/PEEC_Script''\\); api = openmagnetics_api_interface\\(\\);\")",
+      "Bash(\"C:/Program Files/GNU Octave/Octave-7.1.0/mingw64/bin/octave-cli.exe\" --no-gui --eval \"\ncd\\(''c:/Users/Will/proximity_loss/Claude/PEEC_Script''\\);\nwarning\\(''off'', ''all''\\);\n\n% Suppress debug output during init\napi = openmagnetics_api_interface\\(\\);\n\nfprintf\\(''\\\\n========== VERIFICATION ==========\\\\n''\\);\n\n% Core check\ncores = api.get_cores\\(\\);\nfprintf\\(''\\\\nCores: %d total\\\\n'', length\\(fieldnames\\(cores\\)\\)\\);\nif isfield\\(cores, ''ETD_39_20_13''\\)\n    c = cores.ETD_39_20_13;\n    fprintf\\(''  ETD_39_20_13: shape=%s, Ae=%.1fmm2'', c.shape, c.Ae*1e6\\);\n    if isfield\\(c, ''bobbin''\\)\n        fprintf\\('', bobbin=%.2fx%.2fmm'', c.bobbin.width*1e3, c.bobbin.height*1e3\\);\n    end\n    fprintf\\(''\\\\n''\\);\nend\n\n% Material check\nmats = api.get_materials\\(\\);\nfprintf\\(''\\\\nMaterials: %d total\\\\n'', length\\(fieldnames\\(mats\\)\\)\\);\nmat_names = fieldnames\\(mats\\);\nhas_mfr = 0;\nfor i = 1:length\\(mat_names\\)\n    if isfield\\(mats.\\(mat_names{i}\\), ''manufacturer''\\)\n        has_mfr = has_mfr + 1;\n    end\nend\nfprintf\\(''  With manufacturer: %d\\\\n'', has_mfr\\);\n\n% Show some materials with manufacturers\ncount = 0;\nfor i = 1:length\\(mat_names\\)\n    m = mats.\\(mat_names{i}\\);\n    if isfield\\(m, ''manufacturer''\\) && count < 5\n        fprintf\\(''  %s -> %s\\\\n'', m.name, m.manufacturer\\);\n        count = count + 1;\n    end\nend\n\n% Supplier check\nsuppliers = api.get_suppliers\\(\\);\nfprintf\\(''\\\\nSuppliers: %d\\\\n'', length\\(suppliers\\)\\);\nfor i = 1:length\\(suppliers\\)\n    s = suppliers{i};\n    ms = api.get_materials_by_supplier\\(s\\);\n    fprintf\\(''  %s: %d materials\\\\n'', s, length\\(ms\\)\\);\nend\n\")",
+      "Bash(git check-ignore:*)"
     ]
   }
 }

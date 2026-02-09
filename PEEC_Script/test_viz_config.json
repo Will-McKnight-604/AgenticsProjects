@@ -1,0 +1,21 @@
+{
+  "core_shape": "E 42/21/15",
+  "material": "N87",
+  "gapping": [
+    {
+      "type": "subtractive",
+      "length": 0.002
+    }
+  ],
+  "windings": [
+    {
+      "name": "Primary",
+      "wire_name": "Round 0.5 - Grade 1",
+      "num_turns": 15,
+      "num_parallels": 1,
+      "isolation_side": "primary"
+    }
+  ],
+  "output_svg": "test_gapped.svg",
+  "plot_type": "magnetic"
+}
