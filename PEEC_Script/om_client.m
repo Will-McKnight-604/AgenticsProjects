@@ -58,19 +58,6 @@ classdef om_client < handle
             % Get all wires from MKF database
             % Returns struct with wire names as fields
             resp = obj.http_get('/wires');
-
-            % DEBUG: Log sample wire structure
-            fprintf('\n[DEBUG get_wires] API Response Structure:\n');
-            wire_names = fieldnames(resp);
-            if ~isempty(wire_names)
-                sample_name = wire_names{1};
-                fprintf('  Sample wire: %s\n', sample_name);
-                sample_wire = resp.(sample_name);
-                if isstruct(sample_wire)
-                    fprintf('  Fields: %s\n', strjoin(fieldnames(sample_wire), ', '));
-                end
-            end
-
             wires = resp;
         end
 
@@ -94,19 +81,6 @@ classdef om_client < handle
             encoded_name = obj.url_encode(name);
             resp = obj.http_get(sprintf('/wire/%s', encoded_name));
 
-            % DEBUG: Log detailed wire structure
-            fprintf('\n[DEBUG find_wire] Detailed wire data for: %s\n', name);
-            if isstruct(resp)
-                fprintf('  Fields: %s\n', strjoin(fieldnames(resp), ', '));
-                % Log dimensional fields if present
-                dim_fields = {'foil_width', 'foil_thickness', 'rect_width', 'rect_height', 'width', 'thickness', 'outer_diameter'};
-                for i = 1:length(dim_fields)
-                    if isfield(resp, dim_fields{i})
-                        val = resp.(dim_fields{i});
-                        fprintf('  %s = %s\n', dim_fields{i}, mat2str(val));
-                    end
-                end
-            end
 
             wire = resp;
         end

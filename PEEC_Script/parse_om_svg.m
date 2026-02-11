@@ -29,6 +29,9 @@ function parse_om_svg(svg_str, ax)
     % --- Draw polygons (core ferrite + bobbin) ---
     draw_polygons(svg_str, ax, color_map);
 
+    % --- Draw rectangles (spacers/overlays) ---
+    draw_rects(svg_str, ax, color_map);
+
     % --- Draw circles (wire turns) - only copper class ---
     draw_circles(svg_str, ax, color_map);
 
@@ -188,6 +191,41 @@ function draw_circles(svg_str, ax, color_map)
                     set(h, 'FaceAlpha', alpha);
                 catch
                 end
+            end
+        end
+    end
+end
+
+
+function draw_rects(svg_str, ax, color_map)
+% Parse and draw <rect> elements (used for spacer/overlay visuals)
+    rect_pattern = '<rect\s+class="([^"]*)"\s+[^>]*x="([^"]*)"\s+y="([^"]*)"\s+width="([^"]*)"\s+height="([^"]*)"';
+    matches = regexp(svg_str, rect_pattern, 'tokens');
+
+    for i = 1:length(matches)
+        class_name = matches{i}{1};
+        rx = str2double(matches{i}{2});
+        ry = str2double(matches{i}{3});
+        rw = str2double(matches{i}{4});
+        rh = str2double(matches{i}{5});
+
+        if isnan(rx) || isnan(ry) || isnan(rw) || isnan(rh) || rw <= 0 || rh <= 0
+            continue;
+        end
+
+        rgb = get_class_color(class_name, color_map);
+        % SVG y grows downward; flip and offset by height
+        y_flip = -(ry + rh);
+        h = rectangle('Parent', ax, ...
+            'Position', [rx, y_flip, rw, rh], ...
+            'FaceColor', rgb, ...
+            'EdgeColor', 'none');
+
+        alpha = get_class_alpha(class_name, color_map);
+        if alpha < 1.0
+            try
+                set(h, 'FaceAlpha', alpha);
+            catch
             end
         end
     end

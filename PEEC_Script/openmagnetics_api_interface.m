@@ -140,7 +140,6 @@ classdef openmagnetics_api_interface < handle
             %   Ground    -> subtractive (machined)
             %   Spacer    -> additive (spacer inserted)
             %   Distributed -> subtractive with num_gaps > 1
-            %   Custom    -> subtractive (user-defined length + count)
             %
             % Returns: cell array of gap structs for core functionalDescription
 
@@ -180,39 +179,26 @@ classdef openmagnetics_api_interface < handle
 
             wire = obj.get_wire_info(wire_name);
 
-            % DIAGNOSTIC: Log wire name and available fields
-            fprintf('\n[DEBUG wire_to_conductor_dims] Wire: %s\n', wire_name);
-            if isstruct(wire)
-                fprintf('[DEBUG] Available fields: %s\n', strjoin(fieldnames(wire), ', '));
-            else
-                fprintf('[DEBUG] Wire is not a struct: %s\n', class(wire));
-            end
-
             if isfield(wire, 'conductor_shape')
                 shape = wire.conductor_shape;
             else
                 shape = 'round';
             end
-            fprintf('[DEBUG] Conductor shape: %s\n', shape);
 
             if strcmp(shape, 'rectangular')
                 % Foil or rectangular: use actual dimensions
                 if isfield(wire, 'foil_width') && isfield(wire, 'foil_thickness')
                     w = wire.foil_width;
                     h = wire.foil_thickness;
-                    fprintf('[DEBUG] Using foil_width/foil_thickness: %.3f mm x %.3f mm\n', w*1e3, h*1e3);
                 elseif isfield(wire, 'rect_width') && isfield(wire, 'rect_height')
                     w = wire.rect_width;
                     h = wire.rect_height;
-                    fprintf('[DEBUG] Using rect_width/rect_height: %.3f mm x %.3f mm\n', w*1e3, h*1e3);
                 elseif isfield(wire, 'width') && isfield(wire, 'thickness')
                     w = wire.width;
                     h = wire.thickness;
-                    fprintf('[DEBUG] Using width/thickness: %.3f mm x %.3f mm\n', w*1e3, h*1e3);
                 else
                     w = 10e-3;
                     h = 0.1e-3;
-                    fprintf('[DEBUG] WARNING: No dimensional fields found! Using fallback: %.3f mm x %.3f mm\n', w*1e3, h*1e3);
                 end
             else
                 % Round or Litz: equivalent square
@@ -226,7 +212,6 @@ classdef openmagnetics_api_interface < handle
                 side = d * sqrt(pi) / 2;  % Equal-area square
                 w = side;
                 h = side;
-                fprintf('[DEBUG] Round wire: diameter %.3f mm -> square side %.3f mm\n', d*1e3, side*1e3);
             end
         end
 
@@ -426,7 +411,6 @@ classdef openmagnetics_api_interface < handle
             end
 
             wire_names = fieldnames(data);
-            fprintf('Loading %d wires from PyOpenMagnetics JSON export...\n', length(wire_names));
 
             for i = 1:length(wire_names)
                 key = wire_names{i};
@@ -445,7 +429,6 @@ classdef openmagnetics_api_interface < handle
                 n_loaded = n_loaded + 1;
             end
 
-            fprintf('Loaded %d wires from local JSON (no server needed)\n', n_loaded);
         end
 
         function n_loaded = load_core_json(obj, json_path)
@@ -478,7 +461,6 @@ classdef openmagnetics_api_interface < handle
             end
 
             core_names = fieldnames(data);
-            fprintf('Loading %d core shapes from PyOpenMagnetics JSON export...\n', length(core_names));
 
             for i = 1:length(core_names)
                 key = core_names{i};
@@ -548,7 +530,6 @@ classdef openmagnetics_api_interface < handle
                 n_loaded = n_loaded + 1;
             end
 
-            fprintf('Loaded %d core shapes from local JSON\n', n_loaded);
         end
 
         function n_loaded = load_material_json(obj, json_path)
@@ -581,7 +562,6 @@ classdef openmagnetics_api_interface < handle
             end
 
             mat_names = fieldnames(data);
-            fprintf('Loading %d materials from PyOpenMagnetics JSON export...\n', length(mat_names));
 
             for i = 1:length(mat_names)
                 key = mat_names{i};
@@ -626,7 +606,6 @@ classdef openmagnetics_api_interface < handle
                 n_loaded = n_loaded + 1;
             end
 
-            fprintf('Loaded %d materials from local JSON\n', n_loaded);
         end
 
         function load_supplier_json(obj, json_path)
@@ -693,7 +672,6 @@ classdef openmagnetics_api_interface < handle
                 end
             end
 
-            fprintf('Loaded %d suppliers from local JSON\n', length(obj.supplier_list));
         end
 
         function apply_offline_data(obj)
@@ -800,16 +778,9 @@ classdef openmagnetics_api_interface < handle
             out = struct();
             out.name = name;
 
-            % DIAGNOSTIC: Log wire being normalized
-            fprintf('\n[DEBUG normalize_wire] Normalizing wire: %s\n', name);
-
             if ~isstruct(wire)
-                fprintf('[DEBUG] Wire is not a struct, returning empty\n');
                 return;
             end
-
-            % DIAGNOSTIC: Show original fields
-            fprintf('[DEBUG] Original wire fields: %s\n', strjoin(fieldnames(wire), ', '));
 
             if isfield(wire, 'standard'); out.standard = wire.standard; end
             if isfield(wire, 'coating'); out.coating = wire.coating; end
@@ -820,15 +791,12 @@ classdef openmagnetics_api_interface < handle
             if isempty(shape) && isfield(wire, 'shape'); shape = wire.shape; end
             if isempty(shape) && isfield(wire, 'type'); shape = wire.type; end
 
-            fprintf('[DEBUG] Detected shape string: "%s"\n', shape);
-
             is_rect = local_contains(shape, 'rect') || local_contains(shape, 'foil') || local_contains(shape, 'planar');
             if is_rect
                 out.conductor_shape = 'rectangular';
             else
                 out.conductor_shape = 'round';
             end
-            fprintf('[DEBUG] Normalized conductor_shape: %s\n', out.conductor_shape);
 
             d_bare = resolve_dim_value(wire, {'diameter','conducting_diameter','conductingDiameter','conductorDiameter'});
             d_outer = resolve_dim_value(wire, {'outer_diameter','outerDiameter','outer_diameter_total','outerDiameterTotal'});
@@ -838,29 +806,21 @@ classdef openmagnetics_api_interface < handle
             w_rect = resolve_dim_value(wire, {'rect_width','width','foil_width','foilWidth','conducting_height','conductingHeight'});
             h_rect = resolve_dim_value(wire, {'rect_height','height','foil_thickness','foilThickness','conducting_width','conductingWidth'});
 
-            fprintf('[DEBUG] Resolved dimensions: w_rect=%.6f m, h_rect=%.6f m\n', w_rect, h_rect);
-
             if strcmp(out.conductor_shape, 'rectangular')
                 % Check each dimension individually and use fallbacks if needed
                 if h_rect == 0
-                    fprintf('[DEBUG] No thickness found, attempting to parse from name: %s\n', name);
                     [thickness_mm, ~] = parse_foil_dimensions_from_name(name);
                     if thickness_mm > 0
-                        h_rect = thickness_mm * 1e-3;  % Convert mm to m
-                        fprintf('[DEBUG] Parsed thickness from name: %.3f mm\n', thickness_mm);
+                        h_rect = thickness_mm * 1e-3;
                     end
                 end
 
                 if w_rect == 0
-                    fprintf('[DEBUG] No width found\n');
                     [~, width_mm] = parse_foil_dimensions_from_name(name);
                     if width_mm > 0
-                        w_rect = width_mm * 1e-3;  % Convert mm to m
-                        fprintf('[DEBUG] Parsed width from name: %.3f mm\n', width_mm);
+                        w_rect = width_mm * 1e-3;
                     else
-                        % Default foil width if not specified (1 inch = 25.4mm)
                         w_rect = 25.4e-3;
-                        fprintf('[DEBUG] Using default foil width: 25.4 mm\n');
                     end
                 end
 
@@ -868,13 +828,11 @@ classdef openmagnetics_api_interface < handle
                     out.rect_width = w_rect;
                     out.foil_width = w_rect;
                     out.width = w_rect;
-                    fprintf('[DEBUG] Set foil_width = %.3f mm\n', w_rect*1e3);
                 end
                 if h_rect > 0
                     out.rect_height = h_rect;
                     out.foil_thickness = h_rect;
                     out.thickness = h_rect;
-                    fprintf('[DEBUG] Set foil_thickness = %.3f mm\n', h_rect*1e3);
                 end
                 if w_rect > 0 && h_rect > 0
                     out.area = w_rect * h_rect;
@@ -906,7 +864,6 @@ classdef openmagnetics_api_interface < handle
                 out.resistance = 1 / (5.8e7 * out.area);
             end
 
-            fprintf('[DEBUG] Normalization complete for %s\n', name);
         end
 
         function db = convert_core_database(obj, remote)

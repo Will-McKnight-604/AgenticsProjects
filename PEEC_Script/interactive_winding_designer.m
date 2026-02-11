@@ -19,7 +19,6 @@ function interactive_winding_designer()
     data.layout_calc = openmagnetics_winding_layout(data.api);
 
     % Load databases
-    fprintf('Loading wire and core databases...\n');
     data.wires = data.api.get_wires();
     data.cores = data.api.get_cores();
     data.materials = data.api.get_materials();
@@ -97,7 +96,7 @@ function interactive_winding_designer()
     data.gap_winding = 0.0e-3;
 
     % Core air gap parameters
-    data.core_gap_type = 'Ungapped';   % Ungapped, Ground, Spacer, Distributed, Custom
+    data.core_gap_type = 'Ungapped';   % Ungapped, Ground, Spacer, Distributed
     data.core_gap_length = 0;          % Gap length in meters (0 = ungapped)
     data.core_num_gaps = 1;            % Number of gaps
     data.insulation_class = 'basic';
@@ -123,11 +122,18 @@ function interactive_winding_designer()
     data.Ny = 6;
 
     % Create main GUI figure
+    scr = get(0, 'ScreenSize');
+    fig_w = min(1800, max(1200, scr(3) - 100));
+    fig_h = min(900, max(700, scr(4) - 120));
+    fig_w = min(fig_w, max(900, scr(3) - 40));
+    fig_h = min(fig_h, max(650, scr(4) - 80));
+    fig_x = max(20, floor((scr(3) - fig_w) / 2));
+    fig_y = max(20, floor((scr(4) - fig_h) / 2));
     data.fig_gui = figure('Name', 'Interactive Transformer Design Tool [Offline Mode]', ...
-                          'Position', [50 100 1600 700], ...
+                          'Position', [fig_x fig_y fig_w fig_h], ...
                           'NumberTitle', 'off', ...
                           'MenuBar', 'none', ...
-                          'Resize', 'off');
+                          'Resize', 'on');
 
     data.fig_results = [];
 
@@ -149,8 +155,9 @@ function build_gui(data)
     % Main title
     uicontrol('Parent', fig, 'Style', 'text', ...
               'String', 'Interactive Transformer Design Tool [Offline Mode]', ...
-              'Position', [20 660 1560 30], ...
-              'FontSize', 14, 'FontWeight', 'bold', ...
+              'Units', 'normalized', ...
+              'Position', [0.02 0.94 0.96 0.045], ...
+              'FontSize', 17, 'FontWeight', 'bold', ...
               'HorizontalAlignment', 'center', ...
               'Tag', 'main_title');
 
@@ -185,8 +192,9 @@ function build_gui(data)
 
     % ========== LEFT PANEL: CORE SELECTION (with supplier cascade) ==========
     core_panel = uipanel('Parent', fig, ...
-                        'Position', [0.02 0.15 0.28 0.8], ...
-                        'Title', 'Core Selection (OpenMagnetics)');
+                        'Position', [0.02 0.16 0.29 0.76], ...
+                        'Title', 'Core Selection (OpenMagnetics)', ...
+                        'FontSize', 11, 'FontWeight', 'bold');
 
     % --- Supplier dropdown ---
     uicontrol('Parent', core_panel, 'Style', 'text', ...
@@ -266,7 +274,7 @@ function build_gui(data)
               'Position', [30 190 50 20], ...
               'HorizontalAlignment', 'left');
 
-    gap_types = {'Ungapped', 'Ground', 'Spacer', 'Distributed', 'Custom'};
+    gap_types = {'Ungapped', 'Ground', 'Spacer', 'Distributed'};
     gap_idx = find(strcmp(gap_types, data.core_gap_type), 1);
     if isempty(gap_idx); gap_idx = 1; end
 
@@ -399,18 +407,20 @@ function build_gui(data)
 
     % ========== CENTER PANEL: WINDING CONFIGURATION ==========
     winding_panel = uipanel('Parent', fig, ...
-                           'Position', [0.32 0.15 0.34 0.8], ...
-                           'Title', 'Winding Configuration');
+                           'Position', [0.33 0.16 0.34 0.76], ...
+                           'Title', 'Winding Configuration', ...
+                           'FontSize', 11, 'FontWeight', 'bold');
 
     % Tab buttons
     tab_group = uibuttongroup('Parent', winding_panel, ...
-                              'Position', [0.02 0.88 0.96 0.1], ...
+                              'Position', [0.02 0.90 0.96 0.08], ...
                               'BorderType', 'none');
 
     for w = 1:data.n_windings
         uicontrol('Parent', tab_group, 'Style', 'togglebutton', ...
                   'String', data.windings(w).name, ...
-                  'Position', [10 + (w-1)*120, 5, 110, 30], ...
+                  'Position', [10 + (w-1)*130, 6, 120, 28], ...
+                  'FontSize', 10, ...
                   'Tag', sprintf('tab%d', w), ...
                   'Callback', {@switch_tab, w});
     end
@@ -419,21 +429,21 @@ function build_gui(data)
     % Content panels for each winding
     for w = 1:data.n_windings
         panel = uipanel('Parent', winding_panel, ...
-                        'Position', [0.02 0.02 0.96 0.84], ...
+                        'Position', [0.02 0.02 0.96 0.86], ...
                         'Visible', 'off', ...
                         'Tag', sprintf('content%d', w));
 
         % Winding name header
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', sprintf('%s Winding', data.windings(w).name), ...
-                  'Position', [20 430 300 25], ...
+                  'Position', [20 480 300 25], ...
                   'FontSize', 12, 'FontWeight', 'bold', ...
                   'HorizontalAlignment', 'left');
 
         % --- Wire Type dropdown ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'Wire Type:', ...
-                  'Position', [20 400 100 20], ...
+                  'Position', [20 430 100 20], ...
                   'FontWeight', 'bold', 'HorizontalAlignment', 'left');
 
         wire_list = fieldnames(data.wires);
@@ -443,7 +453,7 @@ function build_gui(data)
 
         uicontrol('Parent', panel, 'Style', 'popupmenu', ...
                   'String', wire_list, ...
-                  'Position', [130 400 250 25], ...
+                  'Position', [130 430 230 25], ...
                   'Value', wire_idx, ...
                   'Tag', sprintf('wire_type_%d', w), ...
                   'Callback', {@select_wire, w});
@@ -451,43 +461,43 @@ function build_gui(data)
         % --- Wire Standard dropdown ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'Standard:', ...
-                  'Position', [20 370 100 20], ...
+                  'Position', [20 395 100 20], ...
                   'HorizontalAlignment', 'left');
 
         uicontrol('Parent', panel, 'Style', 'popupmenu', ...
                   'String', data.wire_options.standards, ...
-                  'Position', [130 370 250 25], ...
+                  'Position', [130 395 230 25], ...
                   'Tag', sprintf('wire_std_%d', w), ...
                   'Callback', {@select_wire_attribute, w, 'standard'});
 
         % --- Conductor diameter dropdown ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'Cond. diameter:', ...
-                  'Position', [20 335 120 20], ...
+                  'Position', [20 360 120 20], ...
                   'HorizontalAlignment', 'left');
 
         uicontrol('Parent', panel, 'Style', 'popupmenu', ...
                   'String', data.wire_options.cond_diameters, ...
-                  'Position', [130 335 250 25], ...
+                  'Position', [130 360 230 25], ...
                   'Tag', sprintf('wire_diam_%d', w), ...
                   'Callback', {@select_wire_attribute, w, 'cond_diameter'});
 
         % --- Coating dropdown ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'Coating:', ...
-                  'Position', [20 300 100 20], ...
+                  'Position', [20 325 100 20], ...
                   'HorizontalAlignment', 'left');
 
         uicontrol('Parent', panel, 'Style', 'popupmenu', ...
                   'String', data.wire_options.coatings, ...
-                  'Position', [130 300 250 25], ...
+                  'Position', [130 325 230 25], ...
                   'Tag', sprintf('wire_coat_%d', w), ...
                   'Callback', {@select_wire_attribute, w, 'coating'});
 
         % --- Wire insulation type ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'Wire Insulation:', ...
-                  'Position', [20 265 120 20], ...
+                  'Position', [20 290 120 20], ...
                   'HorizontalAlignment', 'left');
 
         insulation_opts = {'Standard', 'TIW'};
@@ -499,7 +509,7 @@ function build_gui(data)
 
         uicontrol('Parent', panel, 'Style', 'popupmenu', ...
                   'String', insulation_opts, ...
-                  'Position', [130 265 250 25], ...
+                  'Position', [130 290 230 25], ...
                   'Value', ins_val, ...
                   'Tag', sprintf('wire_insulation_%d', w), ...
                   'Callback', {@update_wire_insulation, w});
@@ -507,58 +517,58 @@ function build_gui(data)
         % --- No. Turns ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'No. Turns:', ...
-                  'Position', [20 230 120 20], ...
+                  'Position', [20 255 120 20], ...
                   'FontWeight', 'bold', 'HorizontalAlignment', 'left');
 
         uicontrol('Parent', panel, 'Style', 'pushbutton', ...
                   'String', '-', ...
-                  'Position', [180 230 30 25], ...
+                  'Position', [180 255 30 25], ...
                   'FontSize', 14, ...
                   'Callback', {@adjust_turns, w, -1});
 
         uicontrol('Parent', panel, 'Style', 'edit', ...
                   'String', num2str(data.windings(w).n_turns), ...
-                  'Position', [215 230 60 25], ...
+                  'Position', [215 255 60 25], ...
                   'FontSize', 11, 'HorizontalAlignment', 'center', ...
                   'Tag', sprintf('turns_val_%d', w), ...
                   'Callback', {@update_turns_manual, w});
 
         uicontrol('Parent', panel, 'Style', 'pushbutton', ...
                   'String', '+', ...
-                  'Position', [280 230 30 25], ...
+                  'Position', [280 255 30 25], ...
                   'FontSize', 14, ...
                   'Callback', {@adjust_turns, w, 1});
 
         % --- No. Parallels (Filar) ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'No. Parallels:', ...
-                  'Position', [20 190 120 20], ...
+                  'Position', [20 220 120 20], ...
                   'FontWeight', 'bold', 'HorizontalAlignment', 'left');
 
         uicontrol('Parent', panel, 'Style', 'pushbutton', ...
                   'String', '-', ...
-                  'Position', [180 190 30 25], ...
+                  'Position', [180 220 30 25], ...
                   'FontSize', 14, ...
                   'Callback', {@adjust_filar, w, -1});
 
         uicontrol('Parent', panel, 'Style', 'edit', ...
                   'String', num2str(data.windings(w).n_filar), ...
-                  'Position', [215 190 60 25], ...
+                  'Position', [215 220 60 25], ...
                   'FontSize', 11, 'HorizontalAlignment', 'center', ...
                   'Tag', sprintf('filar_val_%d', w), ...
                   'Callback', {@update_filar_manual, w});
 
         uicontrol('Parent', panel, 'Style', 'pushbutton', ...
                   'String', '+', ...
-                  'Position', [280 190 30 25], ...
+                  'Position', [280 220 30 25], ...
                   'FontSize', 14, ...
                   'Callback', {@adjust_filar, w, 1});
 
         % Filar type label
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', get_filar_name(data.windings(w).n_filar), ...
-                  'Position', [320 190 150 25], ...
-                  'FontSize', 10, 'FontWeight', 'bold', ...
+                  'Position', [305 220 80 25], ...
+                  'FontSize', 9, 'FontWeight', 'bold', ...
                   'HorizontalAlignment', 'left', ...
                   'ForegroundColor', [0.2 0.6 0.2], ...
                   'Tag', sprintf('filar_name_%d', w));
@@ -566,50 +576,51 @@ function build_gui(data)
         % --- RMS Current ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'RMS Current (A):', ...
-                  'Position', [20 150 150 20], ...
+                  'Position', [20 180 150 20], ...
                   'HorizontalAlignment', 'left');
 
         uicontrol('Parent', panel, 'Style', 'edit', ...
                   'String', num2str(data.windings(w).current), ...
-                  'Position', [180 150 80 25], ...
+                  'Position', [180 180 80 25], ...
                   'Tag', sprintf('current_%d', w), ...
                   'Callback', {@update_current, w});
 
         % --- Voltage ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'Voltage (V):', ...
-                  'Position', [20 115 150 20], ...
+                  'Position', [20 150 150 20], ...
                   'HorizontalAlignment', 'left');
 
         uicontrol('Parent', panel, 'Style', 'edit', ...
                   'String', num2str(data.windings(w).voltage), ...
-                  'Position', [180 115 80 25], ...
+                  'Position', [180 150 80 25], ...
                   'Tag', sprintf('voltage_%d', w), ...
                   'Callback', {@update_voltage, w});
 
         % --- Phase ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'Phase (degrees):', ...
-                  'Position', [20 80 150 20], ...
+                  'Position', [20 120 150 20], ...
                   'HorizontalAlignment', 'left');
 
         uicontrol('Parent', panel, 'Style', 'edit', ...
                   'String', num2str(data.windings(w).phase), ...
-                  'Position', [180 80 80 25], ...
+                  'Position', [180 120 80 25], ...
                   'Tag', sprintf('phase_%d', w), ...
                   'Callback', {@update_phase, w});
 
         % --- Configuration Summary ---
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', 'Configuration Summary:', ...
-                  'Position', [20 60 300 20], ...
+                  'Position', [20 90 300 20], ...
                   'FontSize', 10, 'FontWeight', 'bold', ...
                   'HorizontalAlignment', 'left');
 
         uicontrol('Parent', panel, 'Style', 'text', ...
                   'String', get_winding_summary(data, w), ...
-                  'Position', [20 5 460 55], ...
+                  'Position', [20 5 360 80], ...
                   'HorizontalAlignment', 'left', ...
+                  'VerticalAlignment', 'top', ...
                   'Tag', sprintf('summary_%d', w));
     end
 
@@ -623,51 +634,59 @@ function build_gui(data)
 
     % ========== RIGHT PANEL: VISUALIZATION ==========
     vis_panel = uipanel('Parent', fig, ...
-                        'Position', [0.68 0.15 0.30 0.8], ...
-                        'Title', 'Winding Layout in Core Window');
+                        'Position', [0.69 0.16 0.29 0.76], ...
+                        'Title', 'Winding Layout in Core Window', ...
+                        'FontSize', 11, 'FontWeight', 'bold');
 
     uicontrol('Parent', vis_panel, 'Style', 'text', ...
               'String', 'View Mode:', ...
-              'Position', [10 500 80 20], ...
+              'Units', 'normalized', ...
+              'Position', [0.02 0.92 0.18 0.05], ...
               'HorizontalAlignment', 'left');
 
     uicontrol('Parent', vis_panel, 'Style', 'popupmenu', ...
               'String', {'Schematic (2D)', 'Core Window Fit', 'OpenMagnetics View', 'Loss Analysis'}, ...
-              'Position', [90 500 150 25], ...
+              'Units', 'normalized', ...
+              'Position', [0.20 0.92 0.40 0.06], ...
               'Value', 2, ...
               'Tag', 'vis_mode', ...
               'Callback', @change_vis_mode);
 
     uicontrol('Parent', vis_panel, 'Style', 'text', ...
               'String', 'Packing:', ...
-              'Position', [250 500 60 20], ...
+              'Units', 'normalized', ...
+              'Position', [0.62 0.92 0.14 0.05], ...
               'HorizontalAlignment', 'left');
 
     uicontrol('Parent', vis_panel, 'Style', 'popupmenu', ...
               'String', {'Layered', 'Orthocyclic', 'Random'}, ...
-              'Position', [310 500 120 25], ...
+              'Units', 'normalized', ...
+              'Position', [0.76 0.92 0.22 0.06], ...
               'Value', 1, ...
               'Tag', 'packing_pattern', ...
               'Callback', @change_packing);
 
     uicontrol('Parent', vis_panel, 'Style', 'text', ...
               'String', 'Section Interl. Order:', ...
-              'Position', [10 470 140 20], ...
+              'Units', 'normalized', ...
+              'Position', [0.02 0.84 0.30 0.05], ...
               'HorizontalAlignment', 'left');
 
     uicontrol('Parent', vis_panel, 'Style', 'edit', ...
               'String', data.section_order, ...
-              'Position', [150 470 120 25], ...
+              'Units', 'normalized', ...
+              'Position', [0.32 0.84 0.24 0.06], ...
               'Tag', 'section_order', ...
               'Callback', @update_section_order);
 
     axes('Parent', vis_panel, ...
-         'Position', [0.1 0.1 0.85 0.75], ...
+         'Position', [0.08 0.08 0.88 0.70], ...
          'Tag', 'vis_axes');
 
     uicontrol('Parent', vis_panel, 'Style', 'text', ...
               'String', '', ...
-              'Position', [10 10 430 40], ...
+              'Units', 'normalized', ...
+              'Position', [0.02 0.01 0.96 0.06], ...
               'HorizontalAlignment', 'left', ...
               'BackgroundColor', [0.95 0.95 1.0], ...
               'FontSize', 8, ...
@@ -1419,13 +1438,15 @@ function order = parse_section_order(data)
         s = '';
     end
 
-    for i = 1:length(s)
-        c = s(i);
-        if isstrprop(c, 'digit')
-            v = str2double(c);
-            if v >= 1 && v <= data.n_windings
-                order(end+1) = v; %#ok<AGROW>
-            end
+    if data.n_windings <= 9 && ~isempty(regexp(s, '^[0-9]+$', 'once'))
+        tokens = regexp(s, '\d', 'match');
+    else
+        tokens = regexp(s, '\d+', 'match');
+    end
+    for i = 1:length(tokens)
+        v = str2double(tokens{i});
+        if ~isnan(v) && v >= 1 && v <= data.n_windings
+            order(end+1) = v; %#ok<AGROW>
         end
     end
 
@@ -1764,9 +1785,12 @@ function update_gap_type(src, ~)
                 data.core_num_gaps = 3;
                 set(gap_num_ctrl, 'String', '3');
             end
-        case 'Custom'
-            set(gap_len_ctrl, 'Enable', 'on');
-            set(gap_num_ctrl, 'Enable', 'on');
+        otherwise
+            data.core_gap_type = 'Ungapped';
+            data.core_gap_length = 0;
+            data.core_num_gaps = 1;
+            set(gap_len_ctrl, 'String', '0', 'Enable', 'off');
+            set(gap_num_ctrl, 'String', '1', 'Enable', 'off');
     end
 
     guidata(fig, data);
@@ -2271,7 +2295,10 @@ function visualize_openmagnetics(data, ax)
 
     try
         % Build the visualization config
+        fprintf('[OM_VIZ] Building config...\n');
         config = build_om_viz_config(data);
+        fprintf('[OM_VIZ] Config built: core=%s, material=%s, windings=%d\n', ...
+            config.core_shape, config.material, length(config.windings));
 
         % Write config to temp JSON file
         % Use pwd for paths - avoids MSYS/Windows path mangling in Octave
@@ -2281,31 +2308,111 @@ function visualize_openmagnetics(data, ax)
         config.output_svg = strrep(svg_file, '\', '/');
 
         % Write JSON config
+        fprintf('[OM_VIZ] Encoding JSON...\n');
         json_str = jsonencode(config);
+        fprintf('[OM_VIZ] JSON length: %d chars\n', length(json_str));
         fid = fopen(config_file, 'w');
         if fid == -1
-            error('Cannot write config file');
+            error('Cannot write config file: %s', config_file);
         end
         fwrite(fid, json_str);
         fclose(fid);
+        fprintf('[OM_VIZ] Config written to: %s\n', config_file);
 
-        % Call Python script - use forward slashes for MSYS compatibility
-        py_script = fullfile(script_dir, 'generate_om_visualization.py');
-        py_script = strrep(py_script, '\', '/');
-        config_file_cmd = strrep(config_file, '\', '/');
-        [status, output] = system(sprintf('python "%s" "%s"', py_script, config_file_cmd));
+        % Call Python script - use relative paths to avoid MSYS/Windows path mangling
+        py_script_name = 'generate_om_visualization.py';
+        config_file_name = 'om_viz_config.json';
+        
+        if ~exist(fullfile(script_dir, py_script_name), 'file')
+             error('Python script "%s" not found in %s', py_script_name, script_dir);
+        end
+
+        % Check for local venv python (recommended setup)
+        python_cmd = 'python';
+        venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
+        if exist(venv_python, 'file')
+            python_cmd = ['"' venv_python '"'];
+        end
+
+        % Add stderr redirection (2>&1) to capture ModuleNotFoundError
+        cmd = sprintf('%s "%s" "%s" 2>&1', python_cmd, py_script_name, config_file_name);
+        fprintf('[OM_VIZ] Running: %s\n', cmd);
+        
+        % Debug: check which python is being used if not venv
+        if strcmp(python_cmd, 'python')
+            [~, py_path] = system('where python');
+            if ~isempty(py_path)
+                fprintf('[OM_VIZ] Resolved python:\n%s\n', strtrim(py_path));
+            end
+        end
+
+        [status, output] = system(cmd);
+        
+        % Check for module errors (ImportError, ModuleNotFoundError, or "No module named")
+        is_module_error = ~isempty(strfind(output, 'ModuleNotFoundError')) || ...
+                          ~isempty(strfind(output, 'ImportError')) || ...
+                          ~isempty(strfind(output, 'No module named'));
+
+        % Fallback: If python failed with ModuleNotFoundError, try 'py' launcher (Windows)
+        if status ~= 0 && is_module_error && ispc
+            fprintf('[OM_VIZ] Standard python failed. Trying Windows Python Launcher (py)...\n');
+            cmd_fallback = sprintf('py "%s" "%s" 2>&1', py_script_name, config_file_name);
+            [status_fb, output_fb] = system(cmd_fallback);
+            if status_fb == 0 && ~isempty(strfind(output_fb, 'OK'))
+                status = status_fb;
+                output = output_fb;
+                fprintf('[OM_VIZ] Success using ''py'' launcher.\n');
+            end
+        end
+
+        % Fallback 2: Try specific python paths from 'where python' if they look like system installs
+        if status ~= 0 && is_module_error && ispc
+             [~, py_paths_str] = system('where python');
+             % Split by newlines
+             py_paths = strsplit(strtrim(py_paths_str), char(10));
+             for i = 1:length(py_paths)
+                 p = strtrim(py_paths{i});
+                 if isempty(p); continue; end
+                 % Skip Octave bundled python or the one we just tried (if it was 'python')
+                 if ~isempty(strfind(lower(p), 'octave')) || ~isempty(strfind(lower(p), 'usr\bin'))
+                     continue;
+                 end
+                 
+                 fprintf('[OM_VIZ] Trying alternative python: %s\n', p);
+                 cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script_name, config_file_name);
+                 [status_alt, output_alt] = system(cmd_alt);
+                 if status_alt == 0 && ~isempty(strfind(output_alt, 'OK'))
+                     status = status_alt;
+                     output = output_alt;
+                     fprintf('[OM_VIZ] Success using alternative python.\n');
+                     break;
+                 else
+                     fprintf('[OM_VIZ] Alternative python failed (exit=%d): %s\n', status_alt, strtrim(output_alt));
+                 end
+             end
+        end
+
+        fprintf('[OM_VIZ] Python exit code: %d\n', status);
+        fprintf('[OM_VIZ] Python output: "%s"\n', strtrim(output));
 
         if status ~= 0 || isempty(strfind(strtrim(output), 'OK'))
-            error('Python script failed: %s', strtrim(output));
+            if is_module_error
+                fprintf('[OM_VIZ] Hint: PyOpenMagnetics module missing in the python environment used.\n');
+                fprintf('[OM_VIZ] If you installed it globally, try running Octave from a terminal where ''python'' works.\n');
+                fprintf('[OM_VIZ] Or create a .venv in this folder: %s\n', script_dir);
+            end
+            error('Python script failed (exit=%d): %s', status, strtrim(output));
         end
 
         % Read SVG file
+        fprintf('[OM_VIZ] Reading SVG: %s\n', svg_file);
         fid = fopen(svg_file, 'r');
         if fid == -1
-            error('Cannot read SVG file');
+            error('Cannot read SVG file: %s', svg_file);
         end
         svg_str = fread(fid, '*char')';
         fclose(fid);
+        fprintf('[OM_VIZ] SVG loaded: %d chars\n', length(svg_str));
 
         % Parse and render SVG
         parse_om_svg(svg_str, ax);
@@ -2322,6 +2429,10 @@ function visualize_openmagnetics(data, ax)
 
     catch ME
         % Fallback: show error and use basic visualization
+        fprintf('[OM_VIZ] ERROR: %s\n', ME.message);
+        if ~isempty(ME.stack)
+            fprintf('[OM_VIZ]   at %s line %d\n', ME.stack(1).name, ME.stack(1).line);
+        end
         text(ax, 0.5, 0.5, ...
             sprintf('OpenMagnetics view unavailable:\n%s\n\nFalling back to Core Window Fit', ME.message), ...
             'HorizontalAlignment', 'center', 'FontSize', 9, ...
@@ -2394,6 +2505,20 @@ function config = build_om_viz_config(data)
     config.material = mat_name;
     config.gapping = gapping;
     config.windings = windings;
+    config.section_order = data.section_order;
+    if isfield(data, 'core_gap_type'); config.core_gap_type = data.core_gap_type; end
+    if isfield(data, 'core_gap_length'); config.core_gap_length = data.core_gap_length; end
+    if isfield(data, 'core_num_gaps'); config.core_num_gaps = data.core_num_gaps; end
+    try
+        pack_idx = get(findobj(data.fig_gui, 'Tag', 'packing_pattern'), 'Value');
+        pack_vals = {'Layered', 'Orthocyclic', 'Random'};
+        if pack_idx >= 1 && pack_idx <= numel(pack_vals)
+            config.packing_pattern = pack_vals{pack_idx};
+        end
+    catch
+    end
+    if isfield(data, 'tape_thickness'); config.tape_thickness = data.tape_thickness; end
+    if isfield(data, 'tape_layers'); config.tape_layers = data.tape_layers; end
     config.plot_type = 'magnetic';
 end
 
@@ -2846,5 +2971,271 @@ function name = get_filar_name(n)
         name = names{n};
     else
         name = sprintf('%d-filar', n);
+    end
+end
+
+function parse_om_svg(svg_str, ax)
+    % Robust SVG parser for Octave - renders circles, rectangles, polygons, and paths
+    cla(ax);
+    hold(ax, 'on');
+    color_map = parse_css_colors(svg_str);
+    
+    % Extract viewBox for coordinate mapping
+    % Allow spaces around = and quotes
+    vb_match = regexp(svg_str, 'viewBox\s*=\s*["'']([^"'']*)["'']', 'tokens', 'once');
+    if ~isempty(vb_match)
+        vb = sscanf(vb_match{1}, '%f %f %f %f');
+        if length(vb) == 4
+            pad = 0.05;
+            x0 = vb(1); y0 = vb(2); w = vb(3); h = vb(4);
+            xlim(ax, [x0 - pad*w, x0 + w*(1+pad)]);
+            ylim(ax, [y0 - pad*h, y0 + h*(1+pad)]);
+            % SVG Y is down, plot Y is up. OpenMagnetics usually handles this,
+            % but if needed we could flip. For now assume standard Cartesian.
+        end
+    end
+
+    % --- Helper to extract numeric attribute ---
+    function val = get_attr(tag, attr)
+        val = NaN;
+        % Allow spaces around = and quotes
+        pat = [attr '\s*=\s*["'']?([0-9\.\-eE]+)["'']?'];
+        tok = regexp(tag, pat, 'tokens', 'once');
+        if ~isempty(tok)
+            val = str2double(tok{1});
+        end
+    end
+
+    % --- Helper to extract string attribute ---
+    function str_val = get_attr_str(tag, attr)
+        str_val = '';
+        pat = [attr '\s*=\s*["'']([^"'']*)["'']'];
+        tok = regexp(tag, pat, 'tokens', 'once');
+        if ~isempty(tok)
+            str_val = tok{1};
+        end
+    end
+
+    % --- Draw Paths (Core shapes) ---
+    path_tags = regexp(svg_str, '<path[^>]*>', 'match');
+    for i = 1:length(path_tags)
+        tag = path_tags{i};
+        d = get_attr_str(tag, 'd');
+        class_name = get_attr_str(tag, 'class');
+        style = get_attr_str(tag, 'style');
+        [rgb, alpha, has_fill, known] = get_class_style(class_name, color_map);
+        
+        if ~isempty(d)
+            % Heuristic: extract all numbers and plot as polygon
+            % Handle "10-10" case by putting space before minus
+            d_spaced = regexprep(d, '([0-9])-', '$1 -');
+            % Remove commands
+            d_clean = regexprep(d_spaced, '[a-zA-Z,]', ' ');
+            nums = sscanf(d_clean, '%f');
+            
+            if length(nums) >= 4 && mod(length(nums), 2) == 0
+                px = nums(1:2:end);
+                py = nums(2:2:end);
+                
+                if tag_has_fill_none(tag) || contains(style, 'fill:none') || (known && ~has_fill)
+                    line(px, py, 'Parent', ax, 'Color', 'k', 'LineWidth', 1);
+                else
+                    if ~(known && has_fill)
+                        rgb = get_default_color(class_name);
+                        alpha = 1.0;
+                    end
+                    h = patch(ax, px, py, rgb, 'EdgeColor', 'k', 'FaceAlpha', 0.5);
+                    if alpha < 1.0
+                        try
+                            set(h, 'FaceAlpha', alpha);
+                        catch
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    % --- Draw Polygons ---
+    poly_tags = regexp(svg_str, '<polygon[^>]*>', 'match');
+    for i = 1:length(poly_tags)
+        tag = poly_tags{i};
+        pts_str = get_attr_str(tag, 'points');
+        class_name = get_attr_str(tag, 'class');
+        [rgb, alpha, has_fill, known] = get_class_style(class_name, color_map);
+        if ~isempty(pts_str)
+            if tag_has_fill_none(tag) || (known && ~has_fill)
+                continue;
+            end
+            % Replace commas with spaces
+            nums = sscanf(regexprep(pts_str, '[,]', ' '), '%f');
+            if length(nums) >= 4 && mod(length(nums), 2) == 0
+                px = nums(1:2:end);
+                py = nums(2:2:end);
+                if ~(known && has_fill)
+                    rgb = get_default_color(class_name);
+                    alpha = 1.0;
+                end
+                h = patch(ax, px, py, rgb, 'EdgeColor', 'k', 'FaceAlpha', 0.5);
+                if alpha < 1.0
+                    try
+                        set(h, 'FaceAlpha', alpha);
+                    catch
+                    end
+                end
+            end
+        end
+    end
+
+    % --- Draw Rectangles ---
+    rect_tags = regexp(svg_str, '<rect[^>]*>', 'match');
+    for i = 1:length(rect_tags)
+        tag = rect_tags{i};
+        x = get_attr(tag, 'x');
+        y = get_attr(tag, 'y');
+        w = get_attr(tag, 'width');
+        h = get_attr(tag, 'height');
+        class_name = get_attr_str(tag, 'class');
+        [rgb, alpha, has_fill, known] = get_class_style(class_name, color_map);
+        
+        if ~isnan(x) && ~isnan(y) && ~isnan(w) && ~isnan(h)
+            if tag_has_fill_none(tag) || (known && ~has_fill)
+                continue;
+            end
+            if ~(known && has_fill)
+                rgb = get_default_color(class_name);
+                alpha = 1.0;
+            end
+            hrect = rectangle('Parent', ax, 'Position', [x, y, w, h], ...
+                'EdgeColor', 'k', 'FaceColor', rgb);
+            if alpha < 1.0
+                try
+                    set(hrect, 'FaceAlpha', alpha);
+                catch
+                end
+            end
+        end
+    end
+
+    % --- Draw Circles ---
+    circle_tags = regexp(svg_str, '<circle[^>]*>', 'match');
+    for i = 1:length(circle_tags)
+        tag = circle_tags{i};
+        cx = get_attr(tag, 'cx');
+        cy = get_attr(tag, 'cy');
+        r = get_attr(tag, 'r');
+        class_name = get_attr_str(tag, 'class');
+        [rgb, alpha, has_fill, known] = get_class_style(class_name, color_map);
+
+        if ~isnan(cx) && ~isnan(cy) && ~isnan(r)
+            if tag_has_fill_none(tag) || (known && ~has_fill)
+                continue;
+            end
+            if ~(known && has_fill)
+                rgb = get_default_color(class_name);
+                alpha = 1.0;
+            end
+            theta = linspace(0, 2*pi, 30);
+            h = fill(ax, cx + r*cos(theta), cy + r*sin(theta), ...
+                rgb, 'EdgeColor', 'none');
+            if alpha < 1.0
+                try
+                    set(h, 'FaceAlpha', alpha);
+                catch
+                end
+            end
+        end
+    end
+    
+    axis(ax, 'equal');
+    set(ax, 'XTick', [], 'YTick', [], 'Box', 'off', 'XColor', 'none', 'YColor', 'none');
+    xlabel(ax, '');
+    ylabel(ax, '');
+    title(ax, '');
+    hold(ax, 'off');
+end
+
+function color_map = parse_css_colors(svg_str)
+    % Parse CSS <style> block to extract class name -> color mapping
+    color_map = struct();
+    style_match = regexp(svg_str, '<style[^>]*>\s*<!\[CDATA\[(.*?)\]\]>\s*</style>', 'tokens', 'once');
+    if isempty(style_match)
+        style_match = regexp(svg_str, '<style[^>]*>(.*?)</style>', 'tokens', 'once');
+    end
+    if isempty(style_match)
+        return;
+    end
+    css_text = style_match{1};
+    rules = regexp(css_text, '\.([A-Za-z_][A-Za-z0-9_]*)\s*\{([^}]*)\}', 'tokens');
+    for i = 1:length(rules)
+        class_name = rules{i}{1};
+        rule_body = rules{i}{2};
+        safe_name = make_safe_field(class_name);
+        has_fill = false;
+        rgb = [];
+        fill_none = ~isempty(regexp(rule_body, 'fill:\s*none', 'once'));
+        if ~fill_none
+            fill_match = regexp(rule_body, 'fill:\s*#([0-9a-fA-F]{6})', 'tokens', 'once');
+            if ~isempty(fill_match)
+                hex = fill_match{1};
+                rgb = [hex2dec(hex(1:2)), hex2dec(hex(3:4)), hex2dec(hex(5:6))] / 255;
+                has_fill = true;
+            end
+        end
+        opacity_match = regexp(rule_body, 'opacity:\s*([0-9.]+)', 'tokens', 'once');
+        alpha = 1.0;
+        if ~isempty(opacity_match)
+            alpha = str2double(opacity_match{1});
+        end
+        color_map.(safe_name) = struct('rgb', rgb, 'alpha', alpha, 'has_fill', has_fill);
+    end
+end
+
+function [rgb, alpha, has_fill, known] = get_class_style(class_name, color_map)
+    rgb = [];
+    alpha = 1.0;
+    has_fill = true;
+    known = false;
+    safe_name = make_safe_field(class_name);
+    if isfield(color_map, safe_name)
+        entry = color_map.(safe_name);
+        known = true;
+        if isfield(entry, 'alpha'); alpha = entry.alpha; end
+        if isfield(entry, 'has_fill'); has_fill = entry.has_fill; end
+        if isfield(entry, 'rgb'); rgb = entry.rgb; end
+    end
+end
+
+function rgb = get_default_color(class_name)
+    switch class_name
+        case 'ferrite'
+            rgb = [0.482 0.486 0.490];
+        case 'bobbin'
+            rgb = [0.325 0.592 0.588];
+        case 'copper'
+            rgb = [0.722 0.451 0.200];
+        case 'insulation'
+            rgb = [1.000 0.941 0.357];
+        case 'spacer'
+            rgb = [0.231 0.231 0.231];
+        case 'fr4'
+            rgb = [0.0 0.5 0.0];
+        otherwise
+            rgb = [0.9 0.9 0.9];
+    end
+end
+
+function tf = tag_has_fill_none(tag)
+    tf = ~isempty(regexp(tag, 'fill\s*=\s*["'']none["'']', 'once')) || ...
+         ~isempty(regexp(tag, 'fill\s*:\s*none', 'once'));
+end
+
+function safe = make_safe_field(name)
+    safe = regexprep(name, '[^a-zA-Z0-9_]', '_');
+    if ~isempty(safe) && (safe(1) >= '0' && safe(1) <= '9')
+        safe = ['c_' safe];
+    end
+    if isempty(safe)
+        safe = 'unknown';
     end
 end

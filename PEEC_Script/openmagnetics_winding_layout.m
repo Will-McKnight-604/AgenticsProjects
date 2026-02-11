@@ -58,15 +58,10 @@ classdef openmagnetics_winding_layout < handle
                 if strcmpi(wire_type_field, 'foil') || (vis_w > 10 * vis_h)
                     % Foil wire: set width = bobbin height (foil fills the window)
                     vis_w = bobbin_eff.height;
-                    fprintf('  Foil wire: setting width to bobbin height = %.3f mm\n', vis_w*1e3);
                 end
             end
 
             wire_od = max(vis_w, vis_h);  % For round, this is OD
-
-            fprintf('=== WINDING LAYOUT ===\n');
-            fprintf('Core: %s | Wire: %s (OD=%.3fmm) | Turns: %d x %d | %s\n', ...
-                core_name, wire_type, wire_od*1e3, n_turns, n_filar, pattern);
 
             % Route to appropriate packing algorithm
             if strcmp(wire_shape, 'rectangular')
@@ -123,8 +118,6 @@ classdef openmagnetics_winding_layout < handle
                     bobbin.height = 15e-3;
                 end
             end
-            fprintf('  Bobbin window: %.2f x %.2f mm (W x H)\n', ...
-                bobbin.width*1e3, bobbin.height*1e3);
         end
 
         % ============ ROUND/LITZ PACKING ============
