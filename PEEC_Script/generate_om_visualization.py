@@ -44,6 +44,86 @@ def ensure_dict(obj):
     return obj
 
 
+def is_valid_wire(wire_obj):
+    if not isinstance(wire_obj, dict):
+        return False
+    if wire_obj.get('errorMessage'):
+        return False
+    return True
+
+
+def guess_standard(std_text):
+    s = str(std_text or '').lower()
+    if 'nema' in s:
+        return 'NEMA MW 1000 C'
+    return 'IEC 60317'
+
+
+def resolve_wire_data(winding_cfg):
+    wire_name = str(winding_cfg.get('wire_name', '') or '')
+    wire_std = guess_standard(winding_cfg.get('wire_standard', ''))
+    wire_shape = str(winding_cfg.get('wire_shape', 'round') or 'round').lower()
+    cond_w = float(winding_cfg.get('wire_cond_w', 0.0) or 0.0)
+    cond_h = float(winding_cfg.get('wire_cond_h', 0.0) or 0.0)
+
+    # 1) Direct name from OM DB
+    if wire_name:
+        try:
+            wire = ensure_dict(pm.get_wire_data_by_name(wire_name))
+            if is_valid_wire(wire):
+                return wire
+        except Exception:
+            pass
+
+    # 2) Try to resolve AWG style labels
+    if wire_name:
+        awg_match = re.search(r'AWG[_\s-]*(\d+)', wire_name, flags=re.IGNORECASE)
+        if awg_match:
+            awg_num = awg_match.group(1)
+            for awg_label in [f'AWG {awg_num}', f'{awg_num} AWG']:
+                try:
+                    wire = ensure_dict(pm.get_wire_data_by_standard_name(awg_label))
+                    if is_valid_wire(wire):
+                        return wire
+                except Exception:
+                    pass
+
+    # 3) Dimension-based resolution (closest available)
+    dim = 0.0
+    if cond_w > 0 and cond_h > 0:
+        dim = max(cond_w, cond_h)
+    elif wire_name:
+        m = re.search(r'(\d+(?:[_\.]\d+)?)', wire_name)
+        if m:
+            try:
+                dim = float(m.group(1).replace('_', '.')) * 1e-3
+            except Exception:
+                dim = 0.0
+
+    if dim > 0:
+        type_candidates = ['round']
+        if 'rect' in wire_shape or 'foil' in wire_shape:
+            type_candidates = ['rectangular', 'round']
+
+        std_candidates = [wire_std, 'IEC 60317', 'NEMA MW 1000 C']
+        seen = set()
+        for wt in type_candidates:
+            for std in std_candidates:
+                key = (wt, std)
+                if key in seen:
+                    continue
+                seen.add(key)
+                try:
+                    wire = ensure_dict(pm.find_wire_by_dimension(dim, wt, std))
+                    if is_valid_wire(wire):
+                        return wire
+                except Exception:
+                    pass
+
+    # 4) Final fallback
+    return ensure_dict(pm.get_wire_data_by_name('Round 0.5 - Grade 1'))
+
+
 def strip_elements_by_class(svg_content, class_names):
     if not class_names:
         return svg_content
@@ -196,6 +276,49 @@ def compute_turns_width(turns):
     return max(xs) - min(xs)
 
 
+def compute_turns_bounds(turns):
+    if not turns:
+        return None
+    xs = []
+    for t in turns:
+        try:
+            x = float(t['coordinates'][0])
+            r = float(t['dimensions'][0]) / 2.0
+        except Exception:
+            continue
+        xs.append(x - r)
+        xs.append(x + r)
+    if not xs:
+        return None
+    return (min(xs), max(xs))
+
+
+def scale_turns_to_width(coil, target_width):
+    if target_width <= 0:
+        return coil
+    turns = coil.get('turnsDescription', [])
+    bounds = compute_turns_bounds(turns)
+    if not bounds:
+        return coil
+    x_min, x_max = bounds
+    current_width = x_max - x_min
+    if current_width <= 0:
+        return coil
+
+    scale = target_width / current_width
+    center = 0.5 * (x_min + x_max)
+
+    for t in turns:
+        try:
+            x = float(t['coordinates'][0])
+            t['coordinates'][0] = center + (x - center) * scale
+        except Exception:
+            pass
+
+    coil['turnsDescription'] = turns
+    return coil
+
+
 def apply_orthocyclic(svg_content):
     circ_re = re.compile(r'<circle([^>]*?)cx="([^"]+)"([^>]*?)cy="([^"]+)"([^>]*?)r="([^"]+)"([^>]*)>')
     circles = []
@@ -267,6 +390,68 @@ def apply_orthocyclic(svg_content):
     return circ_re.sub(replace_circle, svg_content)
 
 
+def apply_section_spacing(coil, insulation_thickness):
+    try:
+        sections = coil.get('sectionsDescription', [])
+        turns = coil.get('turnsDescription', [])
+    except Exception:
+        return coil
+    if not sections or not turns or insulation_thickness <= 0:
+        return coil
+
+    # Build ordered section list by x-position
+    ordered = []
+    for s in sections:
+        try:
+            name = s.get('name', '')
+            cx = float(s.get('coordinates', [0])[0])
+            w = float(s.get('dimensions', [0])[0])
+        except Exception:
+            continue
+        left = cx - w / 2.0
+        ordered.append((left, name))
+    if not ordered:
+        return coil
+    ordered.sort(key=lambda x: x[0])
+
+    shift_map = {}
+    for idx, (_, name) in enumerate(ordered):
+        if not name:
+            continue
+        shift_map[name] = idx * insulation_thickness
+
+    # Shift sections
+    for s in sections:
+        name = s.get('name', '')
+        if name in shift_map:
+            try:
+                s['coordinates'][0] = float(s['coordinates'][0]) + shift_map[name]
+            except Exception:
+                pass
+
+    # Shift layers if present
+    for layer in coil.get('layersDescription', []) or []:
+        sec = layer.get('section', '')
+        if sec in shift_map:
+            try:
+                layer['coordinates'][0] = float(layer['coordinates'][0]) + shift_map[sec]
+            except Exception:
+                pass
+
+    # Shift turns
+    for t in turns:
+        sec = t.get('section', '')
+        if sec in shift_map:
+            try:
+                t['coordinates'][0] = float(t['coordinates'][0]) + shift_map[sec]
+            except Exception:
+                pass
+
+    coil['sectionsDescription'] = sections
+    coil['turnsDescription'] = turns
+    return coil
+
+
 def generate_visualization(config):
     """Build magnetic from config and generate SVG."""
 
@@ -302,12 +487,7 @@ def generate_visualization(config):
     # 5. Build coil functional description
     coil_func = []
     for i, w in enumerate(windings):
-        wire_name = w.get('wire_name', 'Round 0.5 - Grade 1')
-        try:
-            wire = ensure_dict(pm.get_wire_data_by_name(wire_name))
-        except Exception:
-            # Fallback: try without exact match
-            wire = ensure_dict(pm.get_wire_data_by_name('Round 0.5 - Grade 1'))
+        wire = resolve_wire_data(w)
 
         winding_entry = {
             'name': w.get('name', f'winding_{i}'),
@@ -347,10 +527,24 @@ def generate_visualization(config):
                 section_order = list(range(len(coil_func)))
             total_turns = sum([w.get('num_turns', 0) * max(1, w.get('num_parallels', 1)) for w in windings]) or 1
             proportions = [(w.get('num_turns', 0) * max(1, w.get('num_parallels', 1)) / total_turns) for w in windings]
-            coil_tmp = {'bobbin': bobbin, 'functionalDescription': coil_func}
-            coil_tmp = ensure_dict(pm.wind_by_sections(coil_tmp, 1, proportions, section_order, insulation_thickness))
-            coil_tmp = ensure_dict(pm.wind_by_layers(coil_tmp, [], insulation_thickness))
-            coil_tmp = ensure_dict(pm.wind_by_turns(coil_tmp))
+            coil_tmp = {
+                'bobbin': bobbin,
+                'functionalDescription': coil_func,
+                'layersOrientation': 'overlapping',
+                'turnsAlignment': 'centered'
+            }
+            margin_pairs = []
+            if insulation_thickness > 0:
+                margin_pad = insulation_thickness * 0.5
+                margin_pairs = [[margin_pad, margin_pad]]
+
+            coil_tmp = ensure_dict(pm.wind(coil_tmp, 1, proportions, section_order, margin_pairs))
+            if isinstance(coil_tmp, str):
+                raise RuntimeError(coil_tmp)
+            if isinstance(coil_tmp, dict) and coil_tmp.get('errorMessage'):
+                raise RuntimeError(coil_tmp.get('errorMessage'))
+            if not coil_tmp.get('turnsDescription'):
+                coil_tmp = ensure_dict(pm.wind_by_turns(coil_tmp))
             mag_complete['coil'] = coil_tmp
     except Exception as e:
         print(f'WARNING: Failed to generate turns: {e}', file=sys.stderr)
