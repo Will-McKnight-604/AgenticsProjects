@@ -510,6 +510,7 @@ classdef openmagnetics_api_interface < handle
                     end
                     if isfield(bobbin, 'width') && isfield(bobbin, 'height')
                         entry.bobbin = bobbin;
+                        entry.bobbin_source = 'windingWindow';
                     end
                 end
 
@@ -926,18 +927,26 @@ classdef openmagnetics_api_interface < handle
 
             if ~isfield(out, 'bobbin')
                 bobbin = struct();
+                bobbin_source = '';
                 if isfield(core, 'bobbin')
                     bobbin = core.bobbin;
+                    bobbin_source = 'bobbin';
                 elseif isfield(core, 'winding_window')
                     bobbin = normalize_window(core.winding_window);
+                    bobbin_source = 'windingWindow';
                 elseif isfield(core, 'windingWindow')
                     bobbin = normalize_window(core.windingWindow);
+                    bobbin_source = 'windingWindow';
                 elseif isfield(core, 'window')
                     bobbin = normalize_window(core.window);
+                    bobbin_source = 'windingWindow';
                 end
 
                 if isfield(bobbin, 'width') && isfield(bobbin, 'height')
                     out.bobbin = bobbin;
+                    if ~isempty(bobbin_source)
+                        out.bobbin_source = bobbin_source;
+                    end
                 end
             end
         end

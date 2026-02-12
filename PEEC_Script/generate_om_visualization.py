@@ -66,6 +66,42 @@ def resolve_wire_data(winding_cfg):
     cond_w = float(winding_cfg.get('wire_cond_w', 0.0) or 0.0)
     cond_h = float(winding_cfg.get('wire_cond_h', 0.0) or 0.0)
 
+    def build_custom_wire_from_dims():
+        # Keep OM view dimensions aligned with GUI/Core Window Fit by honoring
+        # explicit conductor dimensions sent by the MATLAB side.
+        if cond_w <= 0 and cond_h <= 0:
+            return None
+
+        if 'rect' in wire_shape or 'foil' in wire_shape:
+            w = cond_w if cond_w > 0 else cond_h
+            h = cond_h if cond_h > 0 else cond_w
+            if w <= 0 or h <= 0:
+                return None
+            return {
+                'name': wire_name or f'Custom rectangular {w*1e3:.3f}x{h*1e3:.3f} mm',
+                'type': 'rectangular',
+                'material': 'copper',
+                'standard': wire_std,
+                'conductingWidth': {'nominal': w},
+                'conductingHeight': {'nominal': h},
+                'outerWidth': {'nominal': w},
+                'outerHeight': {'nominal': h},
+                'coating': {'type': 'enamelled', 'grade': 1}
+            }
+
+        d = max(cond_w, cond_h)
+        if d <= 0:
+            return None
+        return {
+            'name': wire_name or f'Custom round {d*1e3:.3f} mm',
+            'type': 'round',
+            'material': 'copper',
+            'standard': wire_std,
+            'conductingDiameter': {'nominal': d},
+            'outerDiameter': {'nominal': d},
+            'coating': {'type': 'enamelled', 'grade': 1}
+        }
+
     # 1) Direct name from OM DB
     if wire_name:
         try:
@@ -75,7 +111,14 @@ def resolve_wire_data(winding_cfg):
         except Exception:
             pass
 
-    # 2) Try to resolve AWG style labels
+    # 2) Prefer explicit dimensions from GUI before heuristic lookups.
+    #    This avoids wire size drift (e.g. AWG mapping mismatches) that can
+    #    break turn placement and produce inconsistent spacing.
+    custom_wire = build_custom_wire_from_dims()
+    if custom_wire:
+        return custom_wire
+
+    # 3) Try to resolve AWG style labels
     if wire_name:
         awg_match = re.search(r'AWG[_\s-]*(\d+)', wire_name, flags=re.IGNORECASE)
         if awg_match:
@@ -88,7 +131,7 @@ def resolve_wire_data(winding_cfg):
                 except Exception:
                     pass
 
-    # 3) Dimension-based resolution (closest available)
+    # 4) Dimension-based resolution (closest available)
     dim = 0.0
     if cond_w > 0 and cond_h > 0:
         dim = max(cond_w, cond_h)
@@ -120,7 +163,7 @@ def resolve_wire_data(winding_cfg):
                 except Exception:
                     pass
 
-    # 4) Final fallback
+    # 5) Final fallback
     return ensure_dict(pm.get_wire_data_by_name('Round 0.5 - Grade 1'))
 
 
@@ -452,15 +495,70 @@ def apply_section_spacing(coil, insulation_thickness):
     return coil
 
 
-def generate_visualization(config):
-    """Build magnetic from config and generate SVG."""
+def get_bobbin_window_dims(bobbin):
+    try:
+        proc = bobbin.get('processedDescription', {})
+        windows = proc.get('windingWindows', [])
+        if windows:
+            ww = windows[0]
+            w = float(ww.get('width', 0.0) or 0.0)
+            h = float(ww.get('height', 0.0) or 0.0)
+            return w, h
+    except Exception:
+        pass
+    return 0.0, 0.0
+
+
+def parse_svg_viewbox(svg_content):
+    m = re.search(r'viewBox="([^"]+)"', svg_content or '')
+    if not m:
+        return None
+    try:
+        parts = [float(x) for x in m.group(1).split()]
+        if len(parts) != 4:
+            return None
+        return parts
+    except Exception:
+        return None
+
+
+def build_magnetic_from_config(config):
+    """Build full OpenMagnetics magnetic object from GUI config."""
 
     core_shape_name = config['core_shape']
     material_name = config['material']
     gapping = config.get('gapping', [])
     windings = config.get('windings', [])
-    plot_type = config.get('plot_type', 'magnetic')
-    output_svg = config.get('output_svg', 'om_visualization.svg')
+
+    packing_pattern = str(config.get('packing_pattern', 'Layered') or 'Layered')
+    packing_key = packing_pattern.strip().lower()
+    if packing_key == 'orthocyclic':
+        # Match OM web defaults requested by GUI:
+        # - Winding Arrangement: overlapping
+        # - Section Alignment: inner_or_top
+        # - Turns Alignment: spread
+        layers_orientation = 'overlapping'
+        turns_alignment = 'spread'
+        section_alignment = 'inner_or_top'
+    elif packing_key == 'random':
+        layers_orientation = 'overlapping'
+        turns_alignment = 'spread'
+        section_alignment = 'centered'
+    else:
+        layers_orientation = 'overlapping'
+        turns_alignment = 'centered'
+        section_alignment = 'centered'
+
+    wind_meta = {
+        'packing_pattern': packing_pattern,
+        'layers_orientation': layers_orientation,
+        'section_alignment': section_alignment,
+        'turns_alignment': turns_alignment,
+        'used_api_wind': False,
+        'api_wind_success': False,
+        'winding_mode': 'wind_by_turns',
+        'wind_error': ''
+    }
 
     # 1. Get shape and material as full dict objects
     shape = pm.find_core_shape_by_name(core_shape_name)
@@ -488,7 +586,6 @@ def generate_visualization(config):
     coil_func = []
     for i, w in enumerate(windings):
         wire = resolve_wire_data(w)
-
         winding_entry = {
             'name': w.get('name', f'winding_{i}'),
             'numberTurns': w.get('num_turns', 10),
@@ -521,33 +618,79 @@ def generate_visualization(config):
         tape_layers = int(config.get('tape_layers', 0) or 0)
         insulation_thickness = tape_thickness * max(tape_layers, 0)
         use_sections = (section_order and not is_default) or (insulation_thickness > 0)
+        use_api_wind = use_sections or packing_key in ('orthocyclic', 'random')
+        wind_meta['used_api_wind'] = bool(use_api_wind)
 
-        if use_sections:
+        if use_api_wind:
             if not section_order:
                 section_order = list(range(len(coil_func)))
             total_turns = sum([w.get('num_turns', 0) * max(1, w.get('num_parallels', 1)) for w in windings]) or 1
             proportions = [(w.get('num_turns', 0) * max(1, w.get('num_parallels', 1)) / total_turns) for w in windings]
-            coil_tmp = {
+
+            # For interleaving patterns (e.g. 121), a winding can appear multiple
+            # times. Compensate the per-winding proportion by the number of
+            # occurrences, otherwise repeated windings over-expand their section
+            # allocation in orthocyclic/contiguous placement.
+            if section_order:
+                counts = [max(1, section_order.count(i)) for i in range(len(proportions))]
+                proportions = [proportions[i] / counts[i] for i in range(len(proportions))]
+            base_coil = {
                 'bobbin': bobbin,
                 'functionalDescription': coil_func,
-                'layersOrientation': 'overlapping',
-                'turnsAlignment': 'centered'
+                'layersOrientation': layers_orientation,
+                'sectionsAlignment': section_alignment,
+                'sectionAlignment': section_alignment,
+                'turnsAlignment': turns_alignment
             }
             margin_pairs = []
             if insulation_thickness > 0:
                 margin_pad = insulation_thickness * 0.5
-                margin_pairs = [[margin_pad, margin_pad]]
+                n_pairs = max(1, len(section_order) - 1)
+                margin_pairs = [[margin_pad, margin_pad] for _ in range(n_pairs)]
 
-            coil_tmp = ensure_dict(pm.wind(coil_tmp, 1, proportions, section_order, margin_pairs))
-            if isinstance(coil_tmp, str):
-                raise RuntimeError(coil_tmp)
-            if isinstance(coil_tmp, dict) and coil_tmp.get('errorMessage'):
-                raise RuntimeError(coil_tmp.get('errorMessage'))
+            def wind_once(margins):
+                out = ensure_dict(pm.wind(base_coil, 1, proportions, section_order, margins))
+                if isinstance(out, str):
+                    raise RuntimeError(out)
+                if isinstance(out, dict) and out.get('errorMessage'):
+                    raise RuntimeError(out.get('errorMessage'))
+                return out
+
+            try:
+                coil_tmp = wind_once(margin_pairs)
+            except Exception:
+                if margin_pairs:
+                    # Some combinations can fail with explicit margin pairs.
+                    # Retry without margins to preserve winding mode.
+                    coil_tmp = wind_once([])
+                else:
+                    raise
             if not coil_tmp.get('turnsDescription'):
                 coil_tmp = ensure_dict(pm.wind_by_turns(coil_tmp))
             mag_complete['coil'] = coil_tmp
+            wind_meta['api_wind_success'] = True
+            wind_meta['winding_mode'] = 'api_wind'
     except Exception as e:
+        wind_meta['wind_error'] = str(e)
+        wind_meta['winding_mode'] = 'fallback_magnetic_autocomplete'
         print(f'WARNING: Failed to generate turns: {e}', file=sys.stderr)
+
+    return mag_complete, wind_meta, core_full, bobbin
+
+
+def generate_visualization(config):
+    """Build magnetic from config and generate SVG."""
+
+    core_shape_name = config['core_shape']
+    material_name = config['material']
+    windings = config.get('windings', [])
+    plot_type = config.get('plot_type', 'magnetic')
+    output_svg = config.get('output_svg', 'om_visualization.svg')
+    output_meta = config.get('output_meta', '')
+
+    # Build magnetic using the shared builder so analysis pre-screen and
+    # visualization always use the same winding generation path.
+    mag_complete, wind_meta, core_full, bobbin = build_magnetic_from_config(config)
 
     # 8. Generate SVG
     if plot_type == 'core':
@@ -568,10 +711,67 @@ def generate_visualization(config):
     gap_type_hint = str(config.get('core_gap_type', '') or '')
     if gap_type_hint.lower() != 'spacer':
         svg_content = strip_elements_by_class(svg_content, ['spacer', 'gap_additive'])
-    if config.get('packing_pattern', '') == 'Orthocyclic':
-        svg_content = apply_orthocyclic(svg_content)
     with open(output_svg, 'w') as f:
         f.write(svg_content)
+
+    if output_meta:
+        core_proc = core_full.get('processedDescription', {}) if isinstance(core_full, dict) else {}
+        core_width_m = float(core_proc.get('width', 0.0) or 0.0)
+        core_half_height_m = float(core_proc.get('height', 0.0) or 0.0)
+        bobbin_w_m, bobbin_h_m = get_bobbin_window_dims(bobbin)
+        vb = parse_svg_viewbox(svg_content)
+        turns_meta = []
+        try:
+            turns = mag_complete.get('coil', {}).get('turnsDescription', []) or []
+            for t in turns:
+                coords = t.get('coordinates', [0, 0, 0]) or [0, 0, 0]
+                dims = t.get('dimensions', [0, 0]) or [0, 0]
+                try:
+                    x_m = float(coords[0]) if len(coords) > 0 else 0.0
+                    y_m = float(coords[1]) if len(coords) > 1 else 0.0
+                    w_m = float(dims[0]) if len(dims) > 0 else 0.0
+                    h_m = float(dims[1]) if len(dims) > 1 else w_m
+                    if h_m <= 0:
+                        h_m = w_m
+                    r_m = 0.5 * max(0.0, min(w_m, h_m))
+                except Exception:
+                    continue
+                turns_meta.append({
+                    'winding': str(t.get('winding', '')),
+                    'x_m': x_m,
+                    'y_m': y_m,
+                    'r_m': r_m,
+                    'width_m': w_m,
+                    'height_m': h_m,
+                    'shape': str(t.get('crossSectionalShape', '')),
+                    'section': str(t.get('section', '')),
+                    'layer': str(t.get('layer', '')),
+                    'name': str(t.get('name', ''))
+                })
+        except Exception:
+            turns_meta = []
+        meta = {
+            'core_shape': core_shape_name,
+            'material': material_name,
+            'plot_type': plot_type,
+            'viewbox': vb,
+            'core_width_m': core_width_m,
+            'core_half_height_m': core_half_height_m,
+            'core_total_height_m': 2.0 * core_half_height_m,
+            'bobbin_window_width_m': bobbin_w_m,
+            'bobbin_window_height_m': bobbin_h_m,
+            'bobbin_window_area_m2': bobbin_w_m * bobbin_h_m,
+            'windings': len(windings),
+            'winding_names': [w.get('name', f'winding_{i}') for i, w in enumerate(windings)],
+            'section_order': str(config.get('section_order', '') or ''),
+            'turns': turns_meta,
+            'winding': wind_meta
+        }
+        try:
+            with open(output_meta, 'w') as f:
+                json.dump(meta, f)
+        except Exception as e:
+            print(f'WARNING: Failed to write meta file: {e}', file=sys.stderr)
 
     print('OK')
     return True

@@ -109,6 +109,13 @@ classdef openmagnetics_winding_layout < handle
         function bobbin = get_bobbin_dimensions(obj, core)
             if isfield(core, 'bobbin')
                 bobbin = core.bobbin;
+                % Core JSON exports provide windingWindow, while OM view uses
+                % create_basic_bobbin() usable window. Apply a correction so
+                % Core Window Fit and OM view use comparable window sizes.
+                if isfield(core, 'bobbin_source') && strcmp(core.bobbin_source, 'windingWindow')
+                    bobbin.width = bobbin.width * 0.70;
+                    bobbin.height = bobbin.height * 0.85;
+                end
             else
                 if isfield(core, 'dimensions')
                     bobbin.width = 0.4 * core.dimensions.A;
@@ -156,8 +163,8 @@ classdef openmagnetics_winding_layout < handle
                 end
             end
 
-            layer_width = wire_od * 0.866;
-            total_width = n_layers * layer_width;
+            layer_pitch = wire_od * 0.866;
+            total_width = wire_od + max(0, n_layers - 1) * layer_pitch;
 
             layout.fits = (total_width <= bobbin.width);
             layout.n_layers = n_layers;
@@ -306,7 +313,9 @@ classdef openmagnetics_winding_layout < handle
 
             while turn_idx <= n_turns
                 layer = layer + 1;
-                x = (layer - 1) * wire_od * 0.866;
+                % Keep first layer centered inside bobbin, matching layered
+                % left boundary convention.
+                x = wire_od/2 + (layer - 1) * wire_od * 0.866;
 
                 if mod(layer, 2) == 1
                     tpl = tpl_odd;

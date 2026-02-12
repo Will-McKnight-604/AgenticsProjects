@@ -30,6 +30,7 @@ function interactive_winding_designer()
     data.winding_names = {'Primary', 'Secondary'};
     data.winding_colors = {[0.2 0.4 0.8], [0.8 0.2 0.2]};
     data.section_order = '12';
+    data.om_window_cache = struct();
 
     % Default winding parameters
     data.windings(1).name = 'Primary';
@@ -121,6 +122,31 @@ function interactive_winding_designer()
     data.Nx = 6;
     data.Ny = 6;
 
+    % Excitation model parameters
+    data.excitation = struct();
+    data.excitation.source = 'converter';              % 'manual' | 'converter'
+    data.excitation.topology = 'two_switch_forward';   % fixed for now
+    data.excitation.conduction_mode = 'ccm+dcm';       % 'ccm' | 'dcm' | 'ccm+dcm'
+    data.excitation.sweep_mode = 'grid';               % 'nominal' | 'corners' | 'grid'
+    data.excitation.duty_mode = 'derived';             % 'derived' | 'manual'
+    data.excitation.manual_duty = 0.40;
+    data.excitation.line_scales = [0.90, 1.00, 1.10];
+    data.excitation.load_scales = [0.50, 0.75, 1.00];
+    data.excitation.harmonic_energy_pct = 99.5;
+    data.excitation.harmonic_max_order = 60;
+    data.excitation.small_harmonic_pct = 1.0;
+    data.excitation.small_harmonic_consecutive = 5;
+    data.excitation.analysis_mode = 'hybrid';          % 'peec_only' | 'hybrid' | 'om_only'
+    data.excitation.quality_preset = 'standard';       % 'fast' | 'standard' | 'high'
+    data.excitation.peec_refine_top_n = 6;             % worst ranked OM points to refine in PEEC
+    data.excitation.peec_harmonic_cap = 24;            % 0 = no cap
+    data.excitation.prescreen_waveform_samples = 128;  % OM pre-screen waveform samples
+    data.excitation.prescreen_temperature_c = 25;
+    data.excitation.use_cache = true;
+    data.excitation.use_import = false;
+    data.excitation.profile_file = fullfile(pwd(), 'om_excitation_profile.json');
+    data.excitation.cache_file = fullfile(pwd(), 'om_excitation_cache.json');
+
     % Create main GUI figure
     scr = get(0, 'ScreenSize');
     fig_w = min(1800, max(1200, scr(3) - 100));
@@ -164,29 +190,34 @@ function build_gui(data)
     % Data mode controls (top bar)
     uicontrol('Parent', fig, 'Style', 'text', ...
               'String', 'Data Mode:', ...
-              'Position', [560 35 80 18], ...
+              'Units', 'normalized', ...
+              'Position', [0.56 0.036 0.07 0.02], ...
               'FontWeight', 'bold', 'HorizontalAlignment', 'left');
 
     uicontrol('Parent', fig, 'Style', 'popupmenu', ...
               'String', {'Offline', 'Online (OM Server)'}, ...
-              'Position', [650 32 200 25], ...
+              'Units', 'normalized', ...
+              'Position', [0.63 0.032 0.14 0.028], ...
               'Tag', 'data_mode', ...
               'Callback', @update_data_mode);
 
     uicontrol('Parent', fig, 'Style', 'text', ...
               'String', 'Server URL:', ...
-              'Position', [560 8 80 18], ...
+              'Units', 'normalized', ...
+              'Position', [0.56 0.008 0.07 0.02], ...
               'HorizontalAlignment', 'left');
 
     uicontrol('Parent', fig, 'Style', 'edit', ...
               'String', data.online_url, ...
-              'Position', [650 5 240 25], ...
+              'Units', 'normalized', ...
+              'Position', [0.63 0.004 0.16 0.028], ...
               'Tag', 'server_url', ...
               'Callback', @update_server_url);
 
     uicontrol('Parent', fig, 'Style', 'text', ...
               'String', 'Status: Offline', ...
-              'Position', [900 8 300 18], ...
+              'Units', 'normalized', ...
+              'Position', [0.80 0.008 0.18 0.02], ...
               'HorizontalAlignment', 'left', ...
               'Tag', 'data_mode_status');
 
@@ -679,8 +710,17 @@ function build_gui(data)
               'Tag', 'section_order', ...
               'Callback', @update_section_order);
 
+    uicontrol('Parent', vis_panel, 'Style', 'text', ...
+              'String', '', ...
+              'Units', 'normalized', ...
+              'Position', [0.02 0.74 0.96 0.08], ...
+              'HorizontalAlignment', 'left', ...
+              'BackgroundColor', get(vis_panel, 'BackgroundColor'), ...
+              'FontSize', 8, ...
+              'Tag', 'vis_metrics');
+
     axes('Parent', vis_panel, ...
-         'Position', [0.08 0.08 0.88 0.70], ...
+         'Position', [0.08 0.08 0.88 0.60], ...
          'Tag', 'vis_axes');
 
     uicontrol('Parent', vis_panel, 'Style', 'text', ...
@@ -692,10 +732,151 @@ function build_gui(data)
               'FontSize', 8, ...
               'Tag', 'vis_info');
 
+    % ========== EXCITATION PANEL ==========
+    ex_panel = uipanel('Parent', fig, ...
+                       'Position', [0.02 0.02 0.46 0.12], ...
+                       'Title', 'Excitation for PEEC Analysis', ...
+                       'FontSize', 9, 'FontWeight', 'bold');
+
+    uicontrol('Parent', ex_panel, 'Style', 'text', ...
+              'String', 'Source:', ...
+              'Units', 'normalized', ...
+              'Position', [0.01 0.57 0.12 0.30], ...
+              'HorizontalAlignment', 'left');
+
+    src_items = {'Manual RMS/Phase', 'OM Converter (2-Switch FWD)'};
+    src_val = 2;
+    if isfield(data, 'excitation') && isfield(data.excitation, 'source') ...
+            && strcmpi(data.excitation.source, 'manual')
+        src_val = 1;
+    end
+    uicontrol('Parent', ex_panel, 'Style', 'popupmenu', ...
+              'String', src_items, ...
+              'Units', 'normalized', ...
+              'Position', [0.12 0.60 0.30 0.30], ...
+              'Value', src_val, ...
+              'Tag', 'excitation_source', ...
+              'Callback', @update_excitation_source);
+
+    uicontrol('Parent', ex_panel, 'Style', 'text', ...
+              'String', 'Sweep:', ...
+              'Units', 'normalized', ...
+              'Position', [0.44 0.57 0.10 0.30], ...
+              'HorizontalAlignment', 'left');
+
+    sw_items = {'Nominal', 'Corners', 'Grid'};
+    sw_val = 3;
+    if isfield(data, 'excitation') && isfield(data.excitation, 'sweep_mode')
+        switch lower(data.excitation.sweep_mode)
+            case 'nominal', sw_val = 1;
+            case 'corners', sw_val = 2;
+            otherwise, sw_val = 3;
+        end
+    end
+    uicontrol('Parent', ex_panel, 'Style', 'popupmenu', ...
+              'String', sw_items, ...
+              'Units', 'normalized', ...
+              'Position', [0.53 0.60 0.18 0.30], ...
+              'Value', sw_val, ...
+              'Tag', 'excitation_sweep', ...
+              'Callback', @update_excitation_sweep);
+
+    uicontrol('Parent', ex_panel, 'Style', 'text', ...
+              'String', 'Mode:', ...
+              'Units', 'normalized', ...
+              'Position', [0.72 0.57 0.09 0.30], ...
+              'HorizontalAlignment', 'left');
+
+    mode_items = {'CCM', 'DCM', 'CCM+DCM'};
+    mode_val = 3;
+    if isfield(data, 'excitation') && isfield(data.excitation, 'conduction_mode')
+        switch lower(data.excitation.conduction_mode)
+            case 'ccm', mode_val = 1;
+            case 'dcm', mode_val = 2;
+            otherwise, mode_val = 3;
+        end
+    end
+    uicontrol('Parent', ex_panel, 'Style', 'popupmenu', ...
+              'String', mode_items, ...
+              'Units', 'normalized', ...
+              'Position', [0.80 0.60 0.18 0.30], ...
+              'Value', mode_val, ...
+              'Tag', 'excitation_mode', ...
+              'Callback', @update_excitation_mode);
+
+    uicontrol('Parent', ex_panel, 'Style', 'text', ...
+              'String', 'Duty:', ...
+              'Units', 'normalized', ...
+              'Position', [0.01 0.12 0.08 0.30], ...
+              'HorizontalAlignment', 'left');
+
+    duty_items = {'Derived', 'Manual'};
+    duty_val = 1;
+    if isfield(data, 'excitation') && isfield(data.excitation, 'duty_mode') ...
+            && strcmpi(data.excitation.duty_mode, 'manual')
+        duty_val = 2;
+    end
+    uicontrol('Parent', ex_panel, 'Style', 'popupmenu', ...
+              'String', duty_items, ...
+              'Units', 'normalized', ...
+              'Position', [0.09 0.15 0.16 0.30], ...
+              'Value', duty_val, ...
+              'Tag', 'excitation_duty_mode', ...
+              'Callback', @update_excitation_duty_mode);
+
+    md_str = '0.40';
+    if isfield(data, 'excitation') && isfield(data.excitation, 'manual_duty')
+        md_str = num2str(data.excitation.manual_duty);
+    end
+    uicontrol('Parent', ex_panel, 'Style', 'edit', ...
+              'String', md_str, ...
+              'Units', 'normalized', ...
+              'Position', [0.26 0.15 0.10 0.30], ...
+              'Tag', 'excitation_manual_duty', ...
+              'TooltipString', 'Manual duty cycle (0..1)', ...
+              'Callback', @update_excitation_manual_duty);
+
+    use_cache_val = 1;
+    if isfield(data, 'excitation') && isfield(data.excitation, 'use_cache') && ~data.excitation.use_cache
+        use_cache_val = 0;
+    end
+    uicontrol('Parent', ex_panel, 'Style', 'checkbox', ...
+              'String', 'Use cache', ...
+              'Units', 'normalized', ...
+              'Position', [0.39 0.16 0.16 0.28], ...
+              'Value', use_cache_val, ...
+              'Tag', 'excitation_use_cache', ...
+              'Callback', @update_excitation_use_cache);
+
+    use_import_val = 0;
+    if isfield(data, 'excitation') && isfield(data.excitation, 'use_import') && data.excitation.use_import
+        use_import_val = 1;
+    end
+    uicontrol('Parent', ex_panel, 'Style', 'checkbox', ...
+              'String', 'Use imported JSON', ...
+              'Units', 'normalized', ...
+              'Position', [0.56 0.16 0.24 0.28], ...
+              'Value', use_import_val, ...
+              'Tag', 'excitation_use_import', ...
+              'Callback', @update_excitation_use_import);
+
+    p_str = '';
+    if isfield(data, 'excitation') && isfield(data.excitation, 'profile_file')
+        p_str = data.excitation.profile_file;
+    end
+    uicontrol('Parent', ex_panel, 'Style', 'edit', ...
+              'String', p_str, ...
+              'Units', 'normalized', ...
+              'Position', [0.79 0.15 0.20 0.30], ...
+              'Tag', 'excitation_profile_file', ...
+              'TooltipString', 'Path for excitation JSON import/export', ...
+              'Callback', @update_excitation_profile_file);
+
     % ========== BOTTOM BUTTONS ==========
     uicontrol('Parent', fig, 'Style', 'pushbutton', ...
               'String', 'Run Analysis', ...
-              'Position', [650 60 150 40], ...
+              'Units', 'normalized', ...
+              'Position', [0.67 0.085 0.10 0.045], ...
               'FontSize', 12, 'FontWeight', 'bold', ...
               'BackgroundColor', [0.2 0.7 0.3], ...
               'ForegroundColor', 'w', ...
@@ -703,7 +884,8 @@ function build_gui(data)
 
     uicontrol('Parent', fig, 'Style', 'pushbutton', ...
               'String', 'Reset to Defaults', ...
-              'Position', [820 60 150 40], ...
+              'Units', 'normalized', ...
+              'Position', [0.79 0.085 0.10 0.045], ...
               'FontSize', 11, ...
               'Callback', @reset_defaults);
 
@@ -1973,6 +2155,99 @@ function update_phase(src, ~, winding)
     guidata(fig, data);
 end
 
+function update_excitation_source(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val = get(src, 'Value');
+    if val == 1
+        data.excitation.source = 'manual';
+    else
+        data.excitation.source = 'converter';
+    end
+    guidata(fig, data);
+end
+
+function update_excitation_sweep(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val = get(src, 'Value');
+    switch val
+        case 1
+            data.excitation.sweep_mode = 'nominal';
+        case 2
+            data.excitation.sweep_mode = 'corners';
+        otherwise
+            data.excitation.sweep_mode = 'grid';
+    end
+    guidata(fig, data);
+end
+
+function update_excitation_mode(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val = get(src, 'Value');
+    switch val
+        case 1
+            data.excitation.conduction_mode = 'ccm';
+        case 2
+            data.excitation.conduction_mode = 'dcm';
+        otherwise
+            data.excitation.conduction_mode = 'ccm+dcm';
+    end
+    guidata(fig, data);
+end
+
+function update_excitation_duty_mode(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val = get(src, 'Value');
+    if val == 2
+        data.excitation.duty_mode = 'manual';
+    else
+        data.excitation.duty_mode = 'derived';
+    end
+    guidata(fig, data);
+end
+
+function update_excitation_manual_duty(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    v = str2double(get(src, 'String'));
+    if isnan(v)
+        v = 0.40;
+    end
+    v = max(0.02, min(0.49, v));
+    data.excitation.manual_duty = v;
+    set(src, 'String', num2str(v));
+    guidata(fig, data);
+end
+
+function update_excitation_use_cache(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    data.excitation.use_cache = logical(get(src, 'Value'));
+    guidata(fig, data);
+end
+
+function update_excitation_use_import(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    data.excitation.use_import = logical(get(src, 'Value'));
+    guidata(fig, data);
+end
+
+function update_excitation_profile_file(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    p = strtrim(get(src, 'String'));
+    if isempty(p)
+        p = fullfile(pwd(), 'om_excitation_profile.json');
+        set(src, 'String', p);
+    end
+    data.excitation.profile_file = p;
+    guidata(fig, data);
+end
+
 function update_insulation_class(src, ~)
     fig = gcbf;
     data = guidata(fig);
@@ -2264,8 +2539,12 @@ function update_visualization(data)
     fig = data.fig_gui;
     ax = findobj(fig, 'Tag', 'vis_axes');
     vis_mode = get(findobj(fig, 'Tag', 'vis_mode'), 'Value');
+    metrics_ctrl = findobj(fig, 'Tag', 'vis_metrics');
 
     cla(ax);
+    if ~isempty(metrics_ctrl)
+        set(metrics_ctrl, 'String', '');
+    end
 
     switch vis_mode
         case 1
@@ -2305,7 +2584,9 @@ function visualize_openmagnetics(data, ax)
         script_dir = pwd();
         config_file = fullfile(script_dir, 'om_viz_config.json');
         svg_file = fullfile(script_dir, 'om_visualization.svg');
+        meta_file = fullfile(script_dir, 'om_visualization_meta.json');
         config.output_svg = strrep(svg_file, '\', '/');
+        config.output_meta = strrep(meta_file, '\', '/');
 
         % Write JSON config
         fprintf('[OM_VIZ] Encoding JSON...\n');
@@ -2414,8 +2695,35 @@ function visualize_openmagnetics(data, ax)
         fclose(fid);
         fprintf('[OM_VIZ] SVG loaded: %d chars\n', length(svg_str));
 
+        om_meta = struct();
+        if exist(meta_file, 'file')
+            try
+                fidm = fopen(meta_file, 'r');
+                if fidm ~= -1
+                    meta_raw = fread(fidm, '*char')';
+                    fclose(fidm);
+                    om_meta = jsondecode(meta_raw);
+                end
+            catch
+                om_meta = struct();
+            end
+        end
+
         % Parse and render SVG
-        parse_om_svg(svg_str, ax);
+        parse_om_svg(svg_str, ax, om_meta, data);
+
+        om = get_om_window_metrics(om_meta);
+        if om.area_m2 > 0
+            data.om_window_cache = set_om_window_cache_entry(data.om_window_cache, data.selected_core, om);
+            guidata(fig, data);
+        end
+        cwf = get_cwf_window_metrics(data);
+        if om.area_m2 <= 0
+            om = cwf;
+        end
+        set_vis_metrics_text(data, sprintf( ...
+            'Window area [mm^2]  CWF gross: %.2f  |  OM: %.2f  |  usable: %.2f', ...
+            cwf.area_m2*1e6, om.area_m2*1e6, cwf.usable_area_m2*1e6));
 
         % Update status
         core_name = config.core_shape;
@@ -2423,8 +2731,16 @@ function visualize_openmagnetics(data, ax)
         if isfield(data, 'core_gap_type') && ~strcmp(data.core_gap_type, 'Ungapped')
             gap_str = sprintf(' | Gap: %s %.2fmm', data.core_gap_type, data.core_gap_length*1e3);
         end
+        wind_mode = '';
+        try
+            if isfield(om_meta, 'winding') && isfield(om_meta.winding, 'winding_mode')
+                wind_mode = sprintf(' | Mode: %s', om_meta.winding.winding_mode);
+            end
+        catch
+        end
         set(info_ctrl, 'String', ...
-            sprintf('OpenMagnetics: %s%s', core_name, gap_str), ...
+            sprintf('OpenMagnetics: %s%s | OM window: %.2f mm^2%s', ...
+                core_name, gap_str, om.area_m2*1e6, wind_mode), ...
             'BackgroundColor', [0.85 0.95 0.85]);
 
     catch ME
@@ -2440,6 +2756,7 @@ function visualize_openmagnetics(data, ax)
         set(info_ctrl, 'String', ...
             sprintf('OM View failed: %s', ME.message), ...
             'BackgroundColor', [1.0 0.85 0.85]);
+        set_vis_metrics_text(data, '');
     end
 end
 
@@ -2628,6 +2945,11 @@ function visualize_core_window(data, ax)
 
     core = data.cores.(data.selected_core);
     bobbin = data.layout_calc.get_bobbin_dimensions(core);
+    om_ref = get_cached_om_window_metrics(data);
+    if om_ref.area_m2 > 0
+        bobbin.width = om_ref.width_m;
+        bobbin.height = om_ref.height_m;
+    end
 
     edge_margin = 0;
     if isfield(data, 'edge_margin')
@@ -2731,15 +3053,22 @@ function visualize_core_window(data, ax)
         x_start = x_start + layout.required_width + gap_winding;
     end
 
-    xlim(ax, [-0.001, bobbin.width + 0.001]);
-    ylim(ax, [-0.002, bobbin.height + 0.002]);
-    xlabel(ax, 'Width (m)');
-    ylabel(ax, 'Height (m)');
-    title(ax, sprintf('%s packing in %s', pattern, data.selected_core));
+    xpad = max(0.0005, 0.06 * bobbin.width);
+    ypad = max(0.0008, 0.08 * bobbin.height);
+    xlim(ax, [-xpad, bobbin.width + xpad]);
+    ylim(ax, [-ypad, bobbin.height + ypad]);
+    apply_window_axes_mm(ax, bobbin.width, bobbin.height, true);
+    title(ax, '');
     hold(ax, 'off');
 
+    cwf = get_cwf_window_metrics(data);
+    set_vis_metrics_text(data, sprintf( ...
+        'CWF window [mm^2] gross: %.2f  |  usable: %.2f (edge margin: %.2f mm)', ...
+        cwf.area_m2*1e6, cwf.usable_area_m2*1e6, cwf.edge_margin_m*1e3));
+
     if total_fits
-        info_str = sprintf('All windings FIT in core\nPattern: %s', pattern);
+        info_str = sprintf('All windings FIT in core\nPattern: %s | CWF usable window: %.2f mm^2', ...
+            pattern, cwf.usable_area_m2*1e6);
         color = [0.8 1.0 0.8];
     else
         info_str = sprintf('Windings DO NOT FIT\nTry smaller wire or fewer turns');
@@ -2764,8 +3093,971 @@ function run_analysis(~, ~)
     patterns = {'layered', 'orthocyclic', 'random'};
     pattern = patterns{packing_idx};
 
-    % ISSUE #1 FIX: Build conductors from LAYOUT POSITIONS
-    % This ensures analysis geometry matches visualization
+    ex_cfg = resolve_excitation_config(data);
+    [ex_cfg, quality_meta] = apply_excitation_quality_preset(ex_cfg);
+
+    analysis_meta = struct();
+    if strcmp(ex_cfg.source, 'converter')
+        % Converter excitation is locked to OM geometry by design.
+        analysis_meta.requested_source = 'om';
+    else
+        analysis_meta.requested_source = resolve_analysis_source(data);
+    end
+    analysis_meta.used_source = analysis_meta.requested_source;
+    analysis_meta.fallback_used = false;
+    analysis_meta.fallback_reason = '';
+    analysis_meta.pattern = pattern;
+    analysis_meta.section_order = data.section_order;
+    analysis_meta.om_winding_mode = '';
+    analysis_meta.om_api_wind_success = false;
+    analysis_meta.debug_dump_path = '';
+    analysis_meta.excitation_source = ex_cfg.source;
+    analysis_meta.excitation_sweep = ex_cfg.sweep_mode;
+    analysis_meta.excitation_mode = ex_cfg.conduction_mode;
+    analysis_meta.excitation_fallback_used = false;
+    analysis_meta.excitation_fallback_reason = '';
+    analysis_meta.excitation_profile_path = ex_cfg.profile_file;
+    analysis_meta.analysis_mode = ex_cfg.analysis_mode;
+    analysis_meta.quality_preset = ex_cfg.quality_preset;
+    analysis_meta.quality_summary = quality_meta.summary;
+    analysis_meta.prescreen_used = false;
+    analysis_meta.prescreen_fallback_used = false;
+    analysis_meta.prescreen_fallback_reason = '';
+    analysis_meta.prescreen_summary = '';
+    analysis_meta.prescreen_scored_points = 0;
+    analysis_meta.prescreen_selected_points = 0;
+    analysis_meta.peec_refine_top_n = ex_cfg.peec_refine_top_n;
+    analysis_meta.peec_harmonic_cap = ex_cfg.peec_harmonic_cap;
+
+    if strcmp(analysis_meta.requested_source, 'om')
+        try
+            [om_meta, om_err] = generate_om_meta_for_analysis(data);
+            if ~isempty(om_err)
+                error(om_err);
+            end
+            [all_conductors, all_winding_map, all_wire_shapes, geom_meta] = ...
+                build_om_geometry_from_meta(data, om_meta);
+            analysis_meta.used_source = 'om';
+            analysis_meta.geometry_meta = geom_meta;
+            if isfield(om_meta, 'winding') && isstruct(om_meta.winding)
+                if isfield(om_meta.winding, 'winding_mode')
+                    analysis_meta.om_winding_mode = char(om_meta.winding.winding_mode);
+                end
+                if isfield(om_meta.winding, 'api_wind_success')
+                    analysis_meta.om_api_wind_success = logical(om_meta.winding.api_wind_success);
+                end
+            end
+            fprintf('[ANALYSIS] Geometry source: OpenMagnetics turns metadata\n');
+        catch ME
+            fprintf('[ANALYSIS] OM geometry failed, falling back to CWF: %s\n', ME.message);
+            analysis_meta.used_source = 'cwf';
+            analysis_meta.fallback_used = true;
+            analysis_meta.fallback_reason = ME.message;
+            [all_conductors, all_winding_map, all_wire_shapes, geom_meta] = ...
+                build_cwf_geometry_for_analysis(data, pattern);
+            analysis_meta.geometry_meta = geom_meta;
+        end
+    else
+        [all_conductors, all_winding_map, all_wire_shapes, geom_meta] = ...
+            build_cwf_geometry_for_analysis(data, pattern);
+        analysis_meta.geometry_meta = geom_meta;
+        fprintf('[ANALYSIS] Geometry source: Core Window Fit layout\n');
+    end
+
+    try
+        analysis_meta.debug_dump_path = write_analysis_geometry_dump( ...
+            data, all_conductors, all_winding_map, all_wire_shapes, analysis_meta);
+    catch
+        analysis_meta.debug_dump_path = '';
+    end
+
+    fprintf('\nBuilding PEEC geometry with wire shapes...\n');
+    fprintf('  Total conductors: %d\n', size(all_conductors, 1));
+
+    geom = peec_build_geometry(all_conductors, data.sigma, data.mu0, ...
+        data.Nx, data.Ny, all_winding_map, all_wire_shapes);
+
+    fprintf('  Wire shapes: %d conductors\n', length(geom.wire_shapes));
+    for i = 1:min(3, length(geom.wire_shapes))
+        fprintf('    Conductor %d: %s\n', i, geom.wire_shapes{i});
+    end
+
+    excitation_profile = [];
+    if strcmp(ex_cfg.source, 'converter')
+        try
+            [excitation_profile, ex_meta] = generate_converter_excitation_profile(data, ex_cfg);
+            analysis_meta.excitation_generation = ex_meta;
+            fprintf('[ANALYSIS] Excitation source: converter profile (%d operating points)\n', ...
+                numel(excitation_profile.operating_points));
+        catch ME
+            analysis_meta.excitation_fallback_used = true;
+            analysis_meta.excitation_fallback_reason = ME.message;
+            fprintf('[ANALYSIS] Converter excitation failed, using manual RMS/phase: %s\n', ME.message);
+            excitation_profile = build_manual_excitation_profile(data);
+        end
+    else
+        excitation_profile = build_manual_excitation_profile(data);
+        fprintf('[ANALYSIS] Excitation source: manual RMS/phase\n');
+    end
+
+    if ~isstruct(excitation_profile) || ~isfield(excitation_profile, 'operating_points') || isempty(excitation_profile.operating_points)
+        analysis_meta.excitation_fallback_used = true;
+        analysis_meta.excitation_fallback_reason = 'Excitation profile was empty.';
+        excitation_profile = build_manual_excitation_profile(data);
+    end
+
+    run_opts = struct();
+    run_opts.max_harmonics = ex_cfg.peec_harmonic_cap;
+    run_opts.selected_indices = [];
+    run_opts.analysis_mode = ex_cfg.analysis_mode;
+    run_opts.quality_preset = ex_cfg.quality_preset;
+
+    use_prescreen = strcmp(ex_cfg.source, 'converter') && strcmp(analysis_meta.used_source, 'om') ...
+        && ~strcmp(ex_cfg.analysis_mode, 'peec_only');
+    if use_prescreen
+        try
+            [ranked_indices, pres_meta] = run_om_prescreen_for_profile(data, ex_cfg, excitation_profile);
+            top_n = min(max(1, ex_cfg.peec_refine_top_n), numel(ranked_indices));
+            run_opts.selected_indices = ranked_indices(1:top_n);
+            analysis_meta.prescreen_used = true;
+            analysis_meta.prescreen_summary = pres_meta.summary;
+            analysis_meta.prescreen_scored_points = pres_meta.scored_points;
+            analysis_meta.prescreen_selected_points = numel(run_opts.selected_indices);
+            fprintf('[ANALYSIS] OM pre-screen selected %d/%d operating points for PEEC refine\n', ...
+                numel(run_opts.selected_indices), pres_meta.scored_points);
+
+            if strcmp(ex_cfg.analysis_mode, 'om_only')
+                % OM-only mode is represented as a top-1 PEEC refine so result plots
+                % remain available while runtime is minimized.
+                run_opts.selected_indices = run_opts.selected_indices(1);
+                analysis_meta.analysis_mode = 'om_only(top1_peec)';
+            end
+        catch ME
+            analysis_meta.prescreen_fallback_used = true;
+            analysis_meta.prescreen_fallback_reason = ME.message;
+            fprintf('[ANALYSIS] OM pre-screen failed, running PEEC on full set: %s\n', ME.message);
+        end
+    end
+
+    analysis_run = run_peec_with_excitation_profile( ...
+        data, geom, all_conductors, all_winding_map, excitation_profile, run_opts);
+    analysis_meta.excitation_summary = analysis_run.excitation_summary;
+
+    display_results(data, geom, analysis_run.plot_conductors, all_winding_map, ...
+        analysis_run.plot_results, analysis_meta, analysis_run);
+end
+
+function source = resolve_analysis_source(data)
+    % Default analysis source: active view.
+    source = 'cwf';
+    try
+        vis_mode = get(findobj(data.fig_gui, 'Tag', 'vis_mode'), 'Value');
+        if vis_mode == 3
+            source = 'om';
+        else
+            source = 'cwf';
+        end
+    catch
+        source = 'cwf';
+    end
+end
+
+function ex_cfg = resolve_excitation_config(data)
+    ex_cfg = struct();
+    ex_cfg.source = 'manual';
+    ex_cfg.topology = 'two_switch_forward';
+    ex_cfg.conduction_mode = 'ccm+dcm';
+    ex_cfg.sweep_mode = 'grid';
+    ex_cfg.duty_mode = 'derived';
+    ex_cfg.manual_duty = 0.40;
+    ex_cfg.line_scales = [0.90, 1.00, 1.10];
+    ex_cfg.load_scales = [0.50, 0.75, 1.00];
+    ex_cfg.harmonic_energy_pct = 99.5;
+    ex_cfg.harmonic_max_order = 60;
+    ex_cfg.small_harmonic_pct = 1.0;
+    ex_cfg.small_harmonic_consecutive = 5;
+    ex_cfg.analysis_mode = 'hybrid';
+    ex_cfg.quality_preset = 'standard';
+    ex_cfg.peec_refine_top_n = 6;
+    ex_cfg.peec_harmonic_cap = 24;
+    ex_cfg.prescreen_waveform_samples = 128;
+    ex_cfg.prescreen_temperature_c = 25;
+    ex_cfg.use_cache = true;
+    ex_cfg.use_import = false;
+    ex_cfg.profile_file = fullfile(pwd(), 'om_excitation_profile.json');
+    ex_cfg.cache_file = fullfile(pwd(), 'om_excitation_cache.json');
+
+    if isfield(data, 'excitation') && isstruct(data.excitation)
+        ex_user = data.excitation;
+        fields = fieldnames(ex_cfg);
+        for i = 1:numel(fields)
+            f = fields{i};
+            if isfield(ex_user, f)
+                ex_cfg.(f) = ex_user.(f);
+            end
+        end
+    end
+
+    if ~ischar(ex_cfg.source) && ~isstring(ex_cfg.source)
+        ex_cfg.source = 'manual';
+    end
+    if ~ischar(ex_cfg.profile_file) && ~isstring(ex_cfg.profile_file)
+        ex_cfg.profile_file = fullfile(pwd(), 'om_excitation_profile.json');
+    end
+    if ~ischar(ex_cfg.cache_file) && ~isstring(ex_cfg.cache_file)
+        ex_cfg.cache_file = fullfile(pwd(), 'om_excitation_cache.json');
+    end
+
+    if ~ischar(ex_cfg.analysis_mode) && ~isstring(ex_cfg.analysis_mode)
+        ex_cfg.analysis_mode = 'hybrid';
+    end
+    ex_cfg.analysis_mode = lower(strtrim(char(ex_cfg.analysis_mode)));
+    if ~any(strcmp(ex_cfg.analysis_mode, {'peec_only', 'hybrid', 'om_only'}))
+        ex_cfg.analysis_mode = 'hybrid';
+    end
+
+    if ~ischar(ex_cfg.quality_preset) && ~isstring(ex_cfg.quality_preset)
+        ex_cfg.quality_preset = 'standard';
+    end
+    ex_cfg.quality_preset = lower(strtrim(char(ex_cfg.quality_preset)));
+    if ~any(strcmp(ex_cfg.quality_preset, {'fast', 'standard', 'high'}))
+        ex_cfg.quality_preset = 'standard';
+    end
+
+    ex_cfg.peec_refine_top_n = max(1, round(double(ex_cfg.peec_refine_top_n)));
+    ex_cfg.peec_harmonic_cap = max(0, round(double(ex_cfg.peec_harmonic_cap)));
+    ex_cfg.prescreen_waveform_samples = max(64, round(double(ex_cfg.prescreen_waveform_samples)));
+    ex_cfg.prescreen_temperature_c = double(ex_cfg.prescreen_temperature_c);
+    if isnan(ex_cfg.prescreen_temperature_c)
+        ex_cfg.prescreen_temperature_c = 25;
+    end
+end
+
+function [ex_cfg, preset_meta] = apply_excitation_quality_preset(ex_cfg)
+    preset = lower(strtrim(char(ex_cfg.quality_preset)));
+    preset_meta = struct();
+    preset_meta.name = preset;
+    preset_meta.summary = '';
+
+    switch preset
+        case 'fast'
+            ex_cfg.harmonic_energy_pct = 97.0;
+            ex_cfg.harmonic_max_order = 24;
+            ex_cfg.small_harmonic_pct = 2.0;
+            ex_cfg.small_harmonic_consecutive = 3;
+            ex_cfg.peec_refine_top_n = min(ex_cfg.peec_refine_top_n, 3);
+            if ex_cfg.peec_harmonic_cap <= 0 || ex_cfg.peec_harmonic_cap > 12
+                ex_cfg.peec_harmonic_cap = 12;
+            end
+            ex_cfg.prescreen_waveform_samples = min(max(ex_cfg.prescreen_waveform_samples, 64), 96);
+            preset_meta.summary = 'Fast preset: top-3 PEEC refine, harmonic cap 12';
+
+        case 'high'
+            ex_cfg.harmonic_energy_pct = 99.8;
+            ex_cfg.harmonic_max_order = 100;
+            ex_cfg.small_harmonic_pct = 0.5;
+            ex_cfg.small_harmonic_consecutive = 8;
+            ex_cfg.peec_refine_top_n = max(ex_cfg.peec_refine_top_n, 10);
+            if ex_cfg.peec_harmonic_cap <= 0
+                ex_cfg.peec_harmonic_cap = 0;
+            else
+                ex_cfg.peec_harmonic_cap = max(ex_cfg.peec_harmonic_cap, 40);
+            end
+            ex_cfg.prescreen_waveform_samples = max(ex_cfg.prescreen_waveform_samples, 192);
+            preset_meta.summary = 'High preset: top-10 PEEC refine, dense harmonics';
+
+        otherwise
+            ex_cfg.quality_preset = 'standard';
+            ex_cfg.harmonic_energy_pct = 99.5;
+            ex_cfg.harmonic_max_order = 60;
+            ex_cfg.small_harmonic_pct = 1.0;
+            ex_cfg.small_harmonic_consecutive = 5;
+            ex_cfg.peec_refine_top_n = min(max(ex_cfg.peec_refine_top_n, 4), 8);
+            if ex_cfg.peec_harmonic_cap <= 0 || ex_cfg.peec_harmonic_cap > 24
+                ex_cfg.peec_harmonic_cap = 24;
+            end
+            ex_cfg.prescreen_waveform_samples = min(max(ex_cfg.prescreen_waveform_samples, 96), 160);
+            preset_meta.summary = 'Standard preset: top-6 PEEC refine, harmonic cap 24';
+    end
+end
+
+function profile = build_manual_excitation_profile(data)
+    n_w = data.n_windings;
+    i_re = zeros(1, n_w);
+    i_im = zeros(1, n_w);
+    v_re = zeros(1, n_w);
+    v_im = zeros(1, n_w);
+    rms_i = zeros(1, n_w);
+    rms_v = zeros(1, n_w);
+    for w = 1:n_w
+        i_mag = data.windings(w).current;
+        i_ph = data.windings(w).phase;
+        v_mag = 0;
+        if isfield(data.windings(w), 'voltage')
+            v_mag = data.windings(w).voltage;
+        end
+        i_complex = i_mag * exp(1j * i_ph * pi / 180);
+        v_complex = v_mag * exp(1j * i_ph * pi / 180);
+        i_re(w) = real(i_complex);
+        i_im(w) = imag(i_complex);
+        v_re(w) = real(v_complex);
+        v_im(w) = imag(v_complex);
+        rms_i(w) = abs(i_mag);
+        rms_v(w) = abs(v_mag);
+    end
+
+    harmonic = struct();
+    harmonic.order = 1;
+    harmonic.frequency_hz = data.f;
+    harmonic.currents_real_a = i_re;
+    harmonic.currents_imag_a = i_im;
+    harmonic.voltages_real_v = v_re;
+    harmonic.voltages_imag_v = v_im;
+
+    op = struct();
+    op.name = 'manual_nominal';
+    op.line_scale = 1.0;
+    op.load_scale = 1.0;
+    op.conduction_mode = 'manual';
+    op.frequency_hz = data.f;
+    op.duty = NaN;
+    op.rms_currents_a = rms_i;
+    op.rms_voltages_v = rms_v;
+    op.harmonic_count = 1;
+    op.harmonics = harmonic;
+    op.processed_summary = struct('ok', false, 'error', 'manual excitation');
+
+    profile = struct();
+    profile.status = 'OK';
+    profile.source = 'manual_rms_phase';
+    profile.topology = 'manual';
+    profile.sweep_mode = 'nominal';
+    profile.conduction_mode = 'manual';
+    profile.frequency_hz = data.f;
+    profile.operating_points = op;
+end
+
+function [profile, meta] = generate_converter_excitation_profile(data, ex_cfg)
+    profile = struct();
+    meta = struct();
+
+    script_dir = pwd();
+    profile_path = char(ex_cfg.profile_file);
+    if isempty(profile_path)
+        profile_path = fullfile(script_dir, 'om_excitation_profile.json');
+    elseif isempty(fileparts(profile_path))
+        profile_path = fullfile(script_dir, profile_path);
+    end
+    cache_path = char(ex_cfg.cache_file);
+    if isempty(cache_path)
+        cache_path = fullfile(script_dir, 'om_excitation_cache.json');
+    elseif isempty(fileparts(cache_path))
+        cache_path = fullfile(script_dir, cache_path);
+    end
+
+    if logical(ex_cfg.use_import) && exist(profile_path, 'file')
+        fid = fopen(profile_path, 'r');
+        if fid ~= -1
+            raw = fread(fid, '*char')';
+            fclose(fid);
+            profile = jsondecode(raw);
+            meta.loaded_from_import = true;
+            meta.profile_path = profile_path;
+            if isfield(profile, 'status') && strcmpi(char(profile.status), 'OK')
+                return;
+            end
+        end
+    end
+
+    cfg = struct();
+    cfg.source_mode = 'converter';
+    cfg.topology = ex_cfg.topology;
+    cfg.frequency_hz = data.f;
+    cfg.conduction_mode = ex_cfg.conduction_mode;
+    cfg.sweep_mode = ex_cfg.sweep_mode;
+    cfg.duty_mode = ex_cfg.duty_mode;
+    cfg.manual_duty = ex_cfg.manual_duty;
+    cfg.line_scales = ex_cfg.line_scales;
+    cfg.load_scales = ex_cfg.load_scales;
+    cfg.harmonic_energy_pct = ex_cfg.harmonic_energy_pct;
+    cfg.harmonic_max_order = ex_cfg.harmonic_max_order;
+    cfg.small_harmonic_pct = ex_cfg.small_harmonic_pct;
+    cfg.small_harmonic_consecutive = ex_cfg.small_harmonic_consecutive;
+    cfg.use_cache = logical(ex_cfg.use_cache);
+    cfg.use_import = false;
+    cfg.import_file = profile_path;
+    cfg.output_file = profile_path;
+    cfg.cache_file = cache_path;
+    cfg.samples_per_period = 1024;
+
+    windings = cell(1, data.n_windings);
+    for w = 1:data.n_windings
+        winding = struct();
+        winding.name = data.windings(w).name;
+        winding.n_turns = data.windings(w).n_turns;
+        winding.n_parallels = data.windings(w).n_filar;
+        winding.rms_current_a = data.windings(w).current;
+        winding.phase_deg = data.windings(w).phase;
+        v = 0;
+        if isfield(data.windings(w), 'voltage')
+            v = data.windings(w).voltage;
+        end
+        winding.rms_voltage_v = abs(v);
+        if w == 1
+            winding.isolation_side = 'primary';
+        else
+            winding.isolation_side = 'secondary';
+        end
+        windings{w} = winding;
+    end
+    cfg.windings = windings;
+
+    cfg_file = fullfile(script_dir, 'om_excitation_config.json');
+    fid = fopen(cfg_file, 'w');
+    if fid == -1
+        error('Cannot write excitation config file: %s', cfg_file);
+    end
+    fwrite(fid, jsonencode(cfg));
+    fclose(fid);
+
+    py_script_name = 'generate_om_excitation.py';
+    if ~exist(fullfile(script_dir, py_script_name), 'file')
+        error('Python script "%s" not found in %s', py_script_name, script_dir);
+    end
+
+    python_cmd = 'python';
+    venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
+    if exist(venv_python, 'file')
+        python_cmd = ['"' venv_python '"'];
+    end
+
+    cmd = sprintf('%s "%s" "%s" 2>&1', python_cmd, py_script_name, 'om_excitation_config.json');
+    [status, output] = system(cmd);
+    is_module_error = ~isempty(strfind(output, 'ModuleNotFoundError')) || ...
+                      ~isempty(strfind(output, 'ImportError')) || ...
+                      ~isempty(strfind(output, 'No module named'));
+
+    if status ~= 0 && is_module_error && ispc
+        cmd_fb = sprintf('py "%s" "%s" 2>&1', py_script_name, 'om_excitation_config.json');
+        [status_fb, output_fb] = system(cmd_fb);
+        if status_fb == 0 && ~isempty(strfind(output_fb, 'OK'))
+            status = status_fb;
+            output = output_fb;
+        end
+    end
+
+    if status ~= 0 && is_module_error && ispc
+        [~, py_paths_str] = system('where python');
+        py_paths = strsplit(strtrim(py_paths_str), char(10));
+        for i = 1:length(py_paths)
+            p = strtrim(py_paths{i});
+            if isempty(p); continue; end
+            if ~isempty(strfind(lower(p), 'octave')) || ~isempty(strfind(lower(p), 'usr\bin'))
+                continue;
+            end
+            cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script_name, 'om_excitation_config.json');
+            [status_alt, output_alt] = system(cmd_alt);
+            if status_alt == 0 && ~isempty(strfind(output_alt, 'OK'))
+                status = status_alt;
+                output = output_alt;
+                break;
+            end
+        end
+    end
+
+    if status ~= 0 || isempty(strfind(strtrim(output), 'OK'))
+        error('Excitation python failed (exit=%d): %s', status, strtrim(output));
+    end
+
+    if ~exist(profile_path, 'file')
+        error('Excitation profile file not found: %s', profile_path);
+    end
+
+    fidr = fopen(profile_path, 'r');
+    if fidr == -1
+        error('Cannot read excitation profile file: %s', profile_path);
+    end
+    raw = fread(fidr, '*char')';
+    fclose(fidr);
+    profile = jsondecode(raw);
+
+    if ~isfield(profile, 'status') || ~strcmpi(char(profile.status), 'OK')
+        err_msg = 'unknown excitation generation error';
+        if isfield(profile, 'error')
+            err_msg = char(profile.error);
+        end
+        error('Excitation profile status not OK: %s', err_msg);
+    end
+    if ~isfield(profile, 'operating_points') || isempty(profile.operating_points)
+        error('Excitation profile has no operating points');
+    end
+
+    meta.loaded_from_import = false;
+    meta.profile_path = profile_path;
+end
+
+function [ranked_indices, pres_meta] = run_om_prescreen_for_profile(data, ex_cfg, profile)
+    ranked_indices = [];
+    pres_meta = struct();
+    pres_meta.scored_points = 0;
+    pres_meta.summary = '';
+
+    ops = profile.operating_points;
+    if iscell(ops)
+        try
+            ops = [ops{:}];
+        catch
+            ops = struct([]);
+        end
+    end
+    if isempty(ops)
+        error('Excitation profile has no operating points to pre-screen');
+    end
+
+    script_dir = pwd();
+    om_cfg_file = fullfile(script_dir, 'om_viz_config_prescreen.json');
+    ex_profile_file = fullfile(script_dir, 'om_excitation_profile_for_prescreen.json');
+    pres_cfg_file = fullfile(script_dir, 'om_prescreen_config.json');
+    pres_out_file = fullfile(script_dir, 'om_prescreen_losses.json');
+
+    om_cfg = build_om_viz_config(data);
+    if isfield(om_cfg, 'output_svg')
+        om_cfg = rmfield(om_cfg, 'output_svg');
+    end
+    if isfield(om_cfg, 'output_meta')
+        om_cfg = rmfield(om_cfg, 'output_meta');
+    end
+
+    fid = fopen(om_cfg_file, 'w');
+    if fid == -1
+        error('Cannot write OM pre-screen config: %s', om_cfg_file);
+    end
+    fwrite(fid, jsonencode(om_cfg));
+    fclose(fid);
+
+    fid = fopen(ex_profile_file, 'w');
+    if fid == -1
+        error('Cannot write excitation profile for pre-screen: %s', ex_profile_file);
+    end
+    fwrite(fid, jsonencode(profile));
+    fclose(fid);
+
+    pres_cfg = struct();
+    pres_cfg.om_config_file = strrep(om_cfg_file, '\', '/');
+    pres_cfg.excitation_profile_file = strrep(ex_profile_file, '\', '/');
+    pres_cfg.output_file = strrep(pres_out_file, '\', '/');
+    pres_cfg.waveform_samples = ex_cfg.prescreen_waveform_samples;
+    pres_cfg.temperature_c = ex_cfg.prescreen_temperature_c;
+    pres_cfg.max_harmonics_for_waveform = ex_cfg.peec_harmonic_cap;
+    pres_cfg.default_frequency_hz = data.f;
+    pres_cfg.topology = '2-switch forward';
+
+    fid = fopen(pres_cfg_file, 'w');
+    if fid == -1
+        error('Cannot write pre-screen request file: %s', pres_cfg_file);
+    end
+    fwrite(fid, jsonencode(pres_cfg));
+    fclose(fid);
+
+    py_script_name = 'generate_om_prescreen_losses.py';
+    if ~exist(fullfile(script_dir, py_script_name), 'file')
+        error('Pre-screen python script "%s" not found in %s', py_script_name, script_dir);
+    end
+
+    python_cmd = 'python';
+    venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
+    if exist(venv_python, 'file')
+        python_cmd = ['"' venv_python '"'];
+    end
+
+    cfg_arg = strrep(pres_cfg_file, '\', '/');
+    cmd = sprintf('%s "%s" "%s" 2>&1', python_cmd, py_script_name, cfg_arg);
+    [status, output] = system(cmd);
+    is_module_error = ~isempty(strfind(output, 'ModuleNotFoundError')) || ...
+                      ~isempty(strfind(output, 'ImportError')) || ...
+                      ~isempty(strfind(output, 'No module named'));
+
+    if status ~= 0 && is_module_error && ispc
+        cmd_fb = sprintf('py "%s" "%s" 2>&1', py_script_name, cfg_arg);
+        [status_fb, output_fb] = system(cmd_fb);
+        if status_fb == 0 && ~isempty(strfind(output_fb, 'OK'))
+            status = status_fb;
+            output = output_fb;
+        end
+    end
+
+    if status ~= 0 && is_module_error && ispc
+        [~, py_paths_str] = system('where python');
+        py_paths = strsplit(strtrim(py_paths_str), char(10));
+        for i = 1:length(py_paths)
+            p = strtrim(py_paths{i});
+            if isempty(p); continue; end
+            if ~isempty(strfind(lower(p), 'octave')) || ~isempty(strfind(lower(p), 'usr\bin'))
+                continue;
+            end
+            cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script_name, cfg_arg);
+            [status_alt, output_alt] = system(cmd_alt);
+            if status_alt == 0 && ~isempty(strfind(output_alt, 'OK'))
+                status = status_alt;
+                output = output_alt;
+                break;
+            end
+        end
+    end
+
+    if status ~= 0 || isempty(strfind(strtrim(output), 'OK'))
+        error('OM pre-screen python failed (exit=%d): %s', status, strtrim(output));
+    end
+
+    if ~exist(pres_out_file, 'file')
+        error('OM pre-screen output file not found: %s', pres_out_file);
+    end
+    fid = fopen(pres_out_file, 'r');
+    if fid == -1
+        error('Cannot read OM pre-screen output file: %s', pres_out_file);
+    end
+    raw = fread(fid, '*char')';
+    fclose(fid);
+    pres_out = jsondecode(raw);
+
+    if ~isfield(pres_out, 'status') || ~strcmpi(char(pres_out.status), 'OK')
+        err_msg = 'unknown OM pre-screen error';
+        if isfield(pres_out, 'error')
+            err_msg = char(pres_out.error);
+        end
+        error('OM pre-screen status not OK: %s', err_msg);
+    end
+    if ~isfield(pres_out, 'ranked_indices') || isempty(pres_out.ranked_indices)
+        error('OM pre-screen returned no ranked operating points');
+    end
+
+    ranked = pres_out.ranked_indices;
+    if iscell(ranked)
+        tmp = zeros(1, numel(ranked));
+        for i = 1:numel(ranked)
+            if isnumeric(ranked{i})
+                tmp(i) = double(ranked{i});
+            else
+                tmp(i) = str2double(char(ranked{i}));
+            end
+            if isnan(tmp(i))
+                tmp(i) = 0;
+            end
+        end
+        ranked = tmp;
+    end
+    ranked = double(ranked(:)');
+    ranked = ranked(ranked >= 1 & ranked <= numel(ops));
+    ranked = unique(round(ranked), 'stable');
+    if isempty(ranked)
+        error('OM pre-screen ranking was empty after validation');
+    end
+
+    ranked_indices = ranked;
+    pres_meta.scored_points = numel(ops);
+    if isfield(pres_out, 'scored_operating_points')
+        pres_meta.scored_points = double(pres_out.scored_operating_points);
+        if isnan(pres_meta.scored_points) || pres_meta.scored_points <= 0
+            pres_meta.scored_points = numel(ops);
+        end
+    end
+    fallback_count = 0;
+    if isfield(pres_out, 'fallback_count')
+        fallback_count = double(pres_out.fallback_count);
+    end
+    pres_meta.summary = sprintf('OM pre-screen ranked %d points (fallback=%d)', ...
+        pres_meta.scored_points, fallback_count);
+end
+
+function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_template, winding_map, profile, run_opts)
+    n_w = data.n_windings;
+    winding_rdc = compute_winding_rdc_from_geometry(data, conductors_template, winding_map);
+
+    ops = profile.operating_points;
+    if iscell(ops)
+        try
+            ops = [ops{:}];
+        catch
+            ops = struct([]);
+        end
+    end
+    if isempty(ops)
+        error('Excitation profile has no valid operating points');
+    end
+
+    if nargin < 6 || ~isstruct(run_opts)
+        run_opts = struct();
+    end
+    selected_indices = 1:numel(ops);
+    if isfield(run_opts, 'selected_indices') && ~isempty(run_opts.selected_indices)
+        sel = double(run_opts.selected_indices(:)');
+        sel = sel(sel >= 1 & sel <= numel(ops));
+        if ~isempty(sel)
+            selected_indices = unique(round(sel), 'stable');
+        end
+    end
+    max_harmonics = 0;
+    if isfield(run_opts, 'max_harmonics')
+        max_harmonics = max(0, round(double(run_opts.max_harmonics)));
+    end
+
+    op_runs = repmat(struct(), 1, numel(selected_indices));
+    for oi = 1:numel(selected_indices)
+        op_idx = selected_indices(oi);
+        op = ops(op_idx);
+        op_name = sprintf('op_%d', op_idx);
+        if isfield(op, 'name') && ~isempty(op.name)
+            op_name = char(op.name);
+        end
+        h_list = [];
+        if isfield(op, 'harmonics')
+            h_list = op.harmonics;
+        end
+        if iscell(h_list)
+            try
+                h_list = [h_list{:}];
+            catch
+                h_list = struct([]);
+            end
+        end
+        if isempty(h_list)
+            error('Operating point "%s" has no harmonics', op_name);
+        end
+        if max_harmonics > 0 && numel(h_list) > max_harmonics
+            h_list = h_list(1:max_harmonics);
+        end
+
+        op_ac_loss = zeros(n_w, 1);
+        op_total_loss = 0;
+        solved_harmonics = 0;
+        plot_results = [];
+        plot_conductors = conductors_template;
+
+        for hi = 1:numel(h_list)
+            harmonic = h_list(hi);
+            f_h = data.f;
+            if isfield(harmonic, 'frequency_hz')
+                f_h = double(harmonic.frequency_hz);
+            end
+            if f_h <= 0
+                continue;
+            end
+
+            cond_h = apply_harmonic_to_conductors(data, conductors_template, winding_map, harmonic);
+            if isempty(cond_h) || max(cond_h(:,5)) <= 0
+                continue;
+            end
+
+            results_h = peec_solve_frequency(geom, cond_h, f_h, data.sigma, data.mu0);
+            op_total_loss = op_total_loss + results_h.P_total;
+            op_ac_loss = op_ac_loss + accumulate_winding_losses(results_h.P_fil, winding_map, data.Nx, data.Ny, n_w);
+            solved_harmonics = solved_harmonics + 1;
+
+            ord = hi;
+            if isfield(harmonic, 'order')
+                ord = double(harmonic.order);
+            end
+            if isempty(plot_results) || ord == 1
+                plot_results = results_h;
+                plot_conductors = cond_h;
+            end
+        end
+
+        if solved_harmonics == 0
+            error('Operating point "%s" produced no solvable harmonics', op_name);
+        end
+
+        rms_currents = extract_op_rms_currents(op, h_list, data);
+        op_dc_loss = 0.5 * (rms_currents .^ 2) .* winding_rdc;
+        rac_rdc = op_ac_loss ./ max(op_dc_loss, 1e-12);
+
+        op_runs(oi).name = op_name;
+        op_runs(oi).total_loss = op_total_loss;
+        op_runs(oi).ac_loss = op_ac_loss;
+        op_runs(oi).dc_loss = op_dc_loss;
+        op_runs(oi).rac_rdc = rac_rdc;
+        op_runs(oi).harmonic_count = solved_harmonics;
+        op_runs(oi).source_index = op_idx;
+        op_runs(oi).plot_results = plot_results;
+        op_runs(oi).plot_conductors = plot_conductors;
+    end
+
+    losses = zeros(1, numel(op_runs));
+    for i = 1:numel(op_runs)
+        losses(i) = op_runs(i).total_loss;
+    end
+    [~, worst_idx] = max(losses);
+    worst = op_runs(worst_idx);
+    [~, best_idx] = min(losses);
+    best = op_runs(best_idx);
+
+    analysis_run = struct();
+    analysis_run.mode = 'harmonic_sweep';
+    analysis_run.operating_points = op_runs;
+    analysis_run.worst_index = worst_idx;
+    analysis_run.worst_name = worst.name;
+    analysis_run.best_index = best_idx;
+    analysis_run.best_name = best.name;
+    analysis_run.winding_ac_loss = worst.ac_loss;
+    analysis_run.winding_dc_loss = worst.dc_loss;
+    analysis_run.winding_rdc = winding_rdc;
+    analysis_run.winding_rac_rdc = worst.rac_rdc;
+    analysis_run.total_loss = worst.total_loss;
+    analysis_run.best_total_loss = best.total_loss;
+    analysis_run.worst_source_index = worst.source_index;
+    analysis_run.best_source_index = best.source_index;
+    analysis_run.worst_harmonic_count = worst.harmonic_count;
+    analysis_run.best_harmonic_count = best.harmonic_count;
+    analysis_run.best_winding_ac_loss = best.ac_loss;
+    analysis_run.best_winding_dc_loss = best.dc_loss;
+    analysis_run.best_winding_rac_rdc = best.rac_rdc;
+    analysis_run.best_plot_results = best.plot_results;
+    analysis_run.best_plot_conductors = best.plot_conductors;
+    analysis_run.plot_results = worst.plot_results;
+    analysis_run.plot_conductors = worst.plot_conductors;
+    analysis_run.selected_operating_indices = selected_indices;
+    analysis_run.total_operating_points = numel(ops);
+    analysis_run.evaluated_operating_points = numel(selected_indices);
+    analysis_run.max_harmonics = max_harmonics;
+    src_name = 'UNKNOWN';
+    if isfield(profile, 'source') && ~isempty(profile.source)
+        src_name = upper(char(profile.source));
+    end
+    summary = sprintf( ...
+        'Excitation: %s | Operating points: %d/%d | Plotted(worst): %s | Best: %s', ...
+        src_name, numel(op_runs), numel(ops), worst.name, best.name);
+    if max_harmonics > 0
+        summary = sprintf('%s | Harmonic cap: %d', summary, max_harmonics);
+    end
+    analysis_run.excitation_summary = summary;
+end
+
+function winding_rdc = compute_winding_rdc_from_geometry(data, conductors, winding_map)
+    n_w = data.n_windings;
+    winding_rdc = zeros(n_w, 1);
+    for w = 1:n_w
+        cond_idx = find(winding_map == w);
+        if isempty(cond_idx)
+            [w_dim, h_dim] = data.api.wire_to_conductor_dims(data.windings(w).wire_type);
+            area = max(1e-12, w_dim * h_dim);
+        else
+            area = max(1e-12, mean(conductors(cond_idx, 3) .* conductors(cond_idx, 4)));
+        end
+        winding_rdc(w) = (data.windings(w).n_turns / max(1, data.windings(w).n_filar)) / (data.sigma * area);
+    end
+end
+
+function losses = accumulate_winding_losses(P_fil, winding_map, Nx, Ny, n_w)
+    losses = zeros(n_w, 1);
+    fils_per_cond = Nx * Ny;
+    n_cond = numel(winding_map);
+    for c = 1:n_cond
+        w = winding_map(c);
+        if w < 1 || w > n_w
+            continue;
+        end
+        idx_start = (c - 1) * fils_per_cond + 1;
+        idx_end = c * fils_per_cond;
+        if idx_end <= numel(P_fil)
+            losses(w) = losses(w) + sum(P_fil(idx_start:idx_end));
+        end
+    end
+end
+
+function cond_out = apply_harmonic_to_conductors(data, cond_in, winding_map, harmonic)
+    cond_out = cond_in;
+    n_w = data.n_windings;
+    i_re = zeros(n_w, 1);
+    i_im = zeros(n_w, 1);
+    if isfield(harmonic, 'currents_real_a')
+        i_re = to_numeric_vector(harmonic.currents_real_a, n_w, zeros(n_w, 1));
+    end
+    if isfield(harmonic, 'currents_imag_a')
+        i_im = to_numeric_vector(harmonic.currents_imag_a, n_w, zeros(n_w, 1));
+    end
+
+    for c = 1:size(cond_out, 1)
+        if c <= numel(winding_map)
+            w = winding_map(c);
+        else
+            w = 1;
+        end
+        if w < 1 || w > n_w
+            continue;
+        end
+        Iw = complex(i_re(w), i_im(w));
+        n_filar = max(1, data.windings(w).n_filar);
+        Istrand = Iw / n_filar;
+        cond_out(c, 5) = abs(Istrand);
+        cond_out(c, 6) = angle(Istrand) * 180 / pi;
+    end
+end
+
+function vec = to_numeric_vector(value, n, default_vec)
+    vec = default_vec(:);
+    if nargin < 3 || isempty(default_vec)
+        vec = zeros(n, 1);
+    end
+    vals = [];
+    if isnumeric(value)
+        vals = value(:);
+    elseif iscell(value)
+        vals = zeros(numel(value), 1);
+        for i = 1:numel(value)
+            if isnumeric(value{i})
+                vals(i) = value{i};
+            else
+                vals(i) = str2double(char(value{i}));
+            end
+            if isnan(vals(i))
+                vals(i) = 0;
+            end
+        end
+    end
+    m = min(n, numel(vals));
+    if m > 0
+        vec(1:m) = vals(1:m);
+    end
+end
+
+function rms_currents = extract_op_rms_currents(op, harmonics, data)
+    n_w = data.n_windings;
+    rms_currents = zeros(n_w, 1);
+    if isfield(op, 'rms_currents_a')
+        rms_currents = to_numeric_vector(op.rms_currents_a, n_w, rms_currents);
+    end
+
+    if all(rms_currents <= 0) && ~isempty(harmonics)
+        if iscell(harmonics)
+            try
+                harmonics = [harmonics{:}];
+            catch
+                harmonics = struct([]);
+            end
+        end
+        for hi = 1:numel(harmonics)
+            h = harmonics(hi);
+            i_re = zeros(n_w, 1);
+            i_im = zeros(n_w, 1);
+            if isfield(h, 'currents_real_a')
+                i_re = to_numeric_vector(h.currents_real_a, n_w, i_re);
+            end
+            if isfield(h, 'currents_imag_a')
+                i_im = to_numeric_vector(h.currents_imag_a, n_w, i_im);
+            end
+            rms_currents = sqrt(rms_currents .^ 2 + (i_re .^ 2 + i_im .^ 2));
+        end
+    end
+
+    for w = 1:n_w
+        if rms_currents(w) <= 0
+            rms_currents(w) = max(0, data.windings(w).current);
+        end
+    end
+end
+
+function [all_conductors, all_winding_map, all_wire_shapes, meta] = build_cwf_geometry_for_analysis(data, pattern)
+    % Build PEEC conductors from CWF layout engine.
     all_conductors = [];
     all_winding_map = [];
     all_wire_shapes = {};
@@ -2787,9 +4079,8 @@ function run_analysis(~, ~)
 
         wire_type = data.windings(w).wire_type;
         [w_dim, h_dim, shape] = data.api.wire_to_conductor_dims(wire_type);
-        if is_foil_wire(data, wire_type)
-            tmp = w_dim; w_dim = h_dim; h_dim = tmp;
-        end
+        cond_w = w_dim;
+        cond_h = h_dim;
 
         n_filar = data.windings(w).n_filar;
         total_conds = n_turns * n_filar;
@@ -2797,11 +4088,9 @@ function run_analysis(~, ~)
         fprintf('Building winding %d (%s): %s wire (%s), %d turns x %d filar\n', ...
             w, data.windings(w).name, wire_type, shape, n_turns, n_filar);
 
-        % Use SAME layout calculator as visualization
         if ~strcmp(data.selected_core, 'None')
             layout = calculate_layout(data, wire_type, n_turns, pattern, n_filar);
         else
-            % Fallback: simple vertical stack if no core selected
             layout = struct();
             positions = zeros(total_conds, 2);
             for t = 1:total_conds
@@ -2811,21 +4100,29 @@ function run_analysis(~, ~)
             layout.required_width = max(w_dim, h_dim);
         end
 
-        % Current assignment
-        I_per_strand = data.windings(w).current / n_filar;
+        if strcmp(shape, 'rectangular')
+            if isfield(layout, 'draw_w') && isfield(layout, 'draw_h')
+                cond_w = max(1e-12, layout.draw_w);
+                cond_h = max(1e-12, layout.draw_h);
+            elseif isfield(layout, 'wire_vis_w') && isfield(layout, 'wire_vis_h')
+                cond_w = max(1e-12, layout.wire_vis_w);
+                cond_h = max(1e-12, layout.wire_vis_h);
+            end
+        end
+
+        I_per_strand = data.windings(w).current / max(1, n_filar);
         phase = data.windings(w).phase;
 
-        % Build conductor array from layout positions
         for t = 1:total_conds
             x = edge_margin + x_start + layout.turn_positions(t, 1);
             y = edge_margin + layout.turn_positions(t, 2);
-
-            all_conductors = [all_conductors; x, y, w_dim, h_dim, I_per_strand, phase];
+            all_conductors = [all_conductors; x, y, cond_w, cond_h, I_per_strand, phase];
             all_winding_map = [all_winding_map; w];
             all_wire_shapes{end+1} = shape;
         end
 
-        fprintf('  %d conductors at layout positions (pattern: %s)\n', total_conds, pattern);
+        fprintf('  %d conductors at layout positions (pattern: %s, cond=%.3f x %.3f mm)\n', ...
+            total_conds, pattern, cond_w*1e3, cond_h*1e3);
 
         gap_winding = 0;
         if s < length(section_windings)
@@ -2836,28 +4133,312 @@ function run_analysis(~, ~)
         x_start = x_start + layout.required_width + gap_winding;
     end
 
-    fprintf('\nBuilding PEEC geometry with wire shapes...\n');
-    fprintf('  Total conductors: %d\n', size(all_conductors, 1));
+    meta = struct();
+    meta.source = 'cwf';
+    meta.pattern = pattern;
+    meta.envelope = compute_geometry_envelope(all_conductors);
+end
 
-    geom = peec_build_geometry(all_conductors, data.sigma, data.mu0, ...
-        data.Nx, data.Ny, all_winding_map, all_wire_shapes);
+function [om_meta, err_msg] = generate_om_meta_for_analysis(data)
+    % Generate OM visualization artifacts and read metadata for analysis.
+    om_meta = struct();
+    err_msg = '';
+    try
+        config = build_om_viz_config(data);
+        script_dir = pwd();
+        config_file = fullfile(script_dir, 'om_viz_config.json');
+        svg_file = fullfile(script_dir, 'om_visualization.svg');
+        meta_file = fullfile(script_dir, 'om_visualization_meta.json');
+        config.output_svg = strrep(svg_file, '\', '/');
+        config.output_meta = strrep(meta_file, '\', '/');
 
-    fprintf('  Wire shapes: %d conductors\n', length(geom.wire_shapes));
-    for i = 1:min(3, length(geom.wire_shapes))
-        fprintf('    Conductor %d: %s\n', i, geom.wire_shapes{i});
+        fid = fopen(config_file, 'w');
+        if fid == -1
+            error('Cannot write config file: %s', config_file);
+        end
+        fwrite(fid, jsonencode(config));
+        fclose(fid);
+
+        py_script_name = 'generate_om_visualization.py';
+        config_file_name = 'om_viz_config.json';
+        if ~exist(fullfile(script_dir, py_script_name), 'file')
+            error('Python script "%s" not found in %s', py_script_name, script_dir);
+        end
+
+        python_cmd = 'python';
+        venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
+        if exist(venv_python, 'file')
+            python_cmd = ['"' venv_python '"'];
+        end
+
+        cmd = sprintf('%s "%s" "%s" 2>&1', python_cmd, py_script_name, config_file_name);
+        [status, output] = system(cmd);
+
+        is_module_error = ~isempty(strfind(output, 'ModuleNotFoundError')) || ...
+                          ~isempty(strfind(output, 'ImportError')) || ...
+                          ~isempty(strfind(output, 'No module named'));
+        if status ~= 0 && is_module_error && ispc
+            cmd_fallback = sprintf('py "%s" "%s" 2>&1', py_script_name, config_file_name);
+            [status_fb, output_fb] = system(cmd_fallback);
+            if status_fb == 0 && ~isempty(strfind(output_fb, 'OK'))
+                status = status_fb;
+                output = output_fb;
+            end
+        end
+        if status ~= 0 && is_module_error && ispc
+            [~, py_paths_str] = system('where python');
+            py_paths = strsplit(strtrim(py_paths_str), char(10));
+            for i = 1:length(py_paths)
+                p = strtrim(py_paths{i});
+                if isempty(p); continue; end
+                if ~isempty(strfind(lower(p), 'octave')) || ~isempty(strfind(lower(p), 'usr\bin'))
+                    continue;
+                end
+                cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script_name, config_file_name);
+                [status_alt, output_alt] = system(cmd_alt);
+                if status_alt == 0 && ~isempty(strfind(output_alt, 'OK'))
+                    status = status_alt;
+                    output = output_alt;
+                    break;
+                end
+            end
+        end
+        if status ~= 0 || isempty(strfind(strtrim(output), 'OK'))
+            error('OM python failed (exit=%d): %s', status, strtrim(output));
+        end
+
+        if ~exist(meta_file, 'file')
+            error('OM metadata file not found: %s', meta_file);
+        end
+        fidm = fopen(meta_file, 'r');
+        if fidm == -1
+            error('Cannot read OM metadata file: %s', meta_file);
+        end
+        meta_raw = fread(fidm, '*char')';
+        fclose(fidm);
+        om_meta = jsondecode(meta_raw);
+    catch ME
+        err_msg = ME.message;
+    end
+end
+
+function [all_conductors, all_winding_map, all_wire_shapes, meta] = build_om_geometry_from_meta(data, om_meta)
+    % Build PEEC conductors directly from OM turn geometry (Choice A).
+    all_conductors = [];
+    all_winding_map = [];
+    all_wire_shapes = {};
+
+    if ~isstruct(om_meta) || ~isfield(om_meta, 'turns') || isempty(om_meta.turns)
+        error('OM metadata has no turns');
     end
 
-    fprintf('Solving at %.0f kHz...\n', data.f/1e3);
-    results = peec_solve_frequency(geom, all_conductors, data.f, data.sigma, data.mu0);
+    turns = om_meta.turns;
+    if ~isstruct(turns)
+        try
+            turns = [turns{:}];
+        catch
+            turns = struct([]);
+        end
+    end
+    if isempty(turns)
+        error('OM metadata turns are empty');
+    end
 
-    display_results(data, geom, all_conductors, all_winding_map, results);
+    bobbin_w = 0;
+    bobbin_h = 0;
+    if isfield(om_meta, 'bobbin_window_width_m')
+        bobbin_w = om_meta.bobbin_window_width_m;
+    end
+    if isfield(om_meta, 'bobbin_window_height_m')
+        bobbin_h = om_meta.bobbin_window_height_m;
+    end
+    if bobbin_w <= 0 || bobbin_h <= 0
+        cwf = get_cwf_window_metrics(data);
+        bobbin_w = max(1e-9, cwf.width_m);
+        bobbin_h = max(1e-9, cwf.height_m);
+    end
+
+    % Pass 1: collect valid turns and bounding box.
+    valid_turns = struct('x', {}, 'y', {}, 'w', {}, 'h', {}, 'shape', {}, 'winding_idx', {});
+    xmin = inf; xmax = -inf; ymin = inf; ymax = -inf;
+    for i = 1:numel(turns)
+        t = turns(i);
+        if ~isstruct(t) || ~isfield(t, 'x_m') || ~isfield(t, 'y_m')
+            continue;
+        end
+        x = double(t.x_m);
+        y = double(t.y_m);
+
+        w = 0; h = 0;
+        if isfield(t, 'width_m');  w = double(t.width_m); end
+        if isfield(t, 'height_m'); h = double(t.height_m); end
+        if w <= 0 && isfield(t, 'r_m'); w = 2 * double(t.r_m); end
+        if h <= 0 && isfield(t, 'r_m'); h = 2 * double(t.r_m); end
+        if w <= 0 || h <= 0
+            continue;
+        end
+
+        shape = 'rectangular';
+        if isfield(t, 'shape')
+            shape_name = lower(strtrim(char(t.shape)));
+            if ~isempty(strfind(shape_name, 'round')) || ~isempty(strfind(shape_name, 'circle'))
+                shape = 'round';
+            end
+        end
+        if strcmp(shape, 'rectangular')
+            if abs(w - h) <= 0.05 * max(w, h)
+                shape = 'round';
+            end
+        end
+
+        winding_name = '';
+        if isfield(t, 'winding')
+            winding_name = strtrim(char(t.winding));
+        end
+        winding_idx = map_winding_name_to_index(data, winding_name);
+        if winding_idx < 1 || winding_idx > data.n_windings
+            continue;
+        end
+
+        vt = struct();
+        vt.x = x;
+        vt.y = y;
+        vt.w = w;
+        vt.h = h;
+        vt.shape = shape;
+        vt.winding_idx = winding_idx;
+        valid_turns(end+1) = vt; %#ok<AGROW>
+
+        xmin = min(xmin, x - w/2);
+        xmax = max(xmax, x + w/2);
+        ymin = min(ymin, y - h/2);
+        ymax = max(ymax, y + h/2);
+    end
+
+    if isempty(valid_turns)
+        error('No usable OM turns after parsing metadata');
+    end
+
+    cx = 0.5 * (xmin + xmax);
+    cy = 0.5 * (ymin + ymax);
+    target_cx = bobbin_w / 2;
+    target_cy = bobbin_h / 2;
+
+    % Pass 2: convert to local bobbin coordinates and assign currents/phases.
+    for i = 1:numel(valid_turns)
+        t = valid_turns(i);
+        x_local = t.x - cx + target_cx;
+        y_local = t.y - cy + target_cy;
+        w = max(1e-12, t.w);
+        h = max(1e-12, t.h);
+        widx = t.winding_idx;
+        n_filar = max(1, data.windings(widx).n_filar);
+        I_per_strand = data.windings(widx).current / n_filar;
+        phase = data.windings(widx).phase;
+
+        all_conductors = [all_conductors; x_local, y_local, w, h, I_per_strand, phase];
+        all_winding_map = [all_winding_map; widx];
+        all_wire_shapes{end+1} = t.shape;
+    end
+
+    meta = struct();
+    meta.source = 'om';
+    meta.window_w_m = bobbin_w;
+    meta.window_h_m = bobbin_h;
+    meta.raw_bbox_m = [xmin, ymin, xmax, ymax];
+    meta.local_bbox_m = compute_geometry_envelope(all_conductors);
+end
+
+function idx = map_winding_name_to_index(data, winding_name)
+    idx = 0;
+    q = lower(strtrim(char(winding_name)));
+    if isempty(q)
+        return;
+    end
+    for w = 1:data.n_windings
+        n = lower(strtrim(char(data.windings(w).name)));
+        if strcmp(n, q)
+            idx = w;
+            return;
+        end
+    end
+    for w = 1:data.n_windings
+        n = lower(strtrim(char(data.windings(w).name)));
+        if ~isempty(strfind(q, n)) || ~isempty(strfind(n, q))
+            idx = w;
+            return;
+        end
+    end
+end
+
+function env = compute_geometry_envelope(conductors)
+    env = struct('x_min', 0, 'x_max', 0, 'y_min', 0, 'y_max', 0, 'width', 0, 'height', 0);
+    if isempty(conductors)
+        return;
+    end
+    x_min = min(conductors(:,1) - conductors(:,3)/2);
+    x_max = max(conductors(:,1) + conductors(:,3)/2);
+    y_min = min(conductors(:,2) - conductors(:,4)/2);
+    y_max = max(conductors(:,2) + conductors(:,4)/2);
+    env.x_min = x_min;
+    env.x_max = x_max;
+    env.y_min = y_min;
+    env.y_max = y_max;
+    env.width = x_max - x_min;
+    env.height = y_max - y_min;
+end
+
+function dump_path = write_analysis_geometry_dump(data, conductors, winding_map, wire_shapes, analysis_meta)
+    dump_path = '';
+    try
+        dump = struct();
+        dump.generated_at = datestr(now, 30);
+        dump.core = data.selected_core;
+        dump.material = data.selected_material;
+        dump.section_order = data.section_order;
+        dump.analysis_meta = analysis_meta;
+        dump.conductors = conductors;
+        dump.winding_map = winding_map;
+        dump.wire_shapes = wire_shapes;
+        dump.envelope = compute_geometry_envelope(conductors);
+        dump_path = fullfile(pwd(), 'analysis_geometry_dump.json');
+        fid = fopen(dump_path, 'w');
+        if fid ~= -1
+            fwrite(fid, jsonencode(dump));
+            fclose(fid);
+        else
+            dump_path = '';
+        end
+    catch
+        dump_path = '';
+    end
 end
 
 % ===============================================================
 % DISPLAY RESULTS
 % ===============================================================
 
-function display_results(data, geom, conductors, winding_map, results)
+function display_results(data, geom, conductors, winding_map, results, analysis_meta, analysis_run)
+    if nargin < 6 || isempty(analysis_meta)
+        analysis_meta = struct();
+        analysis_meta.requested_source = 'cwf';
+        analysis_meta.used_source = 'cwf';
+        analysis_meta.fallback_used = false;
+        analysis_meta.fallback_reason = '';
+        analysis_meta.debug_dump_path = '';
+    end
+    if nargin < 7
+        analysis_run = struct();
+    end
+
+    selected_case = 1; % 1=worst, 2=best
+    if ~isempty(data.fig_results) && ishandle(data.fig_results)
+        prev_state = getappdata(data.fig_results, 'results_replot_state');
+        if isstruct(prev_state) && isfield(prev_state, 'selected_case')
+            selected_case = max(1, round(double(prev_state.selected_case)));
+        end
+    end
+
     if isempty(data.fig_results) || ~ishandle(data.fig_results)
         data.fig_results = figure('Name', 'Analysis Results', 'Position', [100 50 1400 900]);
     else
@@ -2866,64 +4447,227 @@ function display_results(data, geom, conductors, winding_map, results)
     end
 
     % Calculate per-winding losses
-    fils_per_cond = data.Nx * data.Ny;
-    winding_losses = zeros(data.n_windings, 1);
-    winding_Rdc = zeros(data.n_windings, 1);
-    winding_Pdc = zeros(data.n_windings, 1);
+    has_best_case = isstruct(analysis_run) && isfield(analysis_run, 'best_winding_ac_loss') ...
+        && ~isempty(analysis_run.best_winding_ac_loss);
+    case_items = {'Worst Case'};
+    if has_best_case
+        case_items = {'Worst Case', 'Best Case'};
+    else
+        selected_case = 1;
+    end
+    selected_case = min(max(1, selected_case), numel(case_items));
 
-    cond_offset = 0;
-    for w = 1:data.n_windings
-        n_cond_in_winding = data.windings(w).n_turns * data.windings(w).n_filar;
+    current_case_label = 'Worst';
+    op_eval_count = 0;
+    op_total_count = 0;
+    current_op_name = 'n/a';
+    current_op_idx = 0;
+    worst_op_name = 'n/a';
+    worst_op_idx = 0;
+    best_op_name = 'n/a';
+    best_op_idx = 0;
+    worst_total_loss_display = NaN;
+    best_total_loss_display = NaN;
+    if isstruct(analysis_run) && isfield(analysis_run, 'winding_ac_loss') && ~isempty(analysis_run.winding_ac_loss)
+        worst_winding_losses = analysis_run.winding_ac_loss(:);
+        worst_winding_Pdc = analysis_run.winding_dc_loss(:);
+        worst_rac_rdc = worst_winding_losses ./ max(worst_winding_Pdc, 1e-12);
+        if isfield(analysis_run, 'winding_rac_rdc')
+            worst_rac_rdc = analysis_run.winding_rac_rdc(:);
+        end
 
-        for c = 1:n_cond_in_winding
-            idx_start = (cond_offset + c - 1) * fils_per_cond + 1;
-            idx_end = (cond_offset + c) * fils_per_cond;
+        best_winding_losses = worst_winding_losses;
+        best_winding_Pdc = worst_winding_Pdc;
+        best_rac_rdc = worst_rac_rdc;
+        if has_best_case
+            best_winding_losses = analysis_run.best_winding_ac_loss(:);
+            best_winding_Pdc = analysis_run.best_winding_dc_loss(:);
+            best_rac_rdc = best_winding_losses ./ max(best_winding_Pdc, 1e-12);
+            if isfield(analysis_run, 'best_winding_rac_rdc') && ~isempty(analysis_run.best_winding_rac_rdc)
+                best_rac_rdc = analysis_run.best_winding_rac_rdc(:);
+            end
+        end
+
+        winding_Rdc = analysis_run.winding_rdc(:);
+        if selected_case == 2 && has_best_case
+            winding_losses = best_winding_losses;
+            winding_Pdc = best_winding_Pdc;
+            rac_rdc = best_rac_rdc;
+            current_case_label = 'Best';
+            total_loss_display = analysis_run.best_total_loss;
+            if isfield(analysis_run, 'best_name')
+                current_op_name = char(analysis_run.best_name);
+            end
+            if isfield(analysis_run, 'best_source_index')
+                current_op_idx = analysis_run.best_source_index;
+            end
+        else
+            winding_losses = worst_winding_losses;
+            winding_Pdc = worst_winding_Pdc;
+            rac_rdc = worst_rac_rdc;
+            current_case_label = 'Worst';
+            total_loss_display = analysis_run.total_loss;
+            if isfield(analysis_run, 'worst_name')
+                current_op_name = char(analysis_run.worst_name);
+            end
+            if isfield(analysis_run, 'worst_source_index')
+                current_op_idx = analysis_run.worst_source_index;
+            end
+        end
+
+        if isfield(analysis_run, 'evaluated_operating_points')
+            op_eval_count = analysis_run.evaluated_operating_points;
+        end
+        if isfield(analysis_run, 'total_operating_points')
+            op_total_count = analysis_run.total_operating_points;
+        end
+        if isfield(analysis_run, 'worst_name')
+            worst_op_name = char(analysis_run.worst_name);
+        end
+        if isfield(analysis_run, 'worst_source_index')
+            worst_op_idx = analysis_run.worst_source_index;
+        end
+        if isfield(analysis_run, 'best_name')
+            best_op_name = char(analysis_run.best_name);
+        end
+        if isfield(analysis_run, 'best_source_index')
+            best_op_idx = analysis_run.best_source_index;
+        end
+        if isfield(analysis_run, 'total_loss')
+            worst_total_loss_display = analysis_run.total_loss;
+        end
+        if isfield(analysis_run, 'best_total_loss')
+            best_total_loss_display = analysis_run.best_total_loss;
+        end
+    else
+        fils_per_cond = data.Nx * data.Ny;
+        winding_losses = zeros(data.n_windings, 1);
+        winding_Rdc = zeros(data.n_windings, 1);
+        winding_Pdc = zeros(data.n_windings, 1);
+        n_cond_total = size(conductors, 1);
+        for c = 1:n_cond_total
+            if c <= numel(winding_map)
+                w = winding_map(c);
+            else
+                w = 1;
+            end
+            if w < 1 || w > data.n_windings
+                continue;
+            end
+            idx_start = (c - 1) * fils_per_cond + 1;
+            idx_end = c * fils_per_cond;
             if idx_end <= length(results.P_fil)
                 winding_losses(w) = winding_losses(w) + sum(results.P_fil(idx_start:idx_end));
             end
         end
 
-        cond_offset = cond_offset + n_cond_in_winding;
-
-        % DC loss
-        [w_dim, h_dim] = data.api.wire_to_conductor_dims(data.windings(w).wire_type);
-        A = w_dim * h_dim;
-        winding_Rdc(w) = (data.windings(w).n_turns / data.windings(w).n_filar) / (data.sigma * A);
-        winding_Pdc(w) = 0.5 * data.windings(w).current^2 * winding_Rdc(w);
+        for w = 1:data.n_windings
+            cond_idx = find(winding_map == w);
+            if isempty(cond_idx)
+                [w_dim, h_dim] = data.api.wire_to_conductor_dims(data.windings(w).wire_type);
+                A = max(1e-12, w_dim * h_dim);
+            else
+                A = max(1e-12, mean(conductors(cond_idx,3) .* conductors(cond_idx,4)));
+            end
+            winding_Rdc(w) = (data.windings(w).n_turns / max(1, data.windings(w).n_filar)) / (data.sigma * A);
+            winding_Pdc(w) = 0.5 * data.windings(w).current^2 * winding_Rdc(w);
+        end
+        rac_rdc = winding_losses ./ max(winding_Pdc, 1e-12);
+        total_loss_display = results.P_total;
+        worst_total_loss_display = total_loss_display;
+        current_op_name = 'single_run';
+        current_op_idx = 1;
+        worst_op_name = current_op_name;
+        worst_op_idx = current_op_idx;
+        best_op_name = current_op_name;
+        best_op_idx = current_op_idx;
+        best_total_loss_display = total_loss_display;
     end
 
     annotation('textbox', [0 0.96 1 0.04], ...
         'String', sprintf('Analysis Results @ %.0f kHz', data.f/1e3), ...
         'EdgeColor', 'none', 'HorizontalAlignment', 'center', ...
         'FontSize', 14, 'FontWeight', 'bold');
+    src_msg = sprintf('Source: %s', upper(char(analysis_meta.used_source)));
+    src_color = [0.10 0.45 0.10];
+    if isfield(analysis_meta, 'fallback_used') && analysis_meta.fallback_used
+        src_msg = sprintf('Source: CWF (fallback from OM)');
+        src_color = [0.70 0.10 0.10];
+    end
+    annotation('textbox', [0.02 0.93 0.96 0.025], ...
+        'String', src_msg, 'EdgeColor', 'none', ...
+        'HorizontalAlignment', 'left', 'FontSize', 10, ...
+        'FontWeight', 'bold', 'Color', src_color);
+
+    if numel(case_items) > 1
+        uicontrol('Parent', data.fig_results, 'Style', 'text', ...
+            'Units', 'normalized', ...
+            'Position', [0.74 0.955 0.08 0.02], ...
+            'String', 'Plot Case:', ...
+            'HorizontalAlignment', 'right', ...
+            'FontSize', 9, 'FontWeight', 'bold');
+        uicontrol('Parent', data.fig_results, 'Style', 'popupmenu', ...
+            'Units', 'normalized', ...
+            'Position', [0.82 0.952 0.16 0.03], ...
+            'String', case_items, ...
+            'Value', selected_case, ...
+            'Tag', 'results_case_dropdown', ...
+            'Callback', @results_case_dropdown_callback);
+    end
+
+    if op_total_count > 0
+        op_msg = sprintf('Operating points: %d/%d evaluated | Current plot: %s-case (%s [idx %d])', ...
+            op_eval_count, op_total_count, current_case_label, current_op_name, current_op_idx);
+        annotation('textbox', [0.02 0.905 0.96 0.022], ...
+            'String', op_msg, 'EdgeColor', 'none', ...
+            'HorizontalAlignment', 'left', 'FontSize', 9, ...
+            'Color', [0.20 0.20 0.20]);
+        if ~isnan(best_total_loss_display)
+            loss_msg = sprintf('Worst-case: %.4f W (%s [idx %d]) | Best-case: %.4f W (%s [idx %d])', ...
+                worst_total_loss_display, worst_op_name, worst_op_idx, ...
+                best_total_loss_display, best_op_name, best_op_idx);
+            annotation('textbox', [0.02 0.885 0.96 0.02], ...
+                'String', loss_msg, 'EdgeColor', 'none', ...
+                'HorizontalAlignment', 'left', 'FontSize', 9, ...
+                'Color', [0.10 0.40 0.10]);
+        end
+    end
+
+    plot_results = results;
+    if isstruct(analysis_run)
+        if selected_case == 2 && isfield(analysis_run, 'best_plot_results') && ~isempty(analysis_run.best_plot_results)
+            plot_results = analysis_run.best_plot_results;
+        elseif isfield(analysis_run, 'plot_results') && ~isempty(analysis_run.plot_results)
+            plot_results = analysis_run.plot_results;
+        end
+    end
 
     subplot(2,3,1);
-    plot_current_density(geom, results);
-    title('Current Density');
+    plot_current_density(geom, plot_results);
+    title(sprintf('Current Density (%s Case)', current_case_label));
 
     subplot(2,3,2);
-    plot_loss_density(geom, results);
-    title('Loss Density');
+    plot_loss_density(geom, plot_results);
+    title(sprintf('Loss Density (%s Case)', current_case_label));
 
     subplot(2,3,3);
     bar([winding_Pdc, winding_losses]*1e3);
     set(gca, 'XTickLabel', {data.windings.name});
     ylabel('Loss (mW)');
-    legend('DC Loss', 'AC Loss', 'Location', 'best');
-    title('Winding Loss Comparison');
+    legend('DC Loss (ideal)', 'PEEC Harmonic Loss', 'Location', 'best');
+    title(sprintf('Winding Loss Comparison (%s Case)', current_case_label));
     grid on;
 
     subplot(2,3,4);
-    rac_rdc = winding_losses ./ max(winding_Pdc, 1e-12);
     bar(rac_rdc);
     set(gca, 'XTickLabel', {data.windings.name});
     ylabel('R_{AC}/R_{DC}');
-    title('AC Resistance Factor');
+    title(sprintf('AC Resistance Factor (%s Case)', current_case_label));
     grid on;
 
     subplot(2,3,5);
     axis off;
-    text(0.05, 0.95, 'Loss Summary', 'FontSize', 12, 'FontWeight', 'bold');
+    text(0.05, 0.95, sprintf('Loss Summary (%s Case)', current_case_label), 'FontSize', 12, 'FontWeight', 'bold');
     y_pos = 0.85;
 
     for w = 1:data.n_windings
@@ -2948,7 +4692,7 @@ function display_results(data, geom, conductors, winding_map, results)
         y_pos = y_pos - 0.12;
     end
 
-    text(0.05, y_pos, sprintf('PEEC Total Loss: %.4f W', results.P_total), ...
+    text(0.05, y_pos, sprintf('PEEC Total Loss: %.4f W', total_loss_display), ...
         'FontSize', 11, 'FontWeight', 'bold');
 
     subplot(2,3,6);
@@ -2956,8 +4700,82 @@ function display_results(data, geom, conductors, winding_map, results)
     text(0.05, 0.95, 'Core & Configuration', 'FontSize', 12, 'FontWeight', 'bold');
     text(0.05, 0.85, sprintf('Core: %s', data.selected_core), 'FontSize', 9);
     text(0.05, 0.75, sprintf('Frequency: %.0f kHz', data.f/1e3), 'FontSize', 9);
+    if isfield(analysis_meta, 'requested_source')
+        text(0.05, 0.68, sprintf('Requested source: %s', upper(char(analysis_meta.requested_source))), 'FontSize', 9);
+    end
+    if isfield(analysis_meta, 'used_source')
+        text(0.05, 0.62, sprintf('Used source: %s', upper(char(analysis_meta.used_source))), 'FontSize', 9);
+    end
+    if isfield(analysis_meta, 'fallback_used') && analysis_meta.fallback_used
+        text(0.05, 0.56, 'Fallback: OM -> CWF', 'FontSize', 9, 'Color', [0.70 0.10 0.10], 'FontWeight', 'bold');
+        if isfield(analysis_meta, 'fallback_reason') && ~isempty(analysis_meta.fallback_reason)
+            msg = char(analysis_meta.fallback_reason);
+            if length(msg) > 60
+                msg = [msg(1:57) '...'];
+            end
+            text(0.05, 0.51, sprintf('Reason: %s', msg), 'FontSize', 8, 'Color', [0.70 0.10 0.10]);
+        end
+    end
+    if isfield(analysis_meta, 'debug_dump_path') && ~isempty(analysis_meta.debug_dump_path)
+        text(0.05, 0.46, sprintf('Debug dump: %s', analysis_meta.debug_dump_path), ...
+            'FontSize', 8, 'Color', [0.35 0.35 0.35], 'Interpreter', 'none');
+    end
 
-    y_pos = 0.65;
+    if isfield(analysis_meta, 'excitation_source')
+        text(0.05, 0.40, sprintf('Excitation source: %s', upper(char(analysis_meta.excitation_source))), 'FontSize', 9);
+    end
+    if isfield(analysis_meta, 'excitation_summary') && ~isempty(analysis_meta.excitation_summary)
+        msg = char(analysis_meta.excitation_summary);
+        if length(msg) > 105
+            msg = [msg(1:102) '...'];
+        end
+        text(0.05, 0.35, msg, 'FontSize', 8);
+    end
+    mode_str = 'peec_only';
+    qual_str = 'STANDARD';
+    if isfield(analysis_meta, 'analysis_mode') && ~isempty(analysis_meta.analysis_mode)
+        mode_str = char(analysis_meta.analysis_mode);
+    end
+    if isfield(analysis_meta, 'quality_preset') && ~isempty(analysis_meta.quality_preset)
+        qual_str = upper(char(analysis_meta.quality_preset));
+    end
+    text(0.05, 0.30, sprintf('Analysis mode: %s | Quality: %s', mode_str, qual_str), 'FontSize', 8);
+    if isfield(analysis_meta, 'quality_summary') && ~isempty(analysis_meta.quality_summary)
+        q_msg = char(analysis_meta.quality_summary);
+        if length(q_msg) > 105
+            q_msg = [q_msg(1:102) '...'];
+        end
+        text(0.05, 0.28, q_msg, 'FontSize', 8, 'Color', [0.25 0.25 0.25]);
+    end
+
+    if isfield(analysis_meta, 'prescreen_used') && analysis_meta.prescreen_used
+        ps_msg = sprintf('OM pre-screen: %d points ranked, %d refined in PEEC', ...
+            analysis_meta.prescreen_scored_points, analysis_meta.prescreen_selected_points);
+        if isfield(analysis_meta, 'prescreen_summary') && ~isempty(analysis_meta.prescreen_summary)
+            ps_msg = sprintf('%s | %s', ps_msg, char(analysis_meta.prescreen_summary));
+        end
+        if length(ps_msg) > 110
+            ps_msg = [ps_msg(1:107) '...'];
+        end
+        text(0.05, 0.26, ps_msg, 'FontSize', 8, 'Color', [0.10 0.40 0.10]);
+    elseif isfield(analysis_meta, 'prescreen_fallback_used') && analysis_meta.prescreen_fallback_used
+        text(0.05, 0.26, 'OM pre-screen fallback: full PEEC sweep', ...
+            'FontSize', 8, 'Color', [0.70 0.10 0.10], 'FontWeight', 'bold');
+    end
+
+    if isfield(analysis_meta, 'excitation_fallback_used') && analysis_meta.excitation_fallback_used
+        text(0.05, 0.22, 'Excitation fallback: converter -> manual', ...
+            'FontSize', 8, 'Color', [0.70 0.10 0.10], 'FontWeight', 'bold');
+        if isfield(analysis_meta, 'excitation_fallback_reason') && ~isempty(analysis_meta.excitation_fallback_reason)
+            msg = char(analysis_meta.excitation_fallback_reason);
+            if length(msg) > 65
+                msg = [msg(1:62) '...'];
+            end
+            text(0.05, 0.18, sprintf('Reason: %s', msg), 'FontSize', 8, 'Color', [0.70 0.10 0.10]);
+        end
+    end
+
+    y_pos = 0.14;
     for w = 1:data.n_windings
         text(0.05, y_pos, sprintf('%s: %d x %s', ...
             data.windings(w).name, data.windings(w).n_turns, ...
@@ -2969,11 +4787,41 @@ function display_results(data, geom, conductors, winding_map, results)
     text(0.05, y_pos - 0.05, 'Data: Offline database', 'FontSize', 8, ...
         'Color', [0.5 0.5 0.5]);
 
+    replot_state = struct();
+    replot_state.data = data;
+    replot_state.geom = geom;
+    replot_state.conductors = conductors;
+    replot_state.winding_map = winding_map;
+    replot_state.results = results;
+    replot_state.analysis_meta = analysis_meta;
+    replot_state.analysis_run = analysis_run;
+    replot_state.selected_case = selected_case;
+    setappdata(data.fig_results, 'results_replot_state', replot_state);
+
     fprintf('\n=== ANALYSIS COMPLETE ===\n');
 
     % Store results figure handle
     data.fig_results = gcf;
     guidata(data.fig_gui, data);
+end
+
+function results_case_dropdown_callback(src, ~)
+    fig = ancestor(src, 'figure');
+    if isempty(fig) || ~ishandle(fig)
+        return;
+    end
+    state = getappdata(fig, 'results_replot_state');
+    if ~isstruct(state)
+        return;
+    end
+    val = get(src, 'Value');
+    if isempty(val) || ~isnumeric(val)
+        val = 1;
+    end
+    state.selected_case = max(1, round(double(val)));
+    setappdata(fig, 'results_replot_state', state);
+    display_results(state.data, state.geom, state.conductors, state.winding_map, ...
+        state.results, state.analysis_meta, state.analysis_run);
 end
 
 % ===============================================================
@@ -2994,11 +4842,18 @@ function name = get_filar_name(n)
     end
 end
 
-function parse_om_svg(svg_str, ax)
+function parse_om_svg(svg_str, ax, om_meta, data)
     % Robust SVG parser for Octave - renders circles, rectangles, polygons, and paths
+    if nargin < 3
+        om_meta = struct();
+    end
+    if nargin < 4
+        data = struct();
+    end
     cla(ax);
     hold(ax, 'on');
     color_map = parse_css_colors(svg_str);
+    vb = [];
     
     % Extract viewBox for coordinate mapping
     % Allow spaces around = and quotes
@@ -3012,6 +4867,8 @@ function parse_om_svg(svg_str, ax)
             ylim(ax, [y0 - pad*h, y0 + h*(1+pad)]);
             % SVG Y is down, plot Y is up. OpenMagnetics usually handles this,
             % but if needed we could flip. For now assume standard Cartesian.
+        else
+            vb = [];
         end
     end
 
@@ -3137,42 +4994,344 @@ function parse_om_svg(svg_str, ax)
         end
     end
 
-    % --- Draw Circles ---
-    circle_tags = regexp(svg_str, '<circle[^>]*>', 'match');
-    for i = 1:length(circle_tags)
-        tag = circle_tags{i};
-        cx = get_attr(tag, 'cx');
-        cy = get_attr(tag, 'cy');
-        r = get_attr(tag, 'r');
-        class_name = get_attr_str(tag, 'class');
-        [rgb, alpha, has_fill, known] = get_class_style(class_name, color_map);
+    % --- Draw turns from metadata when available (preserves winding identity) ---
+    % Keep disabled by default: PM SVG already contains authoritative turn
+    % geometry and this remap can drift turns outside the bobbin for some cores.
+    use_meta_turns = false;
+    render_meta_turns = false;
+    if render_meta_turns && ~isempty(vb) && isstruct(om_meta) && isfield(om_meta, 'turns') && ...
+            isfield(om_meta, 'core_width_m') && isfield(om_meta, 'core_half_height_m')
+        core_w = om_meta.core_width_m;
+        core_h_half = om_meta.core_half_height_m;
+        turns = om_meta.turns;
+        if core_w > 0 && core_h_half > 0 && ~isempty(turns)
+            cx_vb = vb(1) + vb(3) / 2;
+            cy_vb = vb(2) + vb(4) / 2;
+            sx = core_w / vb(3);
+            sy = (2 * core_h_half) / vb(4);
+            if sx > 0 && sy > 0
+                r_scale = 0.5 * (1 / sx + 1 / sy);
+                if ~isstruct(turns)
+                    try
+                        turns = [turns{:}];
+                    catch
+                        turns = struct([]);
+                    end
+                end
+                for i = 1:numel(turns)
+                    t = turns(i);
+                    if ~isstruct(t) || ~isfield(t, 'x_m') || ~isfield(t, 'y_m') || ~isfield(t, 'r_m')
+                        continue;
+                    end
+                    x_svg = cx_vb + t.x_m / sx;
+                    y_svg = cy_vb - t.y_m / sy;
+                    r_svg = max(0.05, t.r_m * r_scale);
+                    winding_name = '';
+                    if isfield(t, 'winding')
+                        winding_name = t.winding;
+                    end
+                    rgb = get_winding_color_local(winding_name, data);
+                    theta = linspace(0, 2*pi, 30);
+                    fill(ax, x_svg + r_svg*cos(theta), y_svg + r_svg*sin(theta), ...
+                        rgb, 'EdgeColor', 'none');
+                end
+                use_meta_turns = true;
+            end
+        end
+    end
 
-        if ~isnan(cx) && ~isnan(cy) && ~isnan(r)
-            if tag_has_fill_none(tag) || (known && ~has_fill)
-                continue;
-            end
-            if ~(known && has_fill)
-                rgb = get_default_color(class_name);
-                alpha = 1.0;
-            end
-            theta = linspace(0, 2*pi, 30);
-            h = fill(ax, cx + r*cos(theta), cy + r*sin(theta), ...
-                rgb, 'EdgeColor', 'none');
-            if alpha < 1.0
-                try
-                    set(h, 'FaceAlpha', alpha);
-                catch
+    % --- Draw circles from SVG when metadata is not available ---
+    if ~use_meta_turns
+        circle_tags = regexp(svg_str, '<circle[^>]*>', 'match');
+        for i = 1:length(circle_tags)
+            tag = circle_tags{i};
+            cx = get_attr(tag, 'cx');
+            cy = get_attr(tag, 'cy');
+            r = get_attr(tag, 'r');
+            class_name = get_attr_str(tag, 'class');
+            [rgb, alpha, has_fill, known] = get_class_style(class_name, color_map);
+
+            if ~isnan(cx) && ~isnan(cy) && ~isnan(r)
+                if tag_has_fill_none(tag) || (known && ~has_fill)
+                    continue;
+                end
+                if ~(known && has_fill)
+                    rgb = get_default_color(class_name);
+                    alpha = 1.0;
+                end
+                theta = linspace(0, 2*pi, 30);
+                h = fill(ax, cx + r*cos(theta), cy + r*sin(theta), ...
+                    rgb, 'EdgeColor', 'none');
+                if alpha < 1.0
+                    try
+                        set(h, 'FaceAlpha', alpha);
+                    catch
+                    end
                 end
             end
         end
     end
     
     axis(ax, 'equal');
-    set(ax, 'XTick', [], 'YTick', [], 'Box', 'off', 'XColor', 'none', 'YColor', 'none');
-    xlabel(ax, '');
-    ylabel(ax, '');
+    apply_om_axes_mm(ax, vb, om_meta);
     title(ax, '');
     hold(ax, 'off');
+
+    function rgb = get_winding_color_local(winding_name, data_local)
+        rgb = [0.722 0.451 0.200];
+        try
+            if ~isstruct(data_local) || ~isfield(data_local, 'windings') || ~isfield(data_local, 'winding_colors')
+                return;
+            end
+            n = min(numel(data_local.windings), numel(data_local.winding_colors));
+            wq = strtrim(lower(char(winding_name)));
+            if isempty(wq)
+                return;
+            end
+            for wi = 1:n
+                wn = '';
+                if isfield(data_local.windings(wi), 'name')
+                    wn = data_local.windings(wi).name;
+                end
+                if strcmpi(strtrim(char(wn)), wq)
+                    c = data_local.winding_colors{wi};
+                    if numel(c) == 3
+                        rgb = c;
+                    end
+                    return;
+                end
+            end
+        catch
+        end
+    end
+
+end
+
+function apply_axes_mm(ax, top_axis)
+    if nargin < 2
+        top_axis = false;
+    end
+    xlim_v = xlim(ax);
+    ylim_v = ylim(ax);
+    if any(~isfinite([xlim_v, ylim_v])) || diff(xlim_v) <= 0 || diff(ylim_v) <= 0
+        return;
+    end
+
+    xt = linspace(xlim_v(1), xlim_v(2), 6);
+    yt = linspace(ylim_v(1), ylim_v(2), 7);
+    xlbl = arrayfun(@(v) sprintf('%.1f', v * 1e3), xt, 'UniformOutput', false);
+    ylbl = arrayfun(@(v) sprintf('%.1f', v * 1e3), yt, 'UniformOutput', false);
+
+    set(ax, 'Box', 'on', ...
+        'XColor', [0.15 0.15 0.15], ...
+        'YColor', [0.15 0.15 0.15], ...
+        'FontSize', 8, ...
+        'XTick', xt, 'YTick', yt, ...
+        'XTickLabel', xlbl, 'YTickLabel', ylbl);
+    if top_axis
+        try
+            set(ax, 'XAxisLocation', 'top');
+        catch
+        end
+    end
+    xlabel(ax, 'Width (mm)');
+    ylabel(ax, 'Height (mm)');
+end
+
+function apply_window_axes_mm(ax, window_w_m, window_h_m, top_axis)
+    if nargin < 4
+        top_axis = false;
+    end
+    if window_w_m <= 0 || window_h_m <= 0
+        apply_axes_mm(ax, top_axis);
+        return;
+    end
+
+    xt = [0, 0.25*window_w_m, 0.5*window_w_m, 0.75*window_w_m, window_w_m];
+    yt = [0, 0.25*window_h_m, 0.5*window_h_m, 0.75*window_h_m, window_h_m];
+    xlbl = arrayfun(@(v) sprintf('%.1f', v * 1e3), xt, 'UniformOutput', false);
+    ylbl = arrayfun(@(v) sprintf('%.1f', v * 1e3), yt, 'UniformOutput', false);
+
+    set(ax, 'Box', 'on', ...
+        'XColor', [0.15 0.15 0.15], ...
+        'YColor', [0.15 0.15 0.15], ...
+        'FontSize', 8, ...
+        'XTick', xt, 'YTick', yt, ...
+        'XTickLabel', xlbl, 'YTickLabel', ylbl);
+    if top_axis
+        try
+            set(ax, 'XAxisLocation', 'top');
+        catch
+        end
+    end
+    xlabel(ax, 'Width (mm)');
+    ylabel(ax, 'Height (mm)');
+end
+
+function apply_om_axes_mm(ax, vb, om_meta)
+    % Map SVG coordinates to physical millimeters using OM processed dimensions.
+    if isempty(vb) || numel(vb) ~= 4
+        apply_axes_mm(ax, true);
+        return;
+    end
+
+    core_w = 0;
+    core_h_half = 0;
+    if isstruct(om_meta)
+        if isfield(om_meta, 'core_width_m')
+            core_w = om_meta.core_width_m;
+        end
+        if isfield(om_meta, 'core_half_height_m')
+            core_h_half = om_meta.core_half_height_m;
+        end
+    end
+
+    if core_w <= 0 || core_h_half <= 0
+        apply_axes_mm(ax, true);
+        return;
+    end
+
+    x0 = vb(1); y0 = vb(2); vw = vb(3); vh = vb(4);
+    if vw <= 0 || vh <= 0
+        apply_axes_mm(ax, true);
+        return;
+    end
+
+    cx = x0 + vw / 2;
+    cy = y0 + vh / 2;
+    sx = core_w / vw;
+    sy = (2 * core_h_half) / vh;
+
+    x_ticks_m = [-0.5*core_w, -0.25*core_w, 0, 0.25*core_w, 0.5*core_w];
+    y_ticks_m = [-core_h_half, -0.5*core_h_half, 0, 0.5*core_h_half, core_h_half];
+    xt = cx + (x_ticks_m ./ sx);
+    yt = cy - (y_ticks_m ./ sy);
+    xlbl = arrayfun(@(v) sprintf('%.1f', v * 1e3), x_ticks_m, 'UniformOutput', false);
+    ylbl = arrayfun(@(v) sprintf('%.1f', v * 1e3), y_ticks_m, 'UniformOutput', false);
+
+    set(ax, 'Box', 'on', ...
+        'XColor', [0.15 0.15 0.15], ...
+        'YColor', [0.15 0.15 0.15], ...
+        'FontSize', 8, ...
+        'XTick', xt, 'YTick', yt, ...
+        'XTickLabel', xlbl, 'YTickLabel', ylbl);
+    try
+        set(ax, 'XAxisLocation', 'top');
+    catch
+    end
+    xlabel(ax, 'Width (mm)');
+    ylabel(ax, 'Height (mm)');
+end
+
+function set_vis_metrics_text(data, txt)
+    ctrl = findobj(data.fig_gui, 'Tag', 'vis_metrics');
+    if ~isempty(ctrl)
+        set(ctrl, 'String', txt);
+    end
+end
+
+function metrics = get_cwf_window_metrics(data)
+    metrics = struct( ...
+        'width_m', 0, 'height_m', 0, 'area_m2', 0, ...
+        'usable_width_m', 0, 'usable_height_m', 0, 'usable_area_m2', 0, ...
+        'edge_margin_m', 0);
+    try
+        if strcmp(data.selected_core, 'None')
+            return;
+        end
+        core = data.cores.(data.selected_core);
+        bobbin = data.layout_calc.get_bobbin_dimensions(core);
+        om_ref = get_cached_om_window_metrics(data);
+        edge_margin = 0;
+        if isfield(data, 'edge_margin')
+            edge_margin = max(0, data.edge_margin);
+        end
+        if om_ref.area_m2 > 0
+            bw = max(1e-12, om_ref.width_m);
+            bh = max(1e-12, om_ref.height_m);
+        else
+            bw = max(1e-12, bobbin.width);
+            bh = max(1e-12, bobbin.height);
+        end
+        ubw = max(1e-12, bobbin.width - 2 * edge_margin);
+        ubh = max(1e-12, bobbin.height - 2 * edge_margin);
+        if om_ref.area_m2 > 0
+            ubw = max(1e-12, bw - 2 * edge_margin);
+            ubh = max(1e-12, bh - 2 * edge_margin);
+        end
+        metrics.width_m = bw;
+        metrics.height_m = bh;
+        metrics.area_m2 = bw * bh;
+        metrics.usable_width_m = ubw;
+        metrics.usable_height_m = ubh;
+        metrics.usable_area_m2 = ubw * ubh;
+        metrics.edge_margin_m = edge_margin;
+    catch
+    end
+end
+
+function metrics = get_cached_om_window_metrics(data)
+    metrics = struct('width_m', 0, 'height_m', 0, 'area_m2', 0);
+    if ~isfield(data, 'om_window_cache') || ~isstruct(data.om_window_cache)
+        return;
+    end
+    if ~isfield(data, 'selected_core')
+        return;
+    end
+    key = make_core_cache_key(data.selected_core);
+    if isempty(key) || ~isfield(data.om_window_cache, key)
+        return;
+    end
+    cached = data.om_window_cache.(key);
+    if isstruct(cached) && isfield(cached, 'area_m2') && cached.area_m2 > 0
+        metrics = cached;
+    end
+end
+
+function cache = set_om_window_cache_entry(cache, core_name, metrics)
+    if ~isstruct(cache)
+        cache = struct();
+    end
+    if ~isstruct(metrics) || ~isfield(metrics, 'area_m2') || metrics.area_m2 <= 0
+        return;
+    end
+    key = make_core_cache_key(core_name);
+    if isempty(key)
+        return;
+    end
+    cache.(key) = metrics;
+end
+
+function key = make_core_cache_key(core_name)
+    if isempty(core_name)
+        key = '';
+        return;
+    end
+    key = regexprep(char(core_name), '[^a-zA-Z0-9_]', '_');
+    if isempty(key)
+        key = 'core';
+    end
+    if ~isempty(regexp(key, '^[0-9]', 'once'))
+        key = ['c_' key];
+    end
+end
+
+function metrics = get_om_window_metrics(om_meta)
+    metrics = struct('width_m', 0, 'height_m', 0, 'area_m2', 0);
+    if ~isstruct(om_meta)
+        return;
+    end
+    if isfield(om_meta, 'bobbin_window_width_m')
+        metrics.width_m = om_meta.bobbin_window_width_m;
+    end
+    if isfield(om_meta, 'bobbin_window_height_m')
+        metrics.height_m = om_meta.bobbin_window_height_m;
+    end
+    if isfield(om_meta, 'bobbin_window_area_m2')
+        metrics.area_m2 = om_meta.bobbin_window_area_m2;
+    elseif metrics.width_m > 0 && metrics.height_m > 0
+        metrics.area_m2 = metrics.width_m * metrics.height_m;
+    end
 end
 
 function color_map = parse_css_colors(svg_str)
