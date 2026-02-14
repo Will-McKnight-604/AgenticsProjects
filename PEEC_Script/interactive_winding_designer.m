@@ -3,12 +3,17 @@
 % Layout: Core (left) | Windings (center) | Visualization (right)
 % Fixes: Layout-matched analysis, rect wire viz, OM wire info, supplier cascade
 
-function interactive_winding_designer()
+function interactive_winding_designer(design_spec)
+
+    if nargin < 1
+        design_spec = [];
+    end
 
     close all;
 
     % Initialize global data structure
     data = struct();
+    data.design_spec = design_spec;
 
     % Initialize OpenMagnetics API
     data.api = openmagnetics_api_interface();
@@ -147,6 +152,11 @@ function interactive_winding_designer()
     data.excitation.profile_file = fullfile(pwd(), 'om_excitation_profile.json');
     data.excitation.cache_file = fullfile(pwd(), 'om_excitation_cache.json');
 
+    % Apply design_spec if provided (from topology_wizard)
+    if ~isempty(design_spec) && isstruct(design_spec)
+        data = apply_design_spec(data, design_spec);
+    end
+
     % Create main GUI figure
     scr = get(0, 'ScreenSize');
     fig_w = min(1800, max(1200, scr(3) - 100));
@@ -169,6 +179,231 @@ function interactive_winding_designer()
     % Initial visualization
     update_visualization(data);
 end
+
+
+% ===============================================================
+% APPLY DESIGN SPEC (from topology_wizard)
+% ===============================================================
+
+function data = apply_design_spec(data, spec)
+    % Apply design_spec struct to pre-populate the data structure.
+    % Called when interactive_winding_designer is launched from topology_wizard.
+
+    fprintf('Applying design_spec (source: %s)\n', spec.source);
+
+    % --- Frequency ---
+    if isfield(spec, 'requirements') && isfield(spec.requirements, 'fsw_hz')
+        data.f = spec.requirements.fsw_hz;
+    elseif isfield(spec, 'converter') && isfield(spec.converter, 'fsw_hz')
+        data.f = spec.converter.fsw_hz;
+    end
+
+    % --- Topology / Excitation ---
+    if isfield(spec, 'topology') && ~isempty(spec.topology)
+        data.excitation.topology = spec.topology;
+    end
+
+    % If wizard source, set excitation to converter mode
+    if strcmp(spec.source, 'wizard')
+        data.excitation.source = 'converter';
+    end
+
+    % --- Winding parameters from computed requirements ---
+    if isfield(spec, 'requirements')
+        r = spec.requirements;
+
+        % Turns ratio -> set winding turns
+        if isfield(r, 'turns_ratio') && r.turns_ratio > 0
+            np_ns = r.turns_ratio;
+            % Choose reasonable turn counts
+            if np_ns >= 1
+                ns = max(1, round(10 / np_ns));  % target ~10 secondary turns
+                np = round(ns * np_ns);
+            else
+                np = max(1, round(10 * np_ns));
+                ns = round(np / np_ns);
+            end
+            np = max(1, np);
+            ns = max(1, ns);
+            data.windings(1).n_turns = np;
+            if data.n_windings >= 2
+                data.windings(2).n_turns = ns;
+            end
+        end
+
+        % RMS currents
+        if isfield(r, 'i_pri_rms') && r.i_pri_rms > 0
+            data.windings(1).current = r.i_pri_rms;
+        end
+        if isfield(r, 'i_sec_rms') && r.i_sec_rms > 0 && data.n_windings >= 2
+            data.windings(2).current = r.i_sec_rms;
+        end
+
+        % Voltage (store converter voltages for excitation generation)
+        if isfield(spec, 'converter')
+            c = spec.converter;
+            if isfield(c, 'vin_min') && isfield(c, 'vin_max')
+                vin_nom = (c.vin_min + c.vin_max) / 2;
+                if isfield(spec.requirements, 'vin_nom')
+                    vin_nom = spec.requirements.vin_nom;
+                end
+                data.windings(1).voltage = vin_nom;
+            end
+            if isfield(c, 'vout') && data.n_windings >= 2
+                data.windings(2).voltage = c.vout;
+            end
+        end
+    end
+
+    % --- Insulation ---
+    if isfield(spec, 'insulation')
+        ins = spec.insulation;
+        if isfield(ins, 'class')
+            data.insulation_class = lower(ins.class);
+        end
+        if isfield(ins, 'pollution_degree')
+            data.pollution_degree = ins.pollution_degree;
+        end
+        if isfield(ins, 'overvoltage_cat')
+            ovc_map = struct('I', 'OVC-I', 'II', 'OVC-II', 'III', 'OVC-III', 'IV', 'OVC-IV');
+            ovc_key = strrep(ins.overvoltage_cat, ' ', '');
+            if isfield(ovc_map, ovc_key)
+                data.overvoltage_category = ovc_map.(ovc_key);
+            end
+        end
+    end
+
+    % --- Recommendation (pre-populate core/wire selection) ---
+    if isfield(spec, 'recommendation') && isstruct(spec.recommendation)
+        rec = spec.recommendation;
+
+        % Core shape
+        if isfield(rec, 'core_shape') && ~isempty(rec.core_shape)
+            % Try to find matching core in database
+            core_name = sanitize_field_name(rec.core_shape);
+            if isfield(data.cores, core_name)
+                data.selected_core = core_name;
+            else
+                % Try exact name match
+                core_list = fieldnames(data.cores);
+                for k = 1:numel(core_list)
+                    if strcmpi(core_list{k}, core_name)
+                        data.selected_core = core_list{k};
+                        break;
+                    end
+                end
+            end
+        end
+
+        % Material
+        if isfield(rec, 'core_material') && ~isempty(rec.core_material)
+            mat_name = sanitize_field_name(rec.core_material);
+            if isfield(data.materials, mat_name)
+                data.selected_material = mat_name;
+            end
+        end
+
+        % Supplier (try to match from core)
+        if isfield(rec, 'supplier') && ~isempty(rec.supplier)
+            for k = 1:numel(data.suppliers)
+                if strcmpi(data.suppliers{k}, rec.supplier)
+                    data.selected_supplier = data.suppliers{k};
+                    break;
+                end
+            end
+        end
+
+        % Wire and turns from recommendation
+        if isfield(rec, 'primary_wire') && ~isempty(rec.primary_wire)
+            wire_name = sanitize_field_name(rec.primary_wire);
+            if isfield(data.wires, wire_name)
+                data.windings(1).wire_type = wire_name;
+                [w, h, shape] = data.api.wire_to_conductor_dims(wire_name);
+                data.width = w;
+                data.height = h;
+                data.windings(1).wire_shape = shape;
+            end
+        end
+        if isfield(rec, 'secondary_wire') && ~isempty(rec.secondary_wire) && data.n_windings >= 2
+            wire_name = sanitize_field_name(rec.secondary_wire);
+            if isfield(data.wires, wire_name)
+                data.windings(2).wire_type = wire_name;
+                data.windings(2).wire_shape = data.api.wire_to_conductor_dims(wire_name);
+            end
+        end
+
+        % Turns from recommendation override computed turns
+        if isfield(rec, 'primary_turns') && rec.primary_turns > 0
+            data.windings(1).n_turns = rec.primary_turns;
+        end
+        if isfield(rec, 'secondary_turns') && rec.secondary_turns > 0 && data.n_windings >= 2
+            data.windings(2).n_turns = rec.secondary_turns;
+        end
+
+        % Parallels
+        if isfield(rec, 'primary_parallels') && rec.primary_parallels > 0
+            data.windings(1).n_filar = rec.primary_parallels;
+        end
+        if isfield(rec, 'secondary_parallels') && rec.secondary_parallels > 0 && data.n_windings >= 2
+            data.windings(2).n_filar = rec.secondary_parallels;
+        end
+
+        % Gapping
+        if isfield(rec, 'gapping') && ~isempty(rec.gapping)
+            gaps = rec.gapping;
+            if isstruct(gaps)
+                n_gaps = numel(gaps);
+                if n_gaps > 0
+                    gap_type = gaps(1).type;
+                    if local_contains(gap_type, 'residual')
+                        data.core_gap_type = 'Ungapped';
+                        data.core_gap_length = 0;
+                    elseif local_contains(gap_type, 'subtractive')
+                        data.core_gap_type = 'Ground';
+                        if isfield(gaps(1), 'length')
+                            data.core_gap_length = gaps(1).length;
+                        end
+                    elseif local_contains(gap_type, 'additive')
+                        data.core_gap_type = 'Spacer';
+                        if isfield(gaps(1), 'length')
+                            data.core_gap_length = gaps(1).length;
+                        end
+                    end
+                    data.core_num_gaps = n_gaps;
+                end
+            end
+        end
+    end
+
+    % --- MAS import: store full content for later reference ---
+    if isfield(spec, 'mas_content')
+        data.mas_content = spec.mas_content;
+    end
+
+    % --- Store the full design_spec for export ---
+    data.design_spec = spec;
+
+    fprintf('Design spec applied. Turns: %d/%d, f=%g Hz\n', ...
+            data.windings(1).n_turns, ...
+            data.windings(min(2,data.n_windings)).n_turns, ...
+            data.f);
+end
+
+
+function name = sanitize_field_name(raw)
+    % Convert raw string to valid MATLAB field name
+    name = strrep(raw, ' ', '_');
+    name = strrep(name, '-', '_');
+    name = strrep(name, '.', '_');
+    name = strrep(name, '/', '_');
+    name = strrep(name, '(', '');
+    name = strrep(name, ')', '');
+    % Ensure starts with letter
+    if ~isempty(name) && ~isletter(name(1))
+        name = ['X' name];
+    end
+end
+
 
 % ===============================================================
 % BUILD GUI
@@ -888,6 +1123,16 @@ function build_gui(data)
               'Position', [0.79 0.085 0.10 0.045], ...
               'FontSize', 11, ...
               'Callback', @reset_defaults);
+
+    uicontrol('Parent', fig, 'Style', 'pushbutton', ...
+              'String', 'Export MAS', ...
+              'Units', 'normalized', ...
+              'Position', [0.91 0.085 0.07 0.045], ...
+              'FontSize', 10, ...
+              'BackgroundColor', [0.5 0.3 0.7], ...
+              'ForegroundColor', 'w', ...
+              'TooltipString', 'Export current design as MAS JSON file', ...
+              'Callback', @export_mas_file);
 
     guidata(fig, data);
 end
@@ -4832,6 +5077,100 @@ function reset_defaults(~, ~)
     close all;
     interactive_winding_designer();
 end
+
+
+function export_mas_file(~, ~)
+    % Export current design as a MAS JSON file
+    fig = gcbf();
+    data = guidata(fig);
+
+    % Build MAS structure
+    mas = struct();
+
+    % --- Inputs section ---
+    mas.inputs = struct();
+    mas.inputs.designRequirements = struct();
+    if isfield(data, 'excitation') && isfield(data.excitation, 'topology')
+        mas.inputs.designRequirements.topology = data.excitation.topology;
+    end
+
+    % Magnetizing inductance (from design_spec if available)
+    if isfield(data, 'design_spec') && isstruct(data.design_spec) ...
+            && isfield(data.design_spec, 'requirements') ...
+            && isfield(data.design_spec.requirements, 'Lm_uH')
+        lm_h = data.design_spec.requirements.Lm_uH * 1e-6;
+        mas.inputs.designRequirements.magnetizingInductance = struct('nominal', lm_h);
+    end
+
+    % Turns ratios
+    if data.n_windings >= 2
+        ratio = data.windings(1).n_turns / max(1, data.windings(2).n_turns);
+        mas.inputs.designRequirements.turnsRatios = struct('nominal', ratio);
+    end
+
+    % Operating point
+    op = struct();
+    op.name = 'nominal';
+    op.conditions = struct('ambientTemperature', 25);
+    op.excitationsPerWinding = {};
+    for w = 1:data.n_windings
+        ex = struct();
+        ex.name = data.windings(w).name;
+        ex.frequency = data.f;
+        ex.current = struct('processed', struct('rms', data.windings(w).current));
+        if isfield(data.windings(w), 'voltage')
+            ex.voltage = struct('processed', struct('rms', data.windings(w).voltage));
+        end
+        op.excitationsPerWinding{end+1} = ex;
+    end
+    mas.inputs.operatingPoints = {op};
+
+    % --- Magnetic section ---
+    mas.magnetic = struct();
+
+    % Core
+    mas.magnetic.core = struct();
+    mas.magnetic.core.functionalDescription = struct();
+    mas.magnetic.core.functionalDescription.shape = struct('name', data.selected_core);
+    mas.magnetic.core.functionalDescription.material = data.selected_material;
+    if isfield(data, 'core_gap_type') && ~strcmp(data.core_gap_type, 'Ungapped')
+        mas.magnetic.core.functionalDescription.gapping = struct( ...
+            'type', data.core_gap_type, ...
+            'length', data.core_gap_length);
+    end
+
+    % Coil
+    mas.magnetic.coil = struct();
+    winding_desc = {};
+    for w = 1:data.n_windings
+        wd = struct();
+        wd.name = data.windings(w).name;
+        wd.numberTurns = data.windings(w).n_turns;
+        wd.numberParallels = data.windings(w).n_filar;
+        wd.wire = data.windings(w).wire_type;
+        winding_desc{end+1} = wd;
+    end
+    mas.magnetic.coil.functionalDescription = winding_desc;
+
+    % Ask user for save location
+    [fname, fpath] = uiputfile({'*.json', 'MAS JSON Files (*.json)'}, ...
+                               'Export MAS File', 'design_export.json');
+    if isequal(fname, 0)
+        return;  % user cancelled
+    end
+
+    full_path = fullfile(fpath, fname);
+    try
+        json_str = jsonencode(mas);
+        fid = fopen(full_path, 'w', 'n', 'UTF-8');
+        fprintf(fid, '%s', json_str);
+        fclose(fid);
+        msgbox(sprintf('MAS file exported to:\n%s', full_path), 'Export Complete');
+    catch err
+        errordlg(sprintf('Export failed:\n%s', err.message), 'Error');
+    end
+end
+
 
 function name = get_filar_name(n)
     names = {'Single-filar', 'Bi-filar', 'Tri-filar', 'Quad-filar'};

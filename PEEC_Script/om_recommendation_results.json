@@ -1,0 +1,147 @@
+{
+  "status": "OK",
+  "n_results": 3,
+  "recommendations": [
+    {
+      "score": 2.0203979137775514,
+      "scoring_per_filter": {
+        "COST": 1.0,
+        "DIMENSIONS": 1.0,
+        "EFFECTIVE_CURRENT_DENSITY": 0.2419476196143916,
+        "EFFECTIVE_RESISTANCE": 0.28410999057097097,
+        "LOSSES": 0.02039791377755118,
+        "MAGNETOMOTIVE_FORCE": 1.0
+      },
+      "core_shape": "T 12.7/7.9/6.35",
+      "material": "95",
+      "gapping": [],
+      "n_windings": 2,
+      "primary_turns": 40,
+      "primary_parallels": 1,
+      "primary_wire": "Litz TCA3 7/35 LITZ (MWXX)",
+      "secondary_turns": 5,
+      "secondary_parallels": 1,
+      "secondary_wire": "Litz SXXL66/38FX-2(MWXX)",
+      "core_losses_w": 0.0,
+      "winding_losses_w": 0.0,
+      "total_losses_w": 0.0
+    },
+    {
+      "score": 1.8751083626433647,
+      "scoring_per_filter": {
+        "COST": 0.3122469421871582,
+        "DIMENSIONS": 0.5628614204562066,
+        "EFFECTIVE_CURRENT_DENSITY": 1.0,
+        "EFFECTIVE_RESISTANCE": 0.0,
+        "LOSSES": 1.0,
+        "MAGNETOMOTIVE_FORCE": 1.0
+      },
+      "core_shape": "T 13/7.1/4.8",
+      "material": "3C94",
+      "gapping": [],
+      "n_windings": 2,
+      "primary_turns": 47,
+      "primary_parallels": 1,
+      "primary_wire": "Litz TCA3 7/35 LITZ (MWXX)",
+      "secondary_turns": 6,
+      "secondary_parallels": 1,
+      "secondary_wire": "Litz SXXL20/34FX-3(MWXX)",
+      "core_losses_w": 0.0,
+      "winding_losses_w": 0.0,
+      "total_losses_w": 0.0
+    },
+    {
+      "score": 1.1439361896150284,
+      "scoring_per_filter": {
+        "COST": 0.6446524116926985,
+        "DIMENSIONS": 0.4992837779223299,
+        "EFFECTIVE_CURRENT_DENSITY": 0.0,
+        "EFFECTIVE_RESISTANCE": 1.0,
+        "LOSSES": 0.0,
+        "MAGNETOMOTIVE_FORCE": 1.0
+      },
+      "core_shape": "T 12.7/7.9/6.35",
+      "material": "95",
+      "gapping": [],
+      "n_windings": 2,
+      "primary_turns": 40,
+      "primary_parallels": 1,
+      "primary_wire": "Litz TCA3 09/35 LITZ (MWXX)",
+      "secondary_turns": 5,
+      "secondary_parallels": 1,
+      "secondary_wire": "Litz SXXL66/38FX-2(MWXX)",
+      "core_losses_w": 0.0,
+      "winding_losses_w": 0.0,
+      "total_losses_w": 0.0
+    }
+  ],
+  "weights": {
+    "COST": 0.5,
+    "EFFICIENCY": 0.5,
+    "DIMENSIONS": 0.5
+  },
+  "inputs_used": {
+    "designRequirements": {
+      "topology": "2-switch forward",
+      "magnetizingInductance": {
+        "nominal": 0.0035526315789473676,
+        "minimum": 0.0028421052631578945
+      },
+      "turnsRatios": [
+        {
+          "nominal": 7.894736842105263
+        }
+      ]
+    },
+    "operatingPoints": [
+      {
+        "name": "nominal",
+        "conditions": {
+          "ambientTemperature": 25.0
+        },
+        "excitationsPerWinding": [
+          {
+            "name": "Primary",
+            "frequency": 200000.0,
+            "current": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 0.6333333333333334,
+                "offset": 0.09827586206896553,
+                "dutyCycle": 0.3103448275862069
+              }
+            },
+            "voltage": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 377.4103002333431,
+                "offset": 0,
+                "dutyCycle": 0.3103448275862069
+              }
+            }
+          },
+          {
+            "name": "Secondary",
+            "frequency": 200000.0,
+            "current": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 5.0,
+                "offset": 0.7758620689655172,
+                "dutyCycle": 0.3103448275862069
+              }
+            },
+            "voltage": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 13.014148283908385,
+                "offset": 0,
+                "dutyCycle": 0.3103448275862069
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
