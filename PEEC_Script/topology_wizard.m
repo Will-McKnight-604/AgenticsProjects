@@ -59,9 +59,9 @@ function topology_wizard()
 
     % Recommendation settings
     data.rec.n_results = 5;
-    data.rec.weight_cost = 0.5;
-    data.rec.weight_losses = 0.5;
-    data.rec.weight_dimensions = 0.5;
+    data.rec.weight_cost = 1/3;
+    data.rec.weight_losses = 1/3;
+    data.rec.weight_dimensions = 1/3;
     data.rec.results = {};       % cell array of result structs
     data.rec.selected_idx = 0;   % index of selected recommendation
 
@@ -301,27 +301,39 @@ function build_wizard_panel(data)
               'Value', 2, ...
               'Callback', @cb_n_results);
 
-    % Priority sliders
-    make_label(rec_panel, 'Cost', [0.02 0.52 0.10 0.14]);
+    % Priority sliders (linked: always sum to 100%)
+    make_label(rec_panel, 'Cost', [0.02 0.52 0.08 0.14]);
     data.slider_cost = uicontrol('Parent', rec_panel, 'Style', 'slider', ...
               'Units', 'normalized', ...
-              'Position', [0.13 0.54 0.20 0.12], ...
-              'Min', 0, 'Max', 1, 'Value', 0.5, ...
+              'Position', [0.10 0.54 0.16 0.12], ...
+              'Min', 0, 'Max', 1, 'Value', 1/3, ...
               'Callback', @cb_weight_cost);
+    data.lbl_cost_pct = uicontrol('Parent', rec_panel, 'Style', 'text', ...
+              'Units', 'normalized', ...
+              'Position', [0.26 0.52 0.07 0.14], ...
+              'String', '33%', 'FontSize', 8);
 
-    make_label(rec_panel, 'Losses', [0.35 0.52 0.12 0.14]);
+    make_label(rec_panel, 'Losses', [0.35 0.52 0.09 0.14]);
     data.slider_losses = uicontrol('Parent', rec_panel, 'Style', 'slider', ...
               'Units', 'normalized', ...
-              'Position', [0.47 0.54 0.20 0.12], ...
-              'Min', 0, 'Max', 1, 'Value', 0.5, ...
+              'Position', [0.44 0.54 0.16 0.12], ...
+              'Min', 0, 'Max', 1, 'Value', 1/3, ...
               'Callback', @cb_weight_losses);
+    data.lbl_losses_pct = uicontrol('Parent', rec_panel, 'Style', 'text', ...
+              'Units', 'normalized', ...
+              'Position', [0.60 0.52 0.07 0.14], ...
+              'String', '33%', 'FontSize', 8);
 
-    make_label(rec_panel, 'Size', [0.69 0.52 0.10 0.14]);
+    make_label(rec_panel, 'Size', [0.69 0.52 0.07 0.14]);
     data.slider_dims = uicontrol('Parent', rec_panel, 'Style', 'slider', ...
               'Units', 'normalized', ...
-              'Position', [0.79 0.54 0.19 0.12], ...
-              'Min', 0, 'Max', 1, 'Value', 0.5, ...
+              'Position', [0.76 0.54 0.16 0.12], ...
+              'Min', 0, 'Max', 1, 'Value', 1/3, ...
               'Callback', @cb_weight_dims);
+    data.lbl_dims_pct = uicontrol('Parent', rec_panel, 'Style', 'text', ...
+              'Units', 'normalized', ...
+              'Position', [0.92 0.52 0.07 0.14], ...
+              'String', '33%', 'FontSize', 8);
 
     % Get Recommendations button
     data.btn_get_recs = uicontrol('Parent', rec_panel, 'Style', 'pushbutton', ...
@@ -333,9 +345,9 @@ function build_wizard_panel(data)
               'ForegroundColor', 'w', ...
               'Callback', @cb_get_recommendations);
 
-    % Continue Without Recommendations
+    % Continue to analysis/winding stage
     data.btn_continue_norec = uicontrol('Parent', rec_panel, 'Style', 'pushbutton', ...
-              'String', 'Continue Without Recommendations', ...
+              'String', 'Analyze Design', ...
               'Units', 'normalized', ...
               'Position', [0.45 0.08 0.52 0.35], ...
               'FontSize', 10, 'FontWeight', 'bold', ...
@@ -838,22 +850,80 @@ end
 function cb_weight_cost(src, ~)
     fig = gcbf();
     data = guidata(fig);
-    data.rec.weight_cost = get(src, 'Value');
+    new_val = get(src, 'Value');
+    data = redistribute_weights(data, 'cost', new_val);
     guidata(fig, data);
 end
 
 function cb_weight_losses(src, ~)
     fig = gcbf();
     data = guidata(fig);
-    data.rec.weight_losses = get(src, 'Value');
+    new_val = get(src, 'Value');
+    data = redistribute_weights(data, 'losses', new_val);
     guidata(fig, data);
 end
 
 function cb_weight_dims(src, ~)
     fig = gcbf();
     data = guidata(fig);
-    data.rec.weight_dimensions = get(src, 'Value');
+    new_val = get(src, 'Value');
+    data = redistribute_weights(data, 'dimensions', new_val);
     guidata(fig, data);
+end
+
+function data = redistribute_weights(data, changed, new_val)
+    % Linked weight sliders: always sum to 1.0 (100%).
+    % When one slider changes, the other two redistribute proportionally.
+    new_val = max(0, min(1, new_val));
+    remaining = 1.0 - new_val;
+
+    switch changed
+        case 'cost'
+            other1 = data.rec.weight_losses;
+            other2 = data.rec.weight_dimensions;
+        case 'losses'
+            other1 = data.rec.weight_cost;
+            other2 = data.rec.weight_dimensions;
+        case 'dimensions'
+            other1 = data.rec.weight_cost;
+            other2 = data.rec.weight_losses;
+    end
+
+    old_sum = other1 + other2;
+    if old_sum > 1e-9
+        % Scale proportionally
+        other1_new = other1 * remaining / old_sum;
+        other2_new = other2 * remaining / old_sum;
+    else
+        % Both were zero — split equally
+        other1_new = remaining / 2;
+        other2_new = remaining / 2;
+    end
+
+    switch changed
+        case 'cost'
+            data.rec.weight_cost = new_val;
+            data.rec.weight_losses = other1_new;
+            data.rec.weight_dimensions = other2_new;
+        case 'losses'
+            data.rec.weight_cost = other1_new;
+            data.rec.weight_losses = new_val;
+            data.rec.weight_dimensions = other2_new;
+        case 'dimensions'
+            data.rec.weight_cost = other1_new;
+            data.rec.weight_dimensions = new_val;
+            data.rec.weight_losses = other2_new;
+    end
+
+    % Update slider positions
+    set(data.slider_cost, 'Value', data.rec.weight_cost);
+    set(data.slider_losses, 'Value', data.rec.weight_losses);
+    set(data.slider_dims, 'Value', data.rec.weight_dimensions);
+
+    % Update percentage labels
+    set(data.lbl_cost_pct, 'String', sprintf('%.0f%%', data.rec.weight_cost * 100));
+    set(data.lbl_losses_pct, 'String', sprintf('%.0f%%', data.rec.weight_losses * 100));
+    set(data.lbl_dims_pct, 'String', sprintf('%.0f%%', data.rec.weight_dimensions * 100));
 end
 
 
@@ -1509,12 +1579,12 @@ function config = build_recommendation_config(data)
 
     config.weights = struct();
     config.weights.COST = data.rec.weight_cost;
-    config.weights.EFFICIENCY = data.rec.weight_losses;
+    config.weights.LOSSES = data.rec.weight_losses;
     config.weights.DIMENSIONS = data.rec.weight_dimensions;
 
     % Design requirements (MAS format)
     config.design_requirements = struct();
-    config.design_requirements.topology = '2-switch forward';
+    config.design_requirements.topology = 'Two Switch Forward Converter';
     config.design_requirements.magnetizingInductance = struct();
     config.design_requirements.magnetizingInductance.nominal = r.Lm_uH * 1e-6;
     config.design_requirements.magnetizingInductance.minimum = r.Lm_uH * 0.8 * 1e-6;
@@ -1557,8 +1627,22 @@ function data = display_recommendations(data, results)
     recs = results.recommendations;
     n = numel(recs);
 
+    % Ensure highest-scoring recommendations are shown first
+    scores = zeros(n, 1);
+    for k = 1:n
+        if isfield(recs(k), 'score')
+            scores(k) = double(recs(k).score);
+        end
+    end
+    [~, order] = sort(scores, 'descend');
+    recs = recs(order);
+
     % Build display strings
     items = cell(n, 1);
+    max_score = max(scores);
+    if max_score <= 0
+        max_score = 1;
+    end
     for k = 1:n
         r = recs(k);
         core_name = '?';
@@ -1571,8 +1655,9 @@ function data = display_recommendations(data, results)
         if isfield(r, 'primary_turns'), turns = sprintf('%d/%d', r.primary_turns, r.secondary_turns); end
         if isfield(r, 'score'), score = r.score; end
 
-        items{k} = sprintf('#%d  %s  |  %s  |  Turns: %s  |  Score: %.2f', ...
-                           k, core_name, material, turns, score);
+        rel_pct = 100 * score / max_score;
+        items{k} = sprintf('#%d  %s  |  %s  |  Turns: %s  |  Score: %.2f (%.0f%% of best)', ...
+                           k, core_name, material, turns, score, rel_pct);
     end
 
     [sel, ok] = listdlg('ListString', items, ...

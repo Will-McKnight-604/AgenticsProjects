@@ -3,93 +3,252 @@
   "n_results": 3,
   "recommendations": [
     {
-      "score": 2.0203979137775514,
+      "score": 0.831813823287399,
       "scoring_per_filter": {
-        "COST": 1.0,
-        "DIMENSIONS": 1.0,
-        "EFFECTIVE_CURRENT_DENSITY": 0.2419476196143916,
-        "EFFECTIVE_RESISTANCE": 0.28410999057097097,
-        "LOSSES": 0.02039791377755118,
-        "MAGNETOMOTIVE_FORCE": 1.0
-      },
-      "core_shape": "T 12.7/7.9/6.35",
-      "material": "95",
-      "gapping": [],
-      "n_windings": 2,
-      "primary_turns": 40,
-      "primary_parallels": 1,
-      "primary_wire": "Litz TCA3 7/35 LITZ (MWXX)",
-      "secondary_turns": 5,
-      "secondary_parallels": 1,
-      "secondary_wire": "Litz SXXL66/38FX-2(MWXX)",
-      "core_losses_w": 0.0,
-      "winding_losses_w": 0.0,
-      "total_losses_w": 0.0
-    },
-    {
-      "score": 1.8751083626433647,
-      "scoring_per_filter": {
-        "COST": 0.3122469421871582,
-        "DIMENSIONS": 0.5628614204562066,
-        "EFFECTIVE_CURRENT_DENSITY": 1.0,
-        "EFFECTIVE_RESISTANCE": 0.0,
+        "COST": 0.44600954396390335,
+        "DIMENSIONS": 0.42979805986330255,
+        "EFFECTIVE_CURRENT_DENSITY": 0.46554129887398277,
+        "EFFECTIVE_RESISTANCE": 0.6389960608158374,
         "LOSSES": 1.0,
         "MAGNETOMOTIVE_FORCE": 1.0
       },
-      "core_shape": "T 13/7.1/4.8",
-      "material": "3C94",
-      "gapping": [],
+      "core_shape": "E 20/9/6",
+      "material": "95",
+      "gapping": [
+        {
+          "area": 3.2487e-05,
+          "coordinates": [
+            0.0,
+            5e-06,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.006345,
+          "distanceClosestParallelSurface": 0.004325,
+          "length": 1e-05,
+          "sectionDimensions": [
+            0.00575,
+            0.00565
+          ],
+          "shape": "rectangular",
+          "type": "subtractive"
+        },
+        {
+          "area": 1.582e-05,
+          "coordinates": [
+            0.0086,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.00635,
+          "distanceClosestParallelSurface": 0.004325,
+          "length": 5e-06,
+          "sectionDimensions": [
+            0.0028,
+            0.00565
+          ],
+          "shape": "rectangular",
+          "type": "residual"
+        },
+        {
+          "area": 1.582e-05,
+          "coordinates": [
+            -0.0086,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.00635,
+          "distanceClosestParallelSurface": 0.004325,
+          "length": 5e-06,
+          "sectionDimensions": [
+            0.0028,
+            0.00565
+          ],
+          "shape": "rectangular",
+          "type": "residual"
+        }
+      ],
       "n_windings": 2,
-      "primary_turns": 47,
+      "primary_turns": 15,
       "primary_parallels": 1,
-      "primary_wire": "Litz TCA3 7/35 LITZ (MWXX)",
-      "secondary_turns": 6,
-      "secondary_parallels": 1,
-      "secondary_wire": "Litz SXXL20/34FX-3(MWXX)",
+      "primary_wire": "Litz DXXL20/34TXX-2(MWXX)",
+      "secondary_turns": 15,
+      "secondary_parallels": 2,
+      "secondary_wire": "Round 25.0 - Single Build",
       "core_losses_w": 0.0,
       "winding_losses_w": 0.0,
-      "total_losses_w": 0.0
+      "total_losses_w": 0.0,
+      "weighted_score": 0.831813823287399
     },
     {
-      "score": 1.1439361896150284,
+      "score": 0.6977921592976908,
       "scoring_per_filter": {
-        "COST": 0.6446524116926985,
-        "DIMENSIONS": 0.4992837779223299,
+        "COST": 0.44600954396390335,
+        "DIMENSIONS": 0.3832886674369319,
         "EFFECTIVE_CURRENT_DENSITY": 0.0,
         "EFFECTIVE_RESISTANCE": 1.0,
-        "LOSSES": 0.0,
+        "LOSSES": 0.8211748129333065,
         "MAGNETOMOTIVE_FORCE": 1.0
       },
-      "core_shape": "T 12.7/7.9/6.35",
+      "core_shape": "EL 20/5.8",
       "material": "95",
-      "gapping": [],
+      "gapping": [
+        {
+          "area": 5.3353199999999996e-05,
+          "coordinates": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.004,
+          "distanceClosestParallelSurface": 0.0058049999999999985,
+          "length": 0.0,
+          "sectionDimensions": [
+            0.00506,
+            0.01163
+          ],
+          "shape": "oblong",
+          "type": "subtractive"
+        },
+        {
+          "area": 2.664e-05,
+          "coordinates": [
+            0.0091675,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.004,
+          "distanceClosestParallelSurface": 0.0058049999999999985,
+          "length": 5e-06,
+          "sectionDimensions": [
+            0.001665,
+            0.016
+          ],
+          "shape": "rectangular",
+          "type": "residual"
+        },
+        {
+          "area": 2.664e-05,
+          "coordinates": [
+            -0.0091675,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.004,
+          "distanceClosestParallelSurface": 0.0058049999999999985,
+          "length": 5e-06,
+          "sectionDimensions": [
+            0.001665,
+            0.016
+          ],
+          "shape": "rectangular",
+          "type": "residual"
+        }
+      ],
       "n_windings": 2,
-      "primary_turns": 40,
+      "primary_turns": 9,
       "primary_parallels": 1,
-      "primary_wire": "Litz TCA3 09/35 LITZ (MWXX)",
-      "secondary_turns": 5,
+      "primary_wire": "Litz SXXL20/34FX-3(MWXX)",
+      "secondary_turns": 9,
       "secondary_parallels": 1,
-      "secondary_wire": "Litz SXXL66/38FX-2(MWXX)",
+      "secondary_wire": "Litz SXXL07/30FX-3(MWXX)",
       "core_losses_w": 0.0,
       "winding_losses_w": 0.0,
-      "total_losses_w": 0.0
+      "total_losses_w": 0.0,
+      "weighted_score": 0.6977921592976908
+    },
+    {
+      "score": 0.6954398560173929,
+      "scoring_per_filter": {
+        "COST": 0.44600954396390335,
+        "DIMENSIONS": 0.3982912821958742,
+        "EFFECTIVE_CURRENT_DENSITY": 0.0,
+        "EFFECTIVE_RESISTANCE": 1.0,
+        "LOSSES": 0.8139035632672666,
+        "MAGNETOMOTIVE_FORCE": 1.0
+      },
+      "core_shape": "EL 20/5.8",
+      "material": "95",
+      "gapping": [
+        {
+          "area": 5.3353199999999996e-05,
+          "coordinates": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.004,
+          "distanceClosestParallelSurface": 0.0058049999999999985,
+          "length": 0.0,
+          "sectionDimensions": [
+            0.00506,
+            0.01163
+          ],
+          "shape": "oblong",
+          "type": "subtractive"
+        },
+        {
+          "area": 2.664e-05,
+          "coordinates": [
+            0.0091675,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.004,
+          "distanceClosestParallelSurface": 0.0058049999999999985,
+          "length": 5e-06,
+          "sectionDimensions": [
+            0.001665,
+            0.016
+          ],
+          "shape": "rectangular",
+          "type": "residual"
+        },
+        {
+          "area": 2.664e-05,
+          "coordinates": [
+            -0.0091675,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.004,
+          "distanceClosestParallelSurface": 0.0058049999999999985,
+          "length": 5e-06,
+          "sectionDimensions": [
+            0.001665,
+            0.016
+          ],
+          "shape": "rectangular",
+          "type": "residual"
+        }
+      ],
+      "n_windings": 2,
+      "primary_turns": 9,
+      "primary_parallels": 1,
+      "primary_wire": "Litz SXXL20/34FX-3(MWXX)",
+      "secondary_turns": 9,
+      "secondary_parallels": 1,
+      "secondary_wire": "Litz SXXL07/30FX-2(MWXX)",
+      "core_losses_w": 0.0,
+      "winding_losses_w": 0.0,
+      "total_losses_w": 0.0,
+      "weighted_score": 0.6954398560173929
     }
   ],
   "weights": {
-    "COST": 0.5,
-    "EFFICIENCY": 0.5,
-    "DIMENSIONS": 0.5
+    "COST": 0.11489249269191876,
+    "LOSSES": 0.7017745073080813,
+    "DIMENSIONS": 0.183333
   },
   "inputs_used": {
     "designRequirements": {
-      "topology": "2-switch forward",
+      "topology": "Two Switch Forward Converter",
       "magnetizingInductance": {
-        "nominal": 0.0035526315789473676,
-        "minimum": 0.0028421052631578945
+        "nominal": 0.0003846396123561478,
+        "minimum": 0.0003077116898849183
       },
       "turnsRatios": [
         {
-          "nominal": 7.894736842105263
+          "nominal": 0.9921259842519685
         }
       ]
     },
@@ -102,41 +261,41 @@
         "excitationsPerWinding": [
           {
             "name": "Primary",
-            "frequency": 200000.0,
+            "frequency": 65000.0,
             "current": {
               "processed": {
                 "label": "Rectangular",
-                "peakToPeak": 0.6333333333333334,
-                "offset": 0.09827586206896553,
-                "dutyCycle": 0.3103448275862069
+                "peakToPeak": 5.0396825396825395,
+                "offset": 1.1339285714285714,
+                "dutyCycle": 0.45
               }
             },
             "voltage": {
               "processed": {
                 "label": "Rectangular",
-                "peakToPeak": 377.4103002333431,
+                "peakToPeak": 75.89079196362921,
                 "offset": 0,
-                "dutyCycle": 0.3103448275862069
+                "dutyCycle": 0.45
               }
             }
           },
           {
             "name": "Secondary",
-            "frequency": 200000.0,
+            "frequency": 65000.0,
             "current": {
               "processed": {
                 "label": "Rectangular",
                 "peakToPeak": 5.0,
-                "offset": 0.7758620689655172,
-                "dutyCycle": 0.3103448275862069
+                "offset": 1.125,
+                "dutyCycle": 0.45
               }
             },
             "voltage": {
               "processed": {
                 "label": "Rectangular",
-                "peakToPeak": 13.014148283908385,
+                "peakToPeak": 32.524625127269665,
                 "offset": 0,
-                "dutyCycle": 0.3103448275862069
+                "dutyCycle": 0.45
               }
             }
           }

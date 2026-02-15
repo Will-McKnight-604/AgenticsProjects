@@ -187,6 +187,7 @@ def build_mas_inputs(config):
     # Map internal topology names to MAS schema enum values
     topology_map = {
         "two_switch_forward": "Two Switch Forward Converter",
+        "2_switch_forward": "Two Switch Forward Converter",
         "2-switch forward": "Two Switch Forward Converter",
         "forward": "Two Switch Forward Converter",
         "flyback": "Flyback Converter",
@@ -197,7 +198,8 @@ def build_mas_inputs(config):
         "full_bridge": "Full-Bridge Converter",
     }
     raw_topo = dr.get("topology", "Two Switch Forward Converter")
-    topology = topology_map.get(raw_topo.lower().replace("-", "_").replace(" ", "_"), raw_topo)
+    topo_key = raw_topo.lower().replace("-", "_").replace(" ", "_")
+    topology = topology_map.get(topo_key, raw_topo)
 
     inputs = {
         "designRequirements": {
@@ -251,6 +253,37 @@ def ensure_databases_loaded():
         print(f"Warning: database loading failed: {exc}", file=sys.stderr)
 
 
+def apply_user_weights(recommendations, weights):
+    """Re-score recommendations using user-specified weights.
+
+    The PyOpenMagnetics advisor uses default equal weights internally.
+    We re-score using the three user-controlled weights (COST, LOSSES,
+    DIMENSIONS) applied to the per-filter scores returned by the advisor,
+    then sort descending by weighted score.
+    """
+    w_cost = as_float(weights.get("COST", 1.0), 1.0)
+    w_losses = as_float(weights.get("LOSSES", 1.0), 1.0)
+    w_dims = as_float(weights.get("DIMENSIONS", 1.0), 1.0)
+    w_total = w_cost + w_losses + w_dims
+    if w_total < 1e-12:
+        w_total = 1.0  # avoid division by zero
+
+    for rec in recommendations:
+        spf = rec.get("scoring_per_filter", {})
+        s_cost = as_float(spf.get("COST", 0.0), 0.0)
+        s_losses = as_float(spf.get("LOSSES", 0.0), 0.0)
+        s_dims = as_float(spf.get("DIMENSIONS", 0.0), 0.0)
+
+        # Weighted sum normalized by total weight
+        rec["weighted_score"] = (
+            w_cost * s_cost + w_losses * s_losses + w_dims * s_dims
+        ) / w_total
+        rec["score"] = rec["weighted_score"]
+
+    recommendations.sort(key=lambda r: r.get("weighted_score", 0.0), reverse=True)
+    return recommendations
+
+
 def run_recommendations(config):
     """Run PyOpenMagnetics advisor to get design recommendations."""
 
@@ -260,14 +293,31 @@ def run_recommendations(config):
     if isinstance(weights, str):
         weights = json.loads(weights)
 
+    # Map weight keys: GUI uses LOSSES, API uses EFFICIENCY
+    api_weights = {
+        "COST": as_float(weights.get("COST", 1.0), 1.0),
+        "EFFICIENCY": as_float(weights.get("LOSSES", weights.get("EFFICIENCY", 1.0)), 1.0),
+        "DIMENSIONS": as_float(weights.get("DIMENSIONS", 1.0), 1.0),
+    }
+
     # Ensure core databases are loaded before calling advisor
     ensure_databases_loaded()
 
     # Build MAS inputs
     inputs = build_mas_inputs(config)
 
+    # Log key inputs for traceability
+    dr = inputs.get("designRequirements", {})
+    mag_ind = dr.get("magnetizingInductance", {})
+    turns_ratios = dr.get("turnsRatios", [])
+    ops = inputs.get("operatingPoints", [{}])
+    freq = 0
+    if ops and ops[0].get("excitationsPerWinding"):
+        freq = ops[0]["excitationsPerWinding"][0].get("frequency", 0)
+    print(f"[ADVISOR] Inputs: Lm={mag_ind}, turnsRatios={turns_ratios}, "
+          f"freq={freq}Hz, weights={api_weights}", file=sys.stderr)
+
     # Process inputs through PyOpenMagnetics
-    # process_inputs expects a Python dict, returns a dict with added harmonics
     try:
         processed = pm.process_inputs(inputs)
     except Exception as exc:
@@ -291,14 +341,18 @@ def run_recommendations(config):
     if isinstance(processed, dict):
         processed = strip_nulls(processed)
 
-    # Call advisor — pass dict directly (pybind11 handles conversion)
-    # IMPORTANT: core_mode must be lowercase "available cores" not "AVAILABLE_CORES"
-    # (MKF C++ enum parser expects exact lowercase strings)
+    # Use "standard cores" mode to get E/ETD/PQ/RM cores (not just stocked toroids).
+    # "available cores" only returns commercially stocked cores (mostly toroids).
+    core_mode = "standard cores"
+
+    # Request a larger pool so user weights can meaningfully re-rank results.
+    pool_size = max(max_results * 3, 15)
+
     try:
         results = pm.calculate_advised_magnetics(
             processed,
-            max_results,
-            "available cores"
+            pool_size,
+            core_mode
         )
     except Exception as exc:
         return {
@@ -325,6 +379,10 @@ def run_recommendations(config):
         rec = extract_recommendation(item)
         if rec:
             recommendations.append(rec)
+
+    # Re-score and re-sort using user-specified weights, then trim to requested count
+    recommendations = apply_user_weights(recommendations, weights)
+    recommendations = recommendations[:max_results]
 
     return {
         "status": "OK",

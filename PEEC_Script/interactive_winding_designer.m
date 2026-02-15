@@ -17,8 +17,6 @@ function interactive_winding_designer(design_spec)
 
     % Initialize OpenMagnetics API
     data.api = openmagnetics_api_interface();
-    data.data_mode = 'offline';
-    data.online_url = 'http://localhost:8484';
 
     % Initialize layout calculator
     data.layout_calc = openmagnetics_winding_layout(data.api);
@@ -165,7 +163,7 @@ function interactive_winding_designer(design_spec)
     fig_h = min(fig_h, max(650, scr(4) - 80));
     fig_x = max(20, floor((scr(3) - fig_w) / 2));
     fig_y = max(20, floor((scr(4) - fig_h) / 2));
-    data.fig_gui = figure('Name', 'Interactive Transformer Design Tool [Offline Mode]', ...
+    data.fig_gui = figure('Name', 'Interactive Transformer Design Tool', ...
                           'Position', [fig_x fig_y fig_w fig_h], ...
                           'NumberTitle', 'off', ...
                           'MenuBar', 'none', ...
@@ -276,6 +274,11 @@ function data = apply_design_spec(data, spec)
     % --- Recommendation (pre-populate core/wire selection) ---
     if isfield(spec, 'recommendation') && isstruct(spec.recommendation)
         rec = spec.recommendation;
+        core_applied = false;
+        supplier_applied = false;
+        material_applied = false;
+        pri_wire_applied = false;
+        sec_wire_applied = false;
 
         % Core shape
         if isfield(rec, 'core_shape') && ~isempty(rec.core_shape)
@@ -283,33 +286,65 @@ function data = apply_design_spec(data, spec)
             core_name = sanitize_field_name(rec.core_shape);
             if isfield(data.cores, core_name)
                 data.selected_core = core_name;
+                core_applied = true;
             else
                 % Try exact name match
                 core_list = fieldnames(data.cores);
                 for k = 1:numel(core_list)
                     if strcmpi(core_list{k}, core_name)
                         data.selected_core = core_list{k};
+                        core_applied = true;
                         break;
                     end
                 end
+                if ~core_applied
+                    fprintf('[DESIGN_SPEC] Core not found in local DB: "%s" (key: %s)\n', rec.core_shape, core_name);
+                end
             end
         end
 
-        % Material
+        % Material (support both legacy and advisor output field names)
+        rec_material = '';
         if isfield(rec, 'core_material') && ~isempty(rec.core_material)
-            mat_name = sanitize_field_name(rec.core_material);
+            rec_material = rec.core_material;
+        elseif isfield(rec, 'material') && ~isempty(rec.material)
+            rec_material = rec.material;
+        end
+        if ~isempty(rec_material)
+            mat_name = sanitize_field_name(rec_material);
             if isfield(data.materials, mat_name)
                 data.selected_material = mat_name;
+                material_applied = true;
+            else
+                fprintf('[DESIGN_SPEC] Material not found in local DB: "%s" (key: %s)\n', rec_material, mat_name);
             end
         end
 
-        % Supplier (try to match from core)
+        % Supplier (explicit from recommendation, else inferred from material/core)
+        rec_supplier = '';
         if isfield(rec, 'supplier') && ~isempty(rec.supplier)
+            rec_supplier = rec.supplier;
+        elseif material_applied && isfield(data.materials, data.selected_material)
+            mat_tmp = data.materials.(data.selected_material);
+            if isfield(mat_tmp, 'manufacturer') && ~isempty(mat_tmp.manufacturer)
+                rec_supplier = mat_tmp.manufacturer;
+            end
+        elseif core_applied && isfield(data.cores, data.selected_core)
+            core_tmp = data.cores.(data.selected_core);
+            if isfield(core_tmp, 'manufacturer') && ~isempty(core_tmp.manufacturer)
+                rec_supplier = core_tmp.manufacturer;
+            end
+        end
+        if ~isempty(rec_supplier)
             for k = 1:numel(data.suppliers)
-                if strcmpi(data.suppliers{k}, rec.supplier)
+                if strcmpi(data.suppliers{k}, rec_supplier)
                     data.selected_supplier = data.suppliers{k};
+                    supplier_applied = true;
                     break;
                 end
+            end
+            if ~supplier_applied
+                fprintf('[DESIGN_SPEC] Supplier not found in local DB: "%s"\n', rec_supplier);
             end
         end
 
@@ -322,13 +357,20 @@ function data = apply_design_spec(data, spec)
                 data.width = w;
                 data.height = h;
                 data.windings(1).wire_shape = shape;
+                pri_wire_applied = true;
+            else
+                fprintf('[DESIGN_SPEC] Primary wire not found in local DB: "%s" (key: %s)\n', rec.primary_wire, wire_name);
             end
         end
         if isfield(rec, 'secondary_wire') && ~isempty(rec.secondary_wire) && data.n_windings >= 2
             wire_name = sanitize_field_name(rec.secondary_wire);
             if isfield(data.wires, wire_name)
                 data.windings(2).wire_type = wire_name;
-                data.windings(2).wire_shape = data.api.wire_to_conductor_dims(wire_name);
+                [~, ~, shape2] = data.api.wire_to_conductor_dims(wire_name);
+                data.windings(2).wire_shape = shape2;
+                sec_wire_applied = true;
+            else
+                fprintf('[DESIGN_SPEC] Secondary wire not found in local DB: "%s" (key: %s)\n', rec.secondary_wire, wire_name);
             end
         end
 
@@ -373,6 +415,10 @@ function data = apply_design_spec(data, spec)
                 end
             end
         end
+
+        fprintf('[DESIGN_SPEC] Applied recommendation fields: supplier=%d core=%d material=%d wireP=%d wireS=%d turns=%d/%d\n', ...
+            supplier_applied, core_applied, material_applied, pri_wire_applied, sec_wire_applied, ...
+            data.windings(1).n_turns, data.windings(min(2,data.n_windings)).n_turns);
     end
 
     % --- MAS import: store full content for later reference ---
@@ -391,16 +437,20 @@ end
 
 
 function name = sanitize_field_name(raw)
-    % Convert raw string to valid MATLAB field name
-    name = strrep(raw, ' ', '_');
-    name = strrep(name, '-', '_');
-    name = strrep(name, '.', '_');
-    name = strrep(name, '/', '_');
-    name = strrep(name, '(', '');
-    name = strrep(name, ')', '');
-    % Ensure starts with letter
-    if ~isempty(name) && ~isletter(name(1))
-        name = ['X' name];
+    % Convert raw string to the same key style as openmagnetics_api_interface.make_valid_name
+    if ~ischar(raw)
+        if isa(raw, 'string')
+            raw = char(raw);
+        else
+            raw = 'Unknown';
+        end
+    end
+    name = regexprep(raw, '[^a-zA-Z0-9_]', '_');
+    if isempty(name)
+        name = 'Unknown';
+    end
+    if ~isletter(name(1))
+        name = ['W_' name];
     end
 end
 
@@ -415,50 +465,16 @@ function build_gui(data)
 
     % Main title
     uicontrol('Parent', fig, 'Style', 'text', ...
-              'String', 'Interactive Transformer Design Tool [Offline Mode]', ...
+              'String', 'Interactive Transformer Design Tool', ...
               'Units', 'normalized', ...
               'Position', [0.02 0.94 0.96 0.045], ...
               'FontSize', 17, 'FontWeight', 'bold', ...
               'HorizontalAlignment', 'center', ...
               'Tag', 'main_title');
 
-    % Data mode controls (top bar)
-    uicontrol('Parent', fig, 'Style', 'text', ...
-              'String', 'Data Mode:', ...
-              'Units', 'normalized', ...
-              'Position', [0.56 0.036 0.07 0.02], ...
-              'FontWeight', 'bold', 'HorizontalAlignment', 'left');
-
-    uicontrol('Parent', fig, 'Style', 'popupmenu', ...
-              'String', {'Offline', 'Online (OM Server)'}, ...
-              'Units', 'normalized', ...
-              'Position', [0.63 0.032 0.14 0.028], ...
-              'Tag', 'data_mode', ...
-              'Callback', @update_data_mode);
-
-    uicontrol('Parent', fig, 'Style', 'text', ...
-              'String', 'Server URL:', ...
-              'Units', 'normalized', ...
-              'Position', [0.56 0.008 0.07 0.02], ...
-              'HorizontalAlignment', 'left');
-
-    uicontrol('Parent', fig, 'Style', 'edit', ...
-              'String', data.online_url, ...
-              'Units', 'normalized', ...
-              'Position', [0.63 0.004 0.16 0.028], ...
-              'Tag', 'server_url', ...
-              'Callback', @update_server_url);
-
-    uicontrol('Parent', fig, 'Style', 'text', ...
-              'String', 'Status: Offline', ...
-              'Units', 'normalized', ...
-              'Position', [0.80 0.008 0.18 0.02], ...
-              'HorizontalAlignment', 'left', ...
-              'Tag', 'data_mode_status');
-
     % ========== LEFT PANEL: CORE SELECTION (with supplier cascade) ==========
     core_panel = uipanel('Parent', fig, ...
-                        'Position', [0.02 0.16 0.29 0.76], ...
+                        'Position', [0.02 0.10 0.29 0.82], ...
                         'Title', 'Core Selection (OpenMagnetics)', ...
                         'FontSize', 11, 'FontWeight', 'bold');
 
@@ -469,11 +485,26 @@ function build_gui(data)
               'FontWeight', 'bold', 'HorizontalAlignment', 'left');
 
     supplier_list = data.suppliers;
-    if isempty(supplier_list); supplier_list = {'TDK'}; end
+    if isempty(supplier_list)
+        supplier_list = {'TDK'};
+    end
+    sup_idx = find(strcmp(supplier_list, data.selected_supplier), 1);
+    if isempty(sup_idx)
+        if ~isempty(data.selected_supplier)
+            supplier_list = [{data.selected_supplier}; supplier_list(:)];
+            sup_idx = 1;
+        else
+            sup_idx = 1;
+            data.selected_supplier = supplier_list{1};
+        end
+    else
+        data.selected_supplier = supplier_list{sup_idx};
+    end
 
     uicontrol('Parent', core_panel, 'Style', 'popupmenu', ...
               'String', supplier_list, ...
               'Position', [20 508 380 25], ...
+              'Value', sup_idx, ...
               'Tag', 'supplier_dropdown', ...
               'Callback', @select_supplier);
 
@@ -484,11 +515,29 @@ function build_gui(data)
               'HorizontalAlignment', 'left');
 
     supplier_cores = data.api.get_cores_by_supplier(data.selected_supplier);
-    if isempty(supplier_cores); supplier_cores = fieldnames(data.cores); end
+    if isempty(supplier_cores)
+        supplier_cores = fieldnames(data.cores);
+    end
+    if isempty(supplier_cores)
+        supplier_cores = {'None'};
+    end
+    core_idx = find(strcmp(supplier_cores, data.selected_core), 1);
+    if isempty(core_idx)
+        if isfield(data.cores, data.selected_core)
+            supplier_cores = [{data.selected_core}; supplier_cores(:)];
+            core_idx = 1;
+        else
+            core_idx = 1;
+            data.selected_core = supplier_cores{1};
+        end
+    else
+        data.selected_core = supplier_cores{core_idx};
+    end
 
     uicontrol('Parent', core_panel, 'Style', 'popupmenu', ...
               'String', supplier_cores, ...
               'Position', [20 458 380 25], ...
+              'Value', core_idx, ...
               'Tag', 'core_dropdown', ...
               'Callback', @select_core);
 
@@ -512,11 +561,29 @@ function build_gui(data)
               'HorizontalAlignment', 'left');
 
     supplier_mats = data.api.get_materials_by_supplier(data.selected_supplier);
-    if isempty(supplier_mats); supplier_mats = fieldnames(data.materials); end
+    if isempty(supplier_mats)
+        supplier_mats = fieldnames(data.materials);
+    end
+    if isempty(supplier_mats)
+        supplier_mats = {'N87'};
+    end
+    mat_idx = find(strcmp(supplier_mats, data.selected_material), 1);
+    if isempty(mat_idx)
+        if isfield(data.materials, data.selected_material)
+            supplier_mats = [{data.selected_material}; supplier_mats(:)];
+            mat_idx = 1;
+        else
+            mat_idx = 1;
+            data.selected_material = supplier_mats{1};
+        end
+    else
+        data.selected_material = supplier_mats{mat_idx};
+    end
 
     uicontrol('Parent', core_panel, 'Style', 'popupmenu', ...
               'String', supplier_mats, ...
               'Position', [20 296 380 25], ...
+              'Value', mat_idx, ...
               'Tag', 'material_dropdown', ...
               'Callback', @select_material);
 
@@ -673,7 +740,7 @@ function build_gui(data)
 
     % ========== CENTER PANEL: WINDING CONFIGURATION ==========
     winding_panel = uipanel('Parent', fig, ...
-                           'Position', [0.33 0.16 0.34 0.76], ...
+                           'Position', [0.33 0.10 0.34 0.82], ...
                            'Title', 'Winding Configuration', ...
                            'FontSize', 11, 'FontWeight', 'bold');
 
@@ -900,7 +967,7 @@ function build_gui(data)
 
     % ========== RIGHT PANEL: VISUALIZATION ==========
     vis_panel = uipanel('Parent', fig, ...
-                        'Position', [0.69 0.16 0.29 0.76], ...
+                        'Position', [0.69 0.10 0.29 0.82], ...
                         'Title', 'Winding Layout in Core Window', ...
                         'FontSize', 11, 'FontWeight', 'bold');
 
@@ -967,151 +1034,11 @@ function build_gui(data)
               'FontSize', 8, ...
               'Tag', 'vis_info');
 
-    % ========== EXCITATION PANEL ==========
-    ex_panel = uipanel('Parent', fig, ...
-                       'Position', [0.02 0.02 0.46 0.12], ...
-                       'Title', 'Excitation for PEEC Analysis', ...
-                       'FontSize', 9, 'FontWeight', 'bold');
-
-    uicontrol('Parent', ex_panel, 'Style', 'text', ...
-              'String', 'Source:', ...
-              'Units', 'normalized', ...
-              'Position', [0.01 0.57 0.12 0.30], ...
-              'HorizontalAlignment', 'left');
-
-    src_items = {'Manual RMS/Phase', 'OM Converter (2-Switch FWD)'};
-    src_val = 2;
-    if isfield(data, 'excitation') && isfield(data.excitation, 'source') ...
-            && strcmpi(data.excitation.source, 'manual')
-        src_val = 1;
-    end
-    uicontrol('Parent', ex_panel, 'Style', 'popupmenu', ...
-              'String', src_items, ...
-              'Units', 'normalized', ...
-              'Position', [0.12 0.60 0.30 0.30], ...
-              'Value', src_val, ...
-              'Tag', 'excitation_source', ...
-              'Callback', @update_excitation_source);
-
-    uicontrol('Parent', ex_panel, 'Style', 'text', ...
-              'String', 'Sweep:', ...
-              'Units', 'normalized', ...
-              'Position', [0.44 0.57 0.10 0.30], ...
-              'HorizontalAlignment', 'left');
-
-    sw_items = {'Nominal', 'Corners', 'Grid'};
-    sw_val = 3;
-    if isfield(data, 'excitation') && isfield(data.excitation, 'sweep_mode')
-        switch lower(data.excitation.sweep_mode)
-            case 'nominal', sw_val = 1;
-            case 'corners', sw_val = 2;
-            otherwise, sw_val = 3;
-        end
-    end
-    uicontrol('Parent', ex_panel, 'Style', 'popupmenu', ...
-              'String', sw_items, ...
-              'Units', 'normalized', ...
-              'Position', [0.53 0.60 0.18 0.30], ...
-              'Value', sw_val, ...
-              'Tag', 'excitation_sweep', ...
-              'Callback', @update_excitation_sweep);
-
-    uicontrol('Parent', ex_panel, 'Style', 'text', ...
-              'String', 'Mode:', ...
-              'Units', 'normalized', ...
-              'Position', [0.72 0.57 0.09 0.30], ...
-              'HorizontalAlignment', 'left');
-
-    mode_items = {'CCM', 'DCM', 'CCM+DCM'};
-    mode_val = 3;
-    if isfield(data, 'excitation') && isfield(data.excitation, 'conduction_mode')
-        switch lower(data.excitation.conduction_mode)
-            case 'ccm', mode_val = 1;
-            case 'dcm', mode_val = 2;
-            otherwise, mode_val = 3;
-        end
-    end
-    uicontrol('Parent', ex_panel, 'Style', 'popupmenu', ...
-              'String', mode_items, ...
-              'Units', 'normalized', ...
-              'Position', [0.80 0.60 0.18 0.30], ...
-              'Value', mode_val, ...
-              'Tag', 'excitation_mode', ...
-              'Callback', @update_excitation_mode);
-
-    uicontrol('Parent', ex_panel, 'Style', 'text', ...
-              'String', 'Duty:', ...
-              'Units', 'normalized', ...
-              'Position', [0.01 0.12 0.08 0.30], ...
-              'HorizontalAlignment', 'left');
-
-    duty_items = {'Derived', 'Manual'};
-    duty_val = 1;
-    if isfield(data, 'excitation') && isfield(data.excitation, 'duty_mode') ...
-            && strcmpi(data.excitation.duty_mode, 'manual')
-        duty_val = 2;
-    end
-    uicontrol('Parent', ex_panel, 'Style', 'popupmenu', ...
-              'String', duty_items, ...
-              'Units', 'normalized', ...
-              'Position', [0.09 0.15 0.16 0.30], ...
-              'Value', duty_val, ...
-              'Tag', 'excitation_duty_mode', ...
-              'Callback', @update_excitation_duty_mode);
-
-    md_str = '0.40';
-    if isfield(data, 'excitation') && isfield(data.excitation, 'manual_duty')
-        md_str = num2str(data.excitation.manual_duty);
-    end
-    uicontrol('Parent', ex_panel, 'Style', 'edit', ...
-              'String', md_str, ...
-              'Units', 'normalized', ...
-              'Position', [0.26 0.15 0.10 0.30], ...
-              'Tag', 'excitation_manual_duty', ...
-              'TooltipString', 'Manual duty cycle (0..1)', ...
-              'Callback', @update_excitation_manual_duty);
-
-    use_cache_val = 1;
-    if isfield(data, 'excitation') && isfield(data.excitation, 'use_cache') && ~data.excitation.use_cache
-        use_cache_val = 0;
-    end
-    uicontrol('Parent', ex_panel, 'Style', 'checkbox', ...
-              'String', 'Use cache', ...
-              'Units', 'normalized', ...
-              'Position', [0.39 0.16 0.16 0.28], ...
-              'Value', use_cache_val, ...
-              'Tag', 'excitation_use_cache', ...
-              'Callback', @update_excitation_use_cache);
-
-    use_import_val = 0;
-    if isfield(data, 'excitation') && isfield(data.excitation, 'use_import') && data.excitation.use_import
-        use_import_val = 1;
-    end
-    uicontrol('Parent', ex_panel, 'Style', 'checkbox', ...
-              'String', 'Use imported JSON', ...
-              'Units', 'normalized', ...
-              'Position', [0.56 0.16 0.24 0.28], ...
-              'Value', use_import_val, ...
-              'Tag', 'excitation_use_import', ...
-              'Callback', @update_excitation_use_import);
-
-    p_str = '';
-    if isfield(data, 'excitation') && isfield(data.excitation, 'profile_file')
-        p_str = data.excitation.profile_file;
-    end
-    uicontrol('Parent', ex_panel, 'Style', 'edit', ...
-              'String', p_str, ...
-              'Units', 'normalized', ...
-              'Position', [0.79 0.15 0.20 0.30], ...
-              'Tag', 'excitation_profile_file', ...
-              'TooltipString', 'Path for excitation JSON import/export', ...
-              'Callback', @update_excitation_profile_file);
-
     % ========== BOTTOM BUTTONS ==========
     uicontrol('Parent', fig, 'Style', 'pushbutton', ...
               'String', 'Run Analysis', ...
               'Units', 'normalized', ...
-              'Position', [0.67 0.085 0.10 0.045], ...
+              'Position', [0.68 0.03 0.11 0.05], ...
               'FontSize', 12, 'FontWeight', 'bold', ...
               'BackgroundColor', [0.2 0.7 0.3], ...
               'ForegroundColor', 'w', ...
@@ -1120,14 +1047,14 @@ function build_gui(data)
     uicontrol('Parent', fig, 'Style', 'pushbutton', ...
               'String', 'Reset to Defaults', ...
               'Units', 'normalized', ...
-              'Position', [0.79 0.085 0.10 0.045], ...
+              'Position', [0.80 0.03 0.11 0.05], ...
               'FontSize', 11, ...
               'Callback', @reset_defaults);
 
     uicontrol('Parent', fig, 'Style', 'pushbutton', ...
               'String', 'Export MAS', ...
               'Units', 'normalized', ...
-              'Position', [0.91 0.085 0.07 0.045], ...
+              'Position', [0.92 0.03 0.07 0.05], ...
               'FontSize', 10, ...
               'BackgroundColor', [0.5 0.3 0.7], ...
               'ForegroundColor', 'w', ...
@@ -2400,99 +2327,6 @@ function update_phase(src, ~, winding)
     guidata(fig, data);
 end
 
-function update_excitation_source(src, ~)
-    fig = gcbf;
-    data = guidata(fig);
-    val = get(src, 'Value');
-    if val == 1
-        data.excitation.source = 'manual';
-    else
-        data.excitation.source = 'converter';
-    end
-    guidata(fig, data);
-end
-
-function update_excitation_sweep(src, ~)
-    fig = gcbf;
-    data = guidata(fig);
-    val = get(src, 'Value');
-    switch val
-        case 1
-            data.excitation.sweep_mode = 'nominal';
-        case 2
-            data.excitation.sweep_mode = 'corners';
-        otherwise
-            data.excitation.sweep_mode = 'grid';
-    end
-    guidata(fig, data);
-end
-
-function update_excitation_mode(src, ~)
-    fig = gcbf;
-    data = guidata(fig);
-    val = get(src, 'Value');
-    switch val
-        case 1
-            data.excitation.conduction_mode = 'ccm';
-        case 2
-            data.excitation.conduction_mode = 'dcm';
-        otherwise
-            data.excitation.conduction_mode = 'ccm+dcm';
-    end
-    guidata(fig, data);
-end
-
-function update_excitation_duty_mode(src, ~)
-    fig = gcbf;
-    data = guidata(fig);
-    val = get(src, 'Value');
-    if val == 2
-        data.excitation.duty_mode = 'manual';
-    else
-        data.excitation.duty_mode = 'derived';
-    end
-    guidata(fig, data);
-end
-
-function update_excitation_manual_duty(src, ~)
-    fig = gcbf;
-    data = guidata(fig);
-    v = str2double(get(src, 'String'));
-    if isnan(v)
-        v = 0.40;
-    end
-    v = max(0.02, min(0.49, v));
-    data.excitation.manual_duty = v;
-    set(src, 'String', num2str(v));
-    guidata(fig, data);
-end
-
-function update_excitation_use_cache(src, ~)
-    fig = gcbf;
-    data = guidata(fig);
-    data.excitation.use_cache = logical(get(src, 'Value'));
-    guidata(fig, data);
-end
-
-function update_excitation_use_import(src, ~)
-    fig = gcbf;
-    data = guidata(fig);
-    data.excitation.use_import = logical(get(src, 'Value'));
-    guidata(fig, data);
-end
-
-function update_excitation_profile_file(src, ~)
-    fig = gcbf;
-    data = guidata(fig);
-    p = strtrim(get(src, 'String'));
-    if isempty(p)
-        p = fullfile(pwd(), 'om_excitation_profile.json');
-        set(src, 'String', p);
-    end
-    data.excitation.profile_file = p;
-    guidata(fig, data);
-end
-
 function update_insulation_class(src, ~)
     fig = gcbf;
     data = guidata(fig);
@@ -2576,152 +2410,6 @@ function update_edge_margin(src, ~)
     set(src, 'String', num2str(val_mm));
     update_all_summaries(fig, data);
     guidata(fig, data);
-    update_visualization(data);
-end
-
-function update_data_mode(src, ~)
-    fig = gcbf;
-    data = guidata(fig);
-    prev_data = data;
-    list = get(src, 'String');
-    idx = get(src, 'Value');
-    if ischar(list)
-        list = cellstr(list);
-    end
-    mode_label = 'Offline';
-    if idx >= 1 && idx <= numel(list)
-        mode_label = list{idx};
-    end
-
-    url = get(findobj(fig, 'Tag', 'server_url'), 'String');
-
-    if local_contains(mode_label, 'online')
-        ok = data.api.set_mode('online', url);
-    else
-        ok = data.api.set_mode('offline', url);
-    end
-
-    data.data_mode = data.api.get_mode();
-    data.online_url = url;
-    data = reload_databases(fig, data, prev_data);
-    guidata(fig, data);
-
-    % Update status + title
-    status_text = 'Status: Offline';
-    if strcmpi(data.data_mode, 'online') && ok
-        status_text = sprintf('Status: Online (%s)', url);
-        set(fig, 'Name', 'Interactive Transformer Design Tool [Online Mode]');
-        title_ctrl = findobj(fig, 'Tag', 'main_title');
-        if ~isempty(title_ctrl)
-            set(title_ctrl, 'String', 'Interactive Transformer Design Tool [Online Mode]');
-        end
-    else
-        set(fig, 'Name', 'Interactive Transformer Design Tool [Offline Mode]');
-        set(src, 'Value', 1);
-        title_ctrl = findobj(fig, 'Tag', 'main_title');
-        if ~isempty(title_ctrl)
-            set(title_ctrl, 'String', 'Interactive Transformer Design Tool [Offline Mode]');
-        end
-    end
-    set(findobj(fig, 'Tag', 'data_mode_status'), 'String', status_text);
-end
-
-function update_server_url(src, ~)
-    fig = gcbf;
-    data = guidata(fig);
-    data.online_url = get(src, 'String');
-    guidata(fig, data);
-
-    % If already online, try reconnect
-    mode_ctrl = findobj(fig, 'Tag', 'data_mode');
-    if ~isempty(mode_ctrl) && get(mode_ctrl, 'Value') == 2
-        update_data_mode(mode_ctrl, []);
-    end
-end
-
-function data = reload_databases(fig, data, prev_data)
-    if nargin < 3
-        prev_data = data;
-    end
-    data.wires = data.api.get_wires();
-    data.cores = data.api.get_cores();
-    data.materials = data.api.get_materials();
-    data.suppliers = data.api.get_suppliers();
-    data.wire_options = build_wire_option_lists(data.wires);
-
-    supplier_list = data.suppliers;
-    if isempty(supplier_list)
-        supplier_list = {'TDK'};
-    end
-    sel_supplier = supplier_list{1};
-    if isfield(prev_data, 'selected_supplier') && any(strcmp(supplier_list, prev_data.selected_supplier))
-        sel_supplier = prev_data.selected_supplier;
-    end
-    data.selected_supplier = sel_supplier;
-    set(findobj(fig, 'Tag', 'supplier_dropdown'), 'String', supplier_list, ...
-        'Value', find(strcmp(supplier_list, sel_supplier), 1));
-
-    core_list = data.api.get_cores_by_supplier(data.selected_supplier);
-    if isempty(core_list)
-        core_list = fieldnames(data.cores);
-    end
-    if isempty(core_list)
-        core_list = {'None'};
-    end
-    sel_core = core_list{1};
-    if isfield(prev_data, 'selected_core') && any(strcmp(core_list, prev_data.selected_core))
-        sel_core = prev_data.selected_core;
-    end
-    data.selected_core = sel_core;
-    set(findobj(fig, 'Tag', 'core_dropdown'), 'String', core_list, ...
-        'Value', find(strcmp(core_list, sel_core), 1));
-
-    mat_list = data.api.get_materials_by_supplier(data.selected_supplier);
-    if isempty(mat_list)
-        mat_list = fieldnames(data.materials);
-    end
-    if isempty(mat_list)
-        mat_list = {'N87'};
-    end
-    sel_mat = mat_list{1};
-    if isfield(prev_data, 'selected_material') && any(strcmp(mat_list, prev_data.selected_material))
-        sel_mat = prev_data.selected_material;
-    end
-    data.selected_material = sel_mat;
-    set(findobj(fig, 'Tag', 'material_dropdown'), 'String', mat_list, ...
-        'Value', find(strcmp(mat_list, sel_mat), 1));
-
-    wire_list = fieldnames(data.wires);
-    if isempty(wire_list)
-        wire_list = {'AWG_22'};
-    end
-
-    for w = 1:data.n_windings
-        sel_wire = wire_list{1};
-        if isfield(prev_data, 'windings') && numel(prev_data.windings) >= w
-            prev_wire = prev_data.windings(w).wire_type;
-            if any(strcmp(wire_list, prev_wire))
-                sel_wire = prev_wire;
-            end
-        end
-        data.windings(w).wire_type = sel_wire;
-        set(findobj(fig, 'Tag', sprintf('wire_type_%d', w)), ...
-            'String', wire_list, 'Value', find(strcmp(wire_list, sel_wire), 1));
-
-        set(findobj(fig, 'Tag', sprintf('wire_std_%d', w)), ...
-            'String', data.wire_options.standards, 'Value', 1);
-        set(findobj(fig, 'Tag', sprintf('wire_diam_%d', w)), ...
-            'String', data.wire_options.cond_diameters, 'Value', 1);
-        set(findobj(fig, 'Tag', sprintf('wire_coat_%d', w)), ...
-            'String', data.wire_options.coatings, 'Value', 1);
-
-        update_wire_info_fields(fig, data, w);
-    end
-
-    set(findobj(fig, 'Tag', 'core_info'), 'String', get_core_info_text(data));
-    set(findobj(fig, 'Tag', 'material_info'), 'String', get_material_info_text(data));
-
-    update_all_summaries(fig, data);
     update_visualization(data);
 end
 
@@ -2857,7 +2545,7 @@ function visualize_openmagnetics(data, ax)
         python_cmd = 'python';
         venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
         if exist(venv_python, 'file')
-            python_cmd = ['"' venv_python '"'];
+            python_cmd = ['"' strrep(venv_python, '\', '/') '"'];
         end
 
         % Add stderr redirection (2>&1) to capture ModuleNotFoundError
@@ -2896,14 +2584,19 @@ function visualize_openmagnetics(data, ax)
              [~, py_paths_str] = system('where python');
              % Split by newlines
              py_paths = strsplit(strtrim(py_paths_str), char(10));
+             found_non_module_error = false;
              for i = 1:length(py_paths)
                  p = strtrim(py_paths{i});
                  if isempty(p); continue; end
                  % Skip Octave bundled python or the one we just tried (if it was 'python')
-                 if ~isempty(strfind(lower(p), 'octave')) || ~isempty(strfind(lower(p), 'usr\bin'))
+                 if ~isempty(strfind(lower(p), 'octave')) || ...
+                         ~isempty(strfind(lower(p), 'usr\bin')) || ...
+                         ~isempty(strfind(lower(p), 'usr/bin'))
                      continue;
                  end
-                 
+                 % Convert backslashes for MSYS shell compatibility
+                 p = strrep(p, '\', '/');
+                  
                  fprintf('[OM_VIZ] Trying alternative python: %s\n', p);
                  cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script_name, config_file_name);
                  [status_alt, output_alt] = system(cmd_alt);
@@ -2913,10 +2606,21 @@ function visualize_openmagnetics(data, ax)
                      fprintf('[OM_VIZ] Success using alternative python.\n');
                      break;
                  else
+                     alt_module_error = ~isempty(strfind(output_alt, 'ModuleNotFoundError')) || ...
+                                       ~isempty(strfind(output_alt, 'ImportError')) || ...
+                                       ~isempty(strfind(output_alt, 'No module named'));
+                     if ~alt_module_error
+                         status = status_alt;
+                         output = output_alt;
+                         found_non_module_error = true;
+                     end
                      fprintf('[OM_VIZ] Alternative python failed (exit=%d): %s\n', status_alt, strtrim(output_alt));
+                     if found_non_module_error
+                         break;
+                     end
                  end
              end
-        end
+         end
 
         fprintf('[OM_VIZ] Python exit code: %d\n', status);
         fprintf('[OM_VIZ] Python output: "%s"\n', strtrim(output));
@@ -2963,12 +2667,15 @@ function visualize_openmagnetics(data, ax)
             guidata(fig, data);
         end
         cwf = get_cwf_window_metrics(data);
-        if om.area_m2 <= 0
-            om = cwf;
+        if om.area_m2 > 0
+            set_vis_metrics_text(data, sprintf( ...
+                'Window area [mm^2]  CWF gross: %.2f  |  OM: %.2f  |  usable: %.2f', ...
+                cwf.area_m2*1e6, om.area_m2*1e6, cwf.usable_area_m2*1e6));
+        else
+            set_vis_metrics_text(data, sprintf( ...
+                'Window area [mm^2]  CWF gross: %.2f  |  OM: n/a (no bobbin window)  |  usable: %.2f', ...
+                cwf.area_m2*1e6, cwf.usable_area_m2*1e6));
         end
-        set_vis_metrics_text(data, sprintf( ...
-            'Window area [mm^2]  CWF gross: %.2f  |  OM: %.2f  |  usable: %.2f', ...
-            cwf.area_m2*1e6, om.area_m2*1e6, cwf.usable_area_m2*1e6));
 
         % Update status
         core_name = config.core_shape;
@@ -2983,9 +2690,13 @@ function visualize_openmagnetics(data, ax)
             end
         catch
         end
+        om_area_str = 'n/a';
+        if om.area_m2 > 0
+            om_area_str = sprintf('%.2f mm^2', om.area_m2*1e6);
+        end
         set(info_ctrl, 'String', ...
-            sprintf('OpenMagnetics: %s%s | OM window: %.2f mm^2%s', ...
-                core_name, gap_str, om.area_m2*1e6, wind_mode), ...
+            sprintf('OpenMagnetics: %s%s | OM window: %s%s', ...
+                core_name, gap_str, om_area_str, wind_mode), ...
             'BackgroundColor', [0.85 0.95 0.85]);
 
     catch ME
@@ -2994,13 +2705,18 @@ function visualize_openmagnetics(data, ax)
         if ~isempty(ME.stack)
             fprintf('[OM_VIZ]   at %s line %d\n', ME.stack(1).name, ME.stack(1).line);
         end
-        text(ax, 0.5, 0.5, ...
-            sprintf('OpenMagnetics view unavailable:\n%s\n\nFalling back to Core Window Fit', ME.message), ...
-            'HorizontalAlignment', 'center', 'FontSize', 9, ...
-            'Units', 'normalized', 'Color', [0.6 0.1 0.1]);
+        cla(ax);
+        visualize_core_window(data, ax);
+        vis_mode_ctrl = findobj(fig, 'Tag', 'vis_mode');
+        if ~isempty(vis_mode_ctrl)
+            try
+                set(vis_mode_ctrl, 'Value', 2);
+            catch
+            end
+        end
         set(info_ctrl, 'String', ...
-            sprintf('OM View failed: %s', ME.message), ...
-            'BackgroundColor', [1.0 0.85 0.85]);
+            sprintf('OM View failed (showing Core Window Fit): %s', ME.message), ...
+            'BackgroundColor', [1.0 0.9 0.8]);
         set_vis_metrics_text(data, '');
     end
 end
@@ -3011,8 +2727,17 @@ function config = build_om_viz_config(data)
 
     % Get original core shape name (with spaces/slashes)
     core_name = data.selected_core;
+    core_aliases = {};
     if isfield(data.cores, core_name) && isfield(data.cores.(core_name), 'name')
         core_name = data.cores.(core_name).name;
+    end
+    if isfield(data.cores, data.selected_core) && isfield(data.cores.(data.selected_core), 'aliases')
+        aliases = data.cores.(data.selected_core).aliases;
+        if ischar(aliases)
+            core_aliases = {aliases};
+        elseif iscell(aliases)
+            core_aliases = aliases;
+        end
     end
 
     % Get original material name
@@ -3084,6 +2809,8 @@ function config = build_om_viz_config(data)
 
     config = struct();
     config.core_shape = core_name;
+    config.core_shape_key = data.selected_core;
+    config.core_shape_aliases = core_aliases;
     config.material = mat_name;
     config.gapping = gapping;
     config.windings = windings;
@@ -4125,6 +3852,14 @@ function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_
         op_runs(oi).source_index = op_idx;
         op_runs(oi).plot_results = plot_results;
         op_runs(oi).plot_conductors = plot_conductors;
+        % Keep operating-point context for result reporting (best/worst case details).
+        op_runs(oi).line_scale = get_struct_numeric(op, 'line_scale', NaN);
+        op_runs(oi).load_scale = get_struct_numeric(op, 'load_scale', NaN);
+        op_runs(oi).duty = get_struct_numeric(op, 'duty', NaN);
+        op_runs(oi).frequency_hz = get_struct_numeric(op, 'frequency_hz', data.f);
+        op_runs(oi).conduction_mode = get_struct_string(op, 'conduction_mode', 'n/a');
+        op_runs(oi).rms_currents_a = to_numeric_vector(get_struct_field(op, 'rms_currents_a', []), n_w, zeros(n_w, 1));
+        op_runs(oi).rms_voltages_v = to_numeric_vector(get_struct_field(op, 'rms_voltages_v', []), n_w, zeros(n_w, 1));
     end
 
     losses = zeros(1, numel(op_runs));
@@ -4262,6 +3997,55 @@ function vec = to_numeric_vector(value, n, default_vec)
     m = min(n, numel(vals));
     if m > 0
         vec(1:m) = vals(1:m);
+    end
+end
+
+function val = get_struct_field(s, field_name, default_val)
+    val = default_val;
+    if isstruct(s) && isfield(s, field_name)
+        val = s.(field_name);
+    end
+end
+
+function v = get_struct_numeric(s, field_name, default_val)
+    v = default_val;
+    if ~(isstruct(s) && isfield(s, field_name))
+        return;
+    end
+    raw = s.(field_name);
+    if isnumeric(raw)
+        if isempty(raw)
+            return;
+        end
+        v = double(raw(1));
+        return;
+    end
+    if ischar(raw) || isstring(raw)
+        tmp = str2double(char(raw));
+        if ~isnan(tmp)
+            v = tmp;
+        end
+    end
+end
+
+function txt = get_struct_string(s, field_name, default_val)
+    txt = default_val;
+    if ~(isstruct(s) && isfield(s, field_name))
+        return;
+    end
+    raw = s.(field_name);
+    if ischar(raw)
+        txt = raw;
+    elseif isstring(raw)
+        txt = char(raw);
+    end
+end
+
+function txt = format_numeric_or_na(v, fmt)
+    if isnumeric(v) && isfinite(v)
+        txt = sprintf(fmt, v);
+    else
+        txt = 'n/a';
     end
 end
 
@@ -4713,6 +4497,9 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
     best_op_idx = 0;
     worst_total_loss_display = NaN;
     best_total_loss_display = NaN;
+    selected_op_run = struct();
+    worst_op_run = struct();
+    best_op_run = struct();
     if isstruct(analysis_run) && isfield(analysis_run, 'winding_ac_loss') && ~isempty(analysis_run.winding_ac_loss)
         worst_winding_losses = analysis_run.winding_ac_loss(:);
         worst_winding_Pdc = analysis_run.winding_dc_loss(:);
@@ -4829,6 +4616,34 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
         best_total_loss_display = total_loss_display;
     end
 
+    if isstruct(analysis_run) && isfield(analysis_run, 'operating_points') && ~isempty(analysis_run.operating_points)
+        op_runs_all = analysis_run.operating_points;
+        if iscell(op_runs_all)
+            try
+                op_runs_all = [op_runs_all{:}];
+            catch
+                op_runs_all = struct([]);
+            end
+        end
+        if isstruct(op_runs_all) && ~isempty(op_runs_all)
+            worst_idx_run = 1;
+            best_idx_run = 1;
+            if isfield(analysis_run, 'worst_index')
+                worst_idx_run = max(1, min(numel(op_runs_all), round(double(analysis_run.worst_index))));
+            end
+            if isfield(analysis_run, 'best_index')
+                best_idx_run = max(1, min(numel(op_runs_all), round(double(analysis_run.best_index))));
+            end
+            worst_op_run = op_runs_all(worst_idx_run);
+            best_op_run = op_runs_all(best_idx_run);
+            if selected_case == 2 && has_best_case
+                selected_op_run = best_op_run;
+            else
+                selected_op_run = worst_op_run;
+            end
+        end
+    end
+
     annotation('textbox', [0 0.96 1 0.04], ...
         'String', sprintf('Analysis Results @ %.0f kHz', data.f/1e3), ...
         'EdgeColor', 'none', 'HorizontalAlignment', 'center', ...
@@ -4860,23 +4675,8 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
             'Callback', @results_case_dropdown_callback);
     end
 
-    if op_total_count > 0
-        op_msg = sprintf('Operating points: %d/%d evaluated | Current plot: %s-case (%s [idx %d])', ...
-            op_eval_count, op_total_count, current_case_label, current_op_name, current_op_idx);
-        annotation('textbox', [0.02 0.905 0.96 0.022], ...
-            'String', op_msg, 'EdgeColor', 'none', ...
-            'HorizontalAlignment', 'left', 'FontSize', 9, ...
-            'Color', [0.20 0.20 0.20]);
-        if ~isnan(best_total_loss_display)
-            loss_msg = sprintf('Worst-case: %.4f W (%s [idx %d]) | Best-case: %.4f W (%s [idx %d])', ...
-                worst_total_loss_display, worst_op_name, worst_op_idx, ...
-                best_total_loss_display, best_op_name, best_op_idx);
-            annotation('textbox', [0.02 0.885 0.96 0.02], ...
-                'String', loss_msg, 'EdgeColor', 'none', ...
-                'HorizontalAlignment', 'left', 'FontSize', 9, ...
-                'Color', [0.10 0.40 0.10]);
-        end
-    end
+    % Operating-point details are shown in the "Core & Configuration" panel
+    % to avoid overlap with the top-left plots.
 
     plot_results = results;
     if isstruct(analysis_run)
@@ -4887,30 +4687,35 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
         end
     end
 
-    subplot(2,3,1);
+    ax1 = axes('Position', [0.06 0.53 0.27 0.30]);
+    axes(ax1); %#ok<LAXES>
     plot_current_density(geom, plot_results);
     title(sprintf('Current Density (%s Case)', current_case_label));
 
-    subplot(2,3,2);
+    ax2 = axes('Position', [0.37 0.53 0.27 0.30]);
+    axes(ax2); %#ok<LAXES>
     plot_loss_density(geom, plot_results);
     title(sprintf('Loss Density (%s Case)', current_case_label));
 
-    subplot(2,3,3);
+    ax3 = axes('Position', [0.68 0.53 0.27 0.30]);
+    axes(ax3); %#ok<LAXES>
     bar([winding_Pdc, winding_losses]*1e3);
     set(gca, 'XTickLabel', {data.windings.name});
     ylabel('Loss (mW)');
-    legend('DC Loss (ideal)', 'PEEC Harmonic Loss', 'Location', 'best');
+    legend('DC Loss', 'AC Loss', 'Location', 'best');
     title(sprintf('Winding Loss Comparison (%s Case)', current_case_label));
     grid on;
 
-    subplot(2,3,4);
+    ax4 = axes('Position', [0.06 0.08 0.27 0.30]);
+    axes(ax4); %#ok<LAXES>
     bar(rac_rdc);
     set(gca, 'XTickLabel', {data.windings.name});
     ylabel('R_{AC}/R_{DC}');
     title(sprintf('AC Resistance Factor (%s Case)', current_case_label));
     grid on;
 
-    subplot(2,3,5);
+    ax5 = axes('Position', [0.37 0.08 0.27 0.30]);
+    axes(ax5); %#ok<LAXES>
     axis off;
     text(0.05, 0.95, sprintf('Loss Summary (%s Case)', current_case_label), 'FontSize', 12, 'FontWeight', 'bold');
     y_pos = 0.85;
@@ -4940,97 +4745,72 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
     text(0.05, y_pos, sprintf('PEEC Total Loss: %.4f W', total_loss_display), ...
         'FontSize', 11, 'FontWeight', 'bold');
 
-    subplot(2,3,6);
+    ax6 = axes('Position', [0.68 0.08 0.27 0.30]);
+    axes(ax6); %#ok<LAXES>
     axis off;
     text(0.05, 0.95, 'Core & Configuration', 'FontSize', 12, 'FontWeight', 'bold');
-    text(0.05, 0.85, sprintf('Core: %s', data.selected_core), 'FontSize', 9);
-    text(0.05, 0.75, sprintf('Frequency: %.0f kHz', data.f/1e3), 'FontSize', 9);
+    y_cfg = 0.87;
+
+    text(0.05, y_cfg, sprintf('Core: %s', data.selected_core), 'FontSize', 9); y_cfg = y_cfg - 0.08;
+    text(0.05, y_cfg, sprintf('Frequency: %.0f kHz', data.f/1e3), 'FontSize', 9); y_cfg = y_cfg - 0.08;
     if isfield(analysis_meta, 'requested_source')
-        text(0.05, 0.68, sprintf('Requested source: %s', upper(char(analysis_meta.requested_source))), 'FontSize', 9);
+        text(0.05, y_cfg, sprintf('Requested source: %s', upper(char(analysis_meta.requested_source))), 'FontSize', 9);
+        y_cfg = y_cfg - 0.06;
     end
     if isfield(analysis_meta, 'used_source')
-        text(0.05, 0.62, sprintf('Used source: %s', upper(char(analysis_meta.used_source))), 'FontSize', 9);
+        text(0.05, y_cfg, sprintf('Used source: %s', upper(char(analysis_meta.used_source))), 'FontSize', 9);
+        y_cfg = y_cfg - 0.08;
     end
+
+    if op_total_count > 0
+        text(0.05, y_cfg, sprintf('Operating points: %d/%d evaluated', op_eval_count, op_total_count), ...
+            'FontSize', 9, 'FontWeight', 'bold');
+        y_cfg = y_cfg - 0.07;
+    end
+    text(0.05, y_cfg, sprintf('%s-case plot: %s [idx %d]', current_case_label, current_op_name, current_op_idx), ...
+        'FontSize', 9, 'Color', [0.10 0.35 0.10]);
+    y_cfg = y_cfg - 0.07;
+
+    if ~isnan(worst_total_loss_display) && ~isnan(best_total_loss_display)
+        text(0.05, y_cfg, sprintf('Worst: %.4f W | Best: %.4f W', ...
+            worst_total_loss_display, best_total_loss_display), ...
+            'FontSize', 9);
+        y_cfg = y_cfg - 0.07;
+        text(0.05, y_cfg, sprintf('Worst OP: %s [idx %d] | Best OP: %s [idx %d]', ...
+            worst_op_name, worst_op_idx, best_op_name, best_op_idx), 'FontSize', 8);
+        y_cfg = y_cfg - 0.06;
+    end
+
+    if ~isempty(fieldnames(selected_op_run))
+        op_i = to_numeric_vector(get_struct_field(selected_op_run, 'rms_currents_a', []), data.n_windings, zeros(data.n_windings, 1));
+        op_v = to_numeric_vector(get_struct_field(selected_op_run, 'rms_voltages_v', []), data.n_windings, zeros(data.n_windings, 1));
+        op_duty = get_struct_numeric(selected_op_run, 'duty', NaN);
+        op_line = get_struct_numeric(selected_op_run, 'line_scale', NaN);
+        op_load = get_struct_numeric(selected_op_run, 'load_scale', NaN);
+        op_mode = get_struct_string(selected_op_run, 'conduction_mode', 'n/a');
+
+        text(0.05, y_cfg, 'Selected Operating Point:', 'FontSize', 9, 'FontWeight', 'bold');
+        y_cfg = y_cfg - 0.06;
+        text(0.05, y_cfg, sprintf('  Duty: %s | Mode: %s', format_numeric_or_na(op_duty, '%.3f'), op_mode), 'FontSize', 8);
+        y_cfg = y_cfg - 0.05;
+        text(0.05, y_cfg, sprintf('  Line scale: %s | Load scale: %s', ...
+            format_numeric_or_na(op_line, '%.2f'), format_numeric_or_na(op_load, '%.2f')), 'FontSize', 8);
+        y_cfg = y_cfg - 0.05;
+        if data.n_windings >= 1
+            text(0.05, y_cfg, sprintf('  Input V/I (RMS): %.2f V, %.3f A', op_v(1), op_i(1)), 'FontSize', 8);
+            y_cfg = y_cfg - 0.05;
+        end
+        if data.n_windings >= 2
+            text(0.05, y_cfg, sprintf('  Output V/I (RMS): %.2f V, %.3f A', op_v(2), op_i(2)), 'FontSize', 8);
+            y_cfg = y_cfg - 0.05;
+        end
+    end
+
     if isfield(analysis_meta, 'fallback_used') && analysis_meta.fallback_used
-        text(0.05, 0.56, 'Fallback: OM -> CWF', 'FontSize', 9, 'Color', [0.70 0.10 0.10], 'FontWeight', 'bold');
-        if isfield(analysis_meta, 'fallback_reason') && ~isempty(analysis_meta.fallback_reason)
-            msg = char(analysis_meta.fallback_reason);
-            if length(msg) > 60
-                msg = [msg(1:57) '...'];
-            end
-            text(0.05, 0.51, sprintf('Reason: %s', msg), 'FontSize', 8, 'Color', [0.70 0.10 0.10]);
-        end
+        text(0.05, y_cfg, 'Fallback: OM -> CWF', 'FontSize', 8, ...
+            'Color', [0.70 0.10 0.10], 'FontWeight', 'bold');
+        y_cfg = y_cfg - 0.05;
     end
-    if isfield(analysis_meta, 'debug_dump_path') && ~isempty(analysis_meta.debug_dump_path)
-        text(0.05, 0.46, sprintf('Debug dump: %s', analysis_meta.debug_dump_path), ...
-            'FontSize', 8, 'Color', [0.35 0.35 0.35], 'Interpreter', 'none');
-    end
-
-    if isfield(analysis_meta, 'excitation_source')
-        text(0.05, 0.40, sprintf('Excitation source: %s', upper(char(analysis_meta.excitation_source))), 'FontSize', 9);
-    end
-    if isfield(analysis_meta, 'excitation_summary') && ~isempty(analysis_meta.excitation_summary)
-        msg = char(analysis_meta.excitation_summary);
-        if length(msg) > 105
-            msg = [msg(1:102) '...'];
-        end
-        text(0.05, 0.35, msg, 'FontSize', 8);
-    end
-    mode_str = 'peec_only';
-    qual_str = 'STANDARD';
-    if isfield(analysis_meta, 'analysis_mode') && ~isempty(analysis_meta.analysis_mode)
-        mode_str = char(analysis_meta.analysis_mode);
-    end
-    if isfield(analysis_meta, 'quality_preset') && ~isempty(analysis_meta.quality_preset)
-        qual_str = upper(char(analysis_meta.quality_preset));
-    end
-    text(0.05, 0.30, sprintf('Analysis mode: %s | Quality: %s', mode_str, qual_str), 'FontSize', 8);
-    if isfield(analysis_meta, 'quality_summary') && ~isempty(analysis_meta.quality_summary)
-        q_msg = char(analysis_meta.quality_summary);
-        if length(q_msg) > 105
-            q_msg = [q_msg(1:102) '...'];
-        end
-        text(0.05, 0.28, q_msg, 'FontSize', 8, 'Color', [0.25 0.25 0.25]);
-    end
-
-    if isfield(analysis_meta, 'prescreen_used') && analysis_meta.prescreen_used
-        ps_msg = sprintf('OM pre-screen: %d points ranked, %d refined in PEEC', ...
-            analysis_meta.prescreen_scored_points, analysis_meta.prescreen_selected_points);
-        if isfield(analysis_meta, 'prescreen_summary') && ~isempty(analysis_meta.prescreen_summary)
-            ps_msg = sprintf('%s | %s', ps_msg, char(analysis_meta.prescreen_summary));
-        end
-        if length(ps_msg) > 110
-            ps_msg = [ps_msg(1:107) '...'];
-        end
-        text(0.05, 0.26, ps_msg, 'FontSize', 8, 'Color', [0.10 0.40 0.10]);
-    elseif isfield(analysis_meta, 'prescreen_fallback_used') && analysis_meta.prescreen_fallback_used
-        text(0.05, 0.26, 'OM pre-screen fallback: full PEEC sweep', ...
-            'FontSize', 8, 'Color', [0.70 0.10 0.10], 'FontWeight', 'bold');
-    end
-
-    if isfield(analysis_meta, 'excitation_fallback_used') && analysis_meta.excitation_fallback_used
-        text(0.05, 0.22, 'Excitation fallback: converter -> manual', ...
-            'FontSize', 8, 'Color', [0.70 0.10 0.10], 'FontWeight', 'bold');
-        if isfield(analysis_meta, 'excitation_fallback_reason') && ~isempty(analysis_meta.excitation_fallback_reason)
-            msg = char(analysis_meta.excitation_fallback_reason);
-            if length(msg) > 65
-                msg = [msg(1:62) '...'];
-            end
-            text(0.05, 0.18, sprintf('Reason: %s', msg), 'FontSize', 8, 'Color', [0.70 0.10 0.10]);
-        end
-    end
-
-    y_pos = 0.14;
-    for w = 1:data.n_windings
-        text(0.05, y_pos, sprintf('%s: %d x %s', ...
-            data.windings(w).name, data.windings(w).n_turns, ...
-            get_filar_name(data.windings(w).n_filar)), ...
-            'FontSize', 9, 'Color', data.winding_colors{w});
-        y_pos = y_pos - 0.08;
-    end
-
-    text(0.05, y_pos - 0.05, 'Data: Offline database', 'FontSize', 8, ...
-        'Color', [0.5 0.5 0.5]);
 
     replot_state = struct();
     replot_state.data = data;
@@ -5387,30 +5167,40 @@ function parse_om_svg(svg_str, ax, om_meta, data)
             cx = get_attr(tag, 'cx');
             cy = get_attr(tag, 'cy');
             r = get_attr(tag, 'r');
-            class_name = get_attr_str(tag, 'class');
-            [rgb, alpha, has_fill, known] = get_class_style(class_name, color_map);
+        class_name = get_attr_str(tag, 'class');
+        [rgb, alpha, has_fill, known, stroke_rgb, stroke_w, has_stroke] = get_class_style(class_name, color_map);
 
-            if ~isnan(cx) && ~isnan(cy) && ~isnan(r)
-                if tag_has_fill_none(tag) || (known && ~has_fill)
-                    continue;
+        if ~isnan(cx) && ~isnan(cy) && ~isnan(r)
+            is_no_fill = tag_has_fill_none(tag) || (known && ~has_fill);
+            if is_no_fill
+                if has_stroke
+                    draw_stroke_circle_local(cx, cy, r, stroke_rgb, stroke_w, alpha);
                 end
-                if ~(known && has_fill)
-                    rgb = get_default_color(class_name);
-                    alpha = 1.0;
-                end
-                theta = linspace(0, 2*pi, 30);
-                h = fill(ax, cx + r*cos(theta), cy + r*sin(theta), ...
-                    rgb, 'EdgeColor', 'none');
-                if alpha < 1.0
-                    try
-                        set(h, 'FaceAlpha', alpha);
-                    catch
-                    end
+                continue;
+            end
+            if ~(known && has_fill)
+                rgb = get_default_color(class_name);
+                alpha = 1.0;
+            end
+            theta = linspace(0, 2*pi, 30);
+            edge_color = 'none';
+            edge_w = 0.1;
+            if has_stroke
+                edge_color = stroke_rgb;
+                edge_w = max(0.1, min(stroke_w, 2.0));
+            end
+            h = fill(ax, cx + r*cos(theta), cy + r*sin(theta), ...
+                rgb, 'EdgeColor', edge_color, 'LineWidth', edge_w);
+            if alpha < 1.0
+                try
+                    set(h, 'FaceAlpha', alpha);
+                catch
                 end
             end
         end
     end
-    
+    end
+
     axis(ax, 'equal');
     apply_om_axes_mm(ax, vb, om_meta);
     title(ax, '');
@@ -5441,6 +5231,38 @@ function parse_om_svg(svg_str, ax, om_meta, data)
                 end
             end
         catch
+        end
+    end
+
+    function draw_stroke_circle_local(cx, cy, r, stroke_rgb, stroke_w, alpha_val)
+        if isempty(stroke_rgb)
+            stroke_rgb = [0 0 0];
+        end
+        if ~isfinite(stroke_w) || stroke_w <= 0
+            stroke_w = max(0.3, 0.05 * r);
+        end
+        if ~isfinite(alpha_val) || alpha_val <= 0
+            alpha_val = 1.0;
+        end
+
+        theta = linspace(0, 2*pi, 80);
+        r_outer = max(r + 0.5 * stroke_w, r);
+        r_inner = max(r - 0.5 * stroke_w, 0);
+        if r_inner > 0
+            xo = cx + r_outer * cos(theta);
+            yo = cy + r_outer * sin(theta);
+            xi = cx + r_inner * cos(theta(end:-1:1));
+            yi = cy + r_inner * sin(theta(end:-1:1));
+            hs = patch(ax, [xo, xi], [yo, yi], stroke_rgb, 'EdgeColor', 'none');
+        else
+            hs = fill(ax, cx + r_outer*cos(theta), cy + r_outer*sin(theta), ...
+                stroke_rgb, 'EdgeColor', 'none');
+        end
+        if alpha_val < 1.0
+            try
+                set(hs, 'FaceAlpha', alpha_val);
+            catch
+            end
         end
     end
 
@@ -5700,20 +5522,45 @@ function color_map = parse_css_colors(svg_str)
                 has_fill = true;
             end
         end
+        has_stroke = false;
+        stroke_rgb = [];
+        stroke_w = 0;
+        stroke_none = ~isempty(regexp(rule_body, 'stroke:\s*none', 'once'));
+        if ~stroke_none
+            stroke_match = regexp(rule_body, 'stroke:\s*#([0-9a-fA-F]{6})', 'tokens', 'once');
+            if ~isempty(stroke_match)
+                shex = stroke_match{1};
+                stroke_rgb = [hex2dec(shex(1:2)), hex2dec(shex(3:4)), hex2dec(shex(5:6))] / 255;
+                has_stroke = true;
+            end
+            stroke_w_match = regexp(rule_body, 'stroke-width:\s*([0-9.]+)', 'tokens', 'once');
+            if ~isempty(stroke_w_match)
+                stroke_w = str2double(stroke_w_match{1});
+            end
+            if ~isfinite(stroke_w) || stroke_w < 0
+                stroke_w = 0;
+            end
+            has_stroke = has_stroke && stroke_w > 0;
+        end
         opacity_match = regexp(rule_body, 'opacity:\s*([0-9.]+)', 'tokens', 'once');
         alpha = 1.0;
         if ~isempty(opacity_match)
             alpha = str2double(opacity_match{1});
         end
-        color_map.(safe_name) = struct('rgb', rgb, 'alpha', alpha, 'has_fill', has_fill);
+        color_map.(safe_name) = struct( ...
+            'rgb', rgb, 'alpha', alpha, 'has_fill', has_fill, ...
+            'stroke_rgb', stroke_rgb, 'stroke_w', stroke_w, 'has_stroke', has_stroke);
     end
 end
 
-function [rgb, alpha, has_fill, known] = get_class_style(class_name, color_map)
+function [rgb, alpha, has_fill, known, stroke_rgb, stroke_w, has_stroke] = get_class_style(class_name, color_map)
     rgb = [];
     alpha = 1.0;
     has_fill = true;
     known = false;
+    stroke_rgb = [];
+    stroke_w = 0;
+    has_stroke = false;
     safe_name = make_safe_field(class_name);
     if isfield(color_map, safe_name)
         entry = color_map.(safe_name);
@@ -5721,6 +5568,9 @@ function [rgb, alpha, has_fill, known] = get_class_style(class_name, color_map)
         if isfield(entry, 'alpha'); alpha = entry.alpha; end
         if isfield(entry, 'has_fill'); has_fill = entry.has_fill; end
         if isfield(entry, 'rgb'); rgb = entry.rgb; end
+        if isfield(entry, 'stroke_rgb'); stroke_rgb = entry.stroke_rgb; end
+        if isfield(entry, 'stroke_w'); stroke_w = entry.stroke_w; end
+        if isfield(entry, 'has_stroke'); has_stroke = entry.has_stroke; end
     end
 end
 

@@ -44,6 +44,158 @@ def ensure_dict(obj):
     return obj
 
 
+def is_exception_payload(obj):
+    if isinstance(obj, str):
+        return ('Exception:' in obj) or ('error' in obj.lower())
+    if isinstance(obj, dict):
+        for key in ('errorMessage', 'error'):
+            val = obj.get(key)
+            if isinstance(val, str) and val:
+                return True
+        data_val = obj.get('data')
+        if isinstance(data_val, str) and 'Exception:' in data_val:
+            return True
+    return False
+
+
+def raise_if_invalid(obj, label):
+    obj = ensure_dict(obj)
+    if is_exception_payload(obj):
+        if isinstance(obj, dict):
+            msg = obj.get('errorMessage') or obj.get('error') or obj.get('data')
+        else:
+            msg = str(obj)
+        raise RuntimeError(f'{label} failed: {msg}')
+    if not isinstance(obj, dict):
+        raise RuntimeError(f'{label} failed: unexpected payload type {type(obj).__name__}')
+    return obj
+
+
+def make_valid_name(raw):
+    if raw is None:
+        raw = ''
+    raw = str(raw)
+    name = re.sub(r'[^a-zA-Z0-9_]', '_', raw)
+    if not name:
+        name = 'Unknown'
+    if not name[0].isalpha():
+        name = 'W_' + name
+    return name
+
+
+def _as_string_list(value):
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        out = []
+        for v in value:
+            if isinstance(v, str) and v:
+                out.append(v)
+        return out
+    return []
+
+
+def _dedupe_keep_order(items):
+    seen = set()
+    out = []
+    for item in items:
+        if not item:
+            continue
+        key = item.strip()
+        if not key:
+            continue
+        key_l = key.lower()
+        if key_l in seen:
+            continue
+        seen.add(key_l)
+        out.append(key)
+    return out
+
+
+def _iter_available_shape_names():
+    names = []
+    try:
+        raw = ensure_dict(pm.get_available_core_shapes())
+        if isinstance(raw, list):
+            for entry in raw:
+                if isinstance(entry, str):
+                    names.append(entry)
+                elif isinstance(entry, dict):
+                    if isinstance(entry.get('name'), str):
+                        names.append(entry['name'])
+                    fd = entry.get('functionalDescription', {})
+                    if isinstance(fd, dict) and isinstance(fd.get('shape'), dict):
+                        nm = fd['shape'].get('name')
+                        if isinstance(nm, str):
+                            names.append(nm)
+        elif isinstance(raw, dict):
+            for k, v in raw.items():
+                if isinstance(k, str):
+                    names.append(k)
+                if isinstance(v, dict) and isinstance(v.get('name'), str):
+                    names.append(v['name'])
+    except Exception:
+        return []
+    return _dedupe_keep_order(names)
+
+
+def resolve_core_shape(core_shape_name, aliases=None, core_shape_key=None):
+    candidates = []
+    candidates.extend(_as_string_list(core_shape_name))
+    candidates.extend(_as_string_list(aliases))
+    candidates.extend(_as_string_list(core_shape_key))
+
+    # Helpful transformations for sanitized keys and alias variants.
+    transformed = []
+    for c in list(candidates):
+        transformed.append(c.replace('_', ' '))
+        transformed.append(c.replace('_', '/'))
+        transformed.append(c.replace('_', '-'))
+    candidates.extend(transformed)
+    candidates = _dedupe_keep_order(candidates)
+
+    for cand in candidates:
+        try:
+            shape = ensure_dict(pm.find_core_shape_by_name(cand))
+            if not is_exception_payload(shape):
+                return raise_if_invalid(shape, f'find_core_shape_by_name("{cand}")')
+        except Exception:
+            pass
+
+    # Fallback: match by the same sanitizer used in MATLAB/OM API bridge.
+    target_keys = set(make_valid_name(c) for c in candidates if c)
+    avail_names = _iter_available_shape_names()
+    for nm in avail_names:
+        if make_valid_name(nm) in target_keys:
+            shape = ensure_dict(pm.find_core_shape_by_name(nm))
+            return raise_if_invalid(shape, f'find_core_shape_by_name("{nm}")')
+
+    raise RuntimeError(f'Could not resolve core shape "{core_shape_name}" (aliases={aliases}, key={core_shape_key})')
+
+
+def resolve_material(material_name):
+    candidates = _dedupe_keep_order(_as_string_list(material_name))
+    for cand in candidates:
+        try:
+            mat = ensure_dict(pm.find_core_material_by_name(cand))
+            if not is_exception_payload(mat):
+                return raise_if_invalid(mat, f'find_core_material_by_name("{cand}")')
+        except Exception:
+            pass
+    raise RuntimeError(f'Could not resolve core material "{material_name}"')
+
+
+def infer_core_type(shape_obj):
+    family = str(shape_obj.get('family', '') or '').lower()
+    if family in ('t', 'r', 'toroid', 'toroid'):
+        return 'toroidal'
+    if family in ('p', 'pot'):
+        return 'closed shape'
+    return 'two-piece set'
+
+
 def is_valid_wire(wire_obj):
     if not isinstance(wire_obj, dict):
         return False
@@ -526,6 +678,8 @@ def build_magnetic_from_config(config):
     """Build full OpenMagnetics magnetic object from GUI config."""
 
     core_shape_name = config['core_shape']
+    core_shape_key = config.get('core_shape_key', '')
+    core_shape_aliases = config.get('core_shape_aliases', [])
     material_name = config['material']
     gapping = config.get('gapping', [])
     windings = config.get('windings', [])
@@ -560,27 +714,33 @@ def build_magnetic_from_config(config):
         'wind_error': ''
     }
 
-    # 1. Get shape and material as full dict objects
-    shape = pm.find_core_shape_by_name(core_shape_name)
-    material = pm.find_core_material_by_name(material_name)
+    # 1. Resolve shape and material as full dict objects
+    shape = resolve_core_shape(core_shape_name, core_shape_aliases, core_shape_key)
+    material = resolve_material(material_name)
 
     # 2. Build core functional description
+    core_type = infer_core_type(shape)
+    gapping_use = gapping if isinstance(gapping, list) else []
+    if core_type == 'toroidal' and gapping_use:
+        # Toroids cannot be gapped in OM core model.
+        gapping_use = []
+
     core_data = {
         'functionalDescription': {
             'name': 'gui_core',
-            'type': 'two-piece set',
+            'type': core_type,
             'shape': shape,
             'material': material,
-            'gapping': gapping if gapping else [],
+            'gapping': gapping_use,
             'numberStacks': 1
         }
     }
 
     # 3. Calculate full core data
-    core_full = ensure_dict(pm.calculate_core_data(core_data, True))
+    core_full = raise_if_invalid(pm.calculate_core_data(core_data, True), 'calculate_core_data')
 
     # 4. Create bobbin
-    bobbin = ensure_dict(pm.create_basic_bobbin(core_full, False))
+    bobbin = raise_if_invalid(pm.create_basic_bobbin(core_full, False), 'create_basic_bobbin')
 
     # 5. Build coil functional description
     coil_func = []
