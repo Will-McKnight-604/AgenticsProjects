@@ -6,3 +6,8 @@ nul
 
 # Projects folder
 Projects/
+PEEC_Script/MAS-*/
+
+# OpenMagnetics library source code (use pip install instead)
+PEEC_Script/MKF-main/
+PEEC_Script/PyOpenMagnetics-main/

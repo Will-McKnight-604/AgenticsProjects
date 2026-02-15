@@ -1627,44 +1627,82 @@ function data = display_recommendations(data, results)
     recs = results.recommendations;
     n = numel(recs);
 
-    % Ensure highest-scoring recommendations are shown first
-    scores = zeros(n, 1);
+    % Ensure highest-scoring recommendations are shown first (raw adviser score)
+    raw_scores = zeros(n, 1);
     for k = 1:n
-        if isfield(recs(k), 'score')
-            scores(k) = double(recs(k).score);
+        if isfield(recs(k), 'raw_score')
+            raw_scores(k) = double(recs(k).raw_score);
+        elseif isfield(recs(k), 'score')
+            raw_scores(k) = double(recs(k).score);
         end
     end
-    [~, order] = sort(scores, 'descend');
+    [~, order] = sort(raw_scores, 'descend');
     recs = recs(order);
+    raw_scores = raw_scores(order);
 
     % Build display strings
     items = cell(n, 1);
-    max_score = max(scores);
-    if max_score <= 0
-        max_score = 1;
+    max_raw = max(raw_scores);
+    if max_raw <= 0
+        max_raw = 1;
     end
     for k = 1:n
         r = recs(k);
         core_name = '?';
         material = '?';
         turns = '?';
-        score = 0;
+        raw_score = 0;
+        ui_score = NaN;
+        total_loss = 0;
+        core_loss = 0;
+        winding_loss = 0;
+        has_losses = false;
 
         if isfield(r, 'core_shape'), core_name = r.core_shape; end
         if isfield(r, 'material'), material = r.material; end
-        if isfield(r, 'primary_turns'), turns = sprintf('%d/%d', r.primary_turns, r.secondary_turns); end
-        if isfield(r, 'score'), score = r.score; end
+        if isfield(r, 'primary_turns') && isfield(r, 'secondary_turns')
+            turns = sprintf('%d/%d', r.primary_turns, r.secondary_turns);
+        elseif isfield(r, 'primary_turns')
+            turns = sprintf('%d', r.primary_turns);
+        end
+        if isfield(r, 'raw_score')
+            raw_score = r.raw_score;
+        elseif isfield(r, 'score')
+            raw_score = r.score;
+        end
+        if isfield(r, 'ui_score')
+            ui_score = r.ui_score;
+        elseif isfield(r, 'weighted_score')
+            ui_score = r.weighted_score;
+        end
+        if isfield(r, 'total_losses_w')
+            total_loss = double(r.total_losses_w);
+        end
+        if isfield(r, 'core_losses_w')
+            core_loss = double(r.core_losses_w);
+        end
+        if isfield(r, 'winding_losses_w')
+            winding_loss = double(r.winding_losses_w);
+        end
+        has_losses = (total_loss > 0);
 
-        rel_pct = 100 * score / max_score;
-        items{k} = sprintf('#%d  %s  |  %s  |  Turns: %s  |  Score: %.2f (%.0f%% of best)', ...
-                           k, core_name, material, turns, score, rel_pct);
+        rel_pct = 100 * raw_score / max_raw;
+
+        % Build the display line
+        line = sprintf('#%d  %s  |  %s  |  Turns: %s', k, core_name, material, turns);
+        if has_losses
+            line = sprintf('%s  |  OM Loss: %.2fW (Core:%.2f + Wind:%.2f)', ...
+                           line, total_loss, core_loss, winding_loss);
+        end
+        line = sprintf('%s  |  Score: %.0f pts (%.0f%%)', line, raw_score * 100, rel_pct);
+        items{k} = line;
     end
 
     [sel, ok] = listdlg('ListString', items, ...
                          'SelectionMode', 'single', ...
                          'Name', 'Select Design Recommendation', ...
-                         'ListSize', [600, 300], ...
-                         'PromptString', 'Choose a recommended design:');
+                         'ListSize', [1100, 320], ...
+                         'PromptString', 'Choose a recommended design (losses via OpenMagnetics Core + Winding calculation):');
 
     if ok && ~isempty(sel)
         data.rec.selected_idx = sel;

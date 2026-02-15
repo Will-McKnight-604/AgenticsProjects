@@ -35,6 +35,12 @@ function interactive_winding_designer(design_spec)
     data.section_order = '12';
     data.om_window_cache = struct();
 
+    % OM winding layout defaults (matches OpenMagnetics native controls)
+    data.om_winding_orientation = 'contiguous';   % 'contiguous' or 'overlapping'
+    data.om_section_alignment = 'inner or top';    % 'centered','inner or top','outer or bottom','spread'
+    data.om_turns_alignment = {};                  % per-winding: cell array of alignment strings
+    data.om_proportions = {};                      % per-winding: cell array of proportion values (0-1)
+
     % Default winding parameters
     data.windings(1).name = 'Primary';
     data.windings(1).n_turns = 10;
@@ -55,6 +61,14 @@ function interactive_winding_designer(design_spec)
     data.windings(2).wire_shape = 'round';
     data.windings(2).voltage = 0;
     data.windings(2).wire_insulation = 'standard';
+
+    % Initialize per-winding OM alignment defaults
+    data.om_turns_alignment = cell(1, data.n_windings);
+    data.om_proportions = cell(1, data.n_windings);
+    for ww = 1:data.n_windings
+        data.om_turns_alignment{ww} = 'spread';
+        data.om_proportions{ww} = 1.0 / data.n_windings;
+    end
 
     % Default supplier & core selection
     if ~isempty(data.suppliers)
@@ -173,6 +187,14 @@ function interactive_winding_designer(design_spec)
 
     % Build GUI layout
     build_gui(data);
+
+    % Default to OM view when launched from topology wizard
+    if ~isempty(design_spec) && isstruct(design_spec)
+        vis_ctrl = findobj(data.fig_gui, 'Tag', 'vis_mode');
+        if ~isempty(vis_ctrl)
+            set(vis_ctrl, 'Value', 3);  % OpenMagnetics View
+        end
+    end
 
     % Initial visualization
     update_visualization(data);
@@ -349,29 +371,13 @@ function data = apply_design_spec(data, spec)
         end
 
         % Wire and turns from recommendation
+        % Strategy: (1) try direct name match, (2) try Python-resolved match,
+        % (3) show picker dialog as fallback.
         if isfield(rec, 'primary_wire') && ~isempty(rec.primary_wire)
-            wire_name = sanitize_field_name(rec.primary_wire);
-            if isfield(data.wires, wire_name)
-                data.windings(1).wire_type = wire_name;
-                [w, h, shape] = data.api.wire_to_conductor_dims(wire_name);
-                data.width = w;
-                data.height = h;
-                data.windings(1).wire_shape = shape;
-                pri_wire_applied = true;
-            else
-                fprintf('[DESIGN_SPEC] Primary wire not found in local DB: "%s" (key: %s)\n', rec.primary_wire, wire_name);
-            end
+            [pri_wire_applied, data] = apply_wire_from_rec(data, rec, 'primary', 1);
         end
         if isfield(rec, 'secondary_wire') && ~isempty(rec.secondary_wire) && data.n_windings >= 2
-            wire_name = sanitize_field_name(rec.secondary_wire);
-            if isfield(data.wires, wire_name)
-                data.windings(2).wire_type = wire_name;
-                [~, ~, shape2] = data.api.wire_to_conductor_dims(wire_name);
-                data.windings(2).wire_shape = shape2;
-                sec_wire_applied = true;
-            else
-                fprintf('[DESIGN_SPEC] Secondary wire not found in local DB: "%s" (key: %s)\n', rec.secondary_wire, wire_name);
-            end
+            [sec_wire_applied, data] = apply_wire_from_rec(data, rec, 'secondary', 2);
         end
 
         % Turns from recommendation override computed turns
@@ -451,6 +457,117 @@ function name = sanitize_field_name(raw)
     end
     if ~isletter(name(1))
         name = ['W_' name];
+    end
+end
+
+
+function [applied, data] = apply_wire_from_rec(data, rec, prefix, winding_idx)
+    % Try to apply a wire from a recommendation to a winding.
+    % prefix: 'primary' or 'secondary'
+    % winding_idx: 1 or 2
+    %
+    % Strategy:
+    %   1. Direct name match in local DB (sanitize advisor wire name)
+    %   2. Python-resolved match (prefix_wire_matched field)
+    %   3. Fallback: show wire picker dialog
+
+    applied = false;
+    raw_wire = rec.([prefix '_wire']);
+
+    % --- Attempt 1: direct match ---
+    wire_key = sanitize_field_name(raw_wire);
+    if isfield(data.wires, wire_key)
+        data = set_winding_wire(data, winding_idx, wire_key);
+        applied = true;
+        fprintf('[DESIGN_SPEC] %s wire matched directly: "%s"\n', prefix, wire_key);
+        return;
+    end
+
+    % --- Attempt 2: Python-resolved match ---
+    matched_field = [prefix '_wire_matched'];
+    if isfield(rec, matched_field) && ~isempty(rec.(matched_field))
+        matched_key = sanitize_field_name(rec.(matched_field));
+        if isfield(data.wires, matched_key)
+            data = set_winding_wire(data, winding_idx, matched_key);
+            applied = true;
+            fprintf('[DESIGN_SPEC] %s wire auto-matched: "%s" -> "%s"\n', ...
+                    prefix, raw_wire, matched_key);
+            return;
+        end
+    end
+
+    % --- Attempt 3: dialog fallback ---
+    fprintf('[DESIGN_SPEC] %s wire not found in local DB: "%s"\n', prefix, raw_wire);
+
+    % Determine wire type hint from wire_info if available
+    type_hint = '';
+    info_field = [prefix '_wire_info'];
+    if isfield(rec, info_field) && isstruct(rec.(info_field))
+        wi = rec.(info_field);
+        if isfield(wi, 'wire_type')
+            type_hint = wi.wire_type;
+        end
+    end
+
+    picked = pick_wire_dialog(data, raw_wire, type_hint);
+    if ~isempty(picked) && isfield(data.wires, picked)
+        data = set_winding_wire(data, winding_idx, picked);
+        applied = true;
+        fprintf('[DESIGN_SPEC] %s wire selected by user: "%s"\n', prefix, picked);
+    else
+        fprintf('[DESIGN_SPEC] %s wire: user cancelled or no selection\n', prefix);
+    end
+end
+
+
+function data = set_winding_wire(data, winding_idx, wire_key)
+    % Apply a wire key to a winding index, updating conductor dimensions.
+    data.windings(winding_idx).wire_type = wire_key;
+    [w, h, shape] = data.api.wire_to_conductor_dims(wire_key);
+    if winding_idx == 1
+        data.width = w;
+        data.height = h;
+    end
+    data.windings(winding_idx).wire_shape = shape;
+end
+
+
+function picked = pick_wire_dialog(data, original_name, type_hint)
+    % Show a wire picker dialog when automatic matching fails.
+    % Filters wire list by type_hint if available.
+    % Returns the selected wire key, or '' if cancelled.
+
+    picked = '';
+    all_wires = fieldnames(data.wires);
+    if isempty(all_wires)
+        return;
+    end
+
+    % Filter by type hint if provided
+    filtered = all_wires;
+    if ~isempty(type_hint)
+        type_lower = lower(type_hint);
+        match_idx = false(size(all_wires));
+        for k = 1:numel(all_wires)
+            if ~isempty(strfind(lower(all_wires{k}), type_lower))
+                match_idx(k) = true;
+            end
+        end
+        if any(match_idx)
+            filtered = all_wires(match_idx);
+        end
+    end
+
+    prompt_str = sprintf('Advisor wire "%s" not found.\nSelect a %s wire from the local database:', ...
+                         original_name, type_hint);
+    [sel, ok] = listdlg('ListString', filtered, ...
+                         'SelectionMode', 'single', ...
+                         'Name', 'Wire Selection', ...
+                         'ListSize', [600, 400], ...
+                         'PromptString', prompt_str);
+
+    if ok && ~isempty(sel)
+        picked = filtered{sel};
     end
 end
 
@@ -985,19 +1102,13 @@ function build_gui(data)
               'Tag', 'vis_mode', ...
               'Callback', @change_vis_mode);
 
-    uicontrol('Parent', vis_panel, 'Style', 'text', ...
-              'String', 'Packing:', ...
+    uicontrol('Parent', vis_panel, 'Style', 'pushbutton', ...
+              'String', 'Winding Options...', ...
               'Units', 'normalized', ...
-              'Position', [0.62 0.92 0.14 0.05], ...
-              'HorizontalAlignment', 'left');
-
-    uicontrol('Parent', vis_panel, 'Style', 'popupmenu', ...
-              'String', {'Layered', 'Orthocyclic', 'Random'}, ...
-              'Units', 'normalized', ...
-              'Position', [0.76 0.92 0.22 0.06], ...
-              'Value', 1, ...
-              'Tag', 'packing_pattern', ...
-              'Callback', @change_packing);
+              'Position', [0.62 0.92 0.36 0.06], ...
+              'FontSize', 9, ...
+              'Tag', 'btn_winding_options', ...
+              'Callback', @cb_open_winding_options);
 
     uicontrol('Parent', vis_panel, 'Style', 'text', ...
               'String', 'Section Interl. Order:', ...
@@ -2450,10 +2561,10 @@ function change_vis_mode(~, ~)
     update_visualization(data);
 end
 
-function change_packing(~, ~)
+function cb_open_winding_options(~, ~)
     fig = gcbf;
     data = guidata(fig);
-    update_visualization(data);
+    open_winding_options_dialog(data);
 end
 
 function update_section_order(src, ~)
@@ -2461,6 +2572,248 @@ function update_section_order(src, ~)
     data = guidata(fig);
     data.section_order = get(src, 'String');
     guidata(fig, data);
+    update_visualization(data);
+end
+
+% ===============================================================
+% WINDING OPTIONS DIALOG (OM-native controls)
+% ===============================================================
+
+function open_winding_options_dialog(data)
+% Opens a popup window with OpenMagnetics-native winding layout controls.
+% Global: Windings Orientation, Section Alignment, Interleave Order, Proportions
+% Per-winding: Turns Alignment
+% Layout mirrors the OpenMagnetics web tool.
+
+    parent_fig = data.fig_gui;
+    n_w = data.n_windings;
+
+    % Calculate dialog size
+    row_h = 32;          % height per row of controls
+    hdr_h = 28;          % height for winding header bar
+    global_rows = 3 + n_w;  % orientation, section alignment, interleave order + proportions
+    per_w_rows = 1;      % turns alignment only (proportions moved to global)
+    per_w_block = hdr_h + per_w_rows * row_h + 12;
+
+    top_pad = 20;
+    bot_pad = 60;        % space for Apply button
+    sep = 12;            % gap between sections
+
+    dlg_h = top_pad + global_rows * row_h + sep + n_w * per_w_block + bot_pad;
+    dlg_w = 460;
+
+    % Position dialog centered on parent
+    parent_pos = get(parent_fig, 'Position');
+    dlg_x = parent_pos(1) + (parent_pos(3) - dlg_w) / 2;
+    dlg_y = parent_pos(2) + (parent_pos(4) - dlg_h) / 2;
+
+    dlg = figure('Name', 'Winding Layout Options', ...
+                 'Position', [dlg_x dlg_y dlg_w dlg_h], ...
+                 'NumberTitle', 'off', ...
+                 'MenuBar', 'none', ...
+                 'Resize', 'off');
+
+    % Store handles for retrieval on Apply
+    h = struct();
+    h.parent_fig = parent_fig;
+    h.n_windings = n_w;
+
+    lbl_x = 15;
+    ctrl_x = 210;
+    ctrl_w = 220;
+
+    % ---- Global Controls ----
+    y = dlg_h - top_pad - 5;
+
+    uicontrol('Parent', dlg, 'Style', 'text', ...
+              'String', 'Windings Orientation:', ...
+              'Position', [lbl_x y 180 20], ...
+              'HorizontalAlignment', 'left', 'FontSize', 9);
+    orient_opts = {'contiguous', 'overlapping'};
+    orient_val = 1;
+    for k = 1:numel(orient_opts)
+        if strcmp(orient_opts{k}, data.om_winding_orientation)
+            orient_val = k;
+        end
+    end
+    h.pop_orientation = uicontrol('Parent', dlg, 'Style', 'popupmenu', ...
+              'String', orient_opts, ...
+              'Position', [ctrl_x y-2 ctrl_w 25], ...
+              'Value', orient_val, 'FontSize', 9);
+
+    y = y - row_h;
+    uicontrol('Parent', dlg, 'Style', 'text', ...
+              'String', 'Section Alignment:', ...
+              'Position', [lbl_x y 180 20], ...
+              'HorizontalAlignment', 'left', 'FontSize', 9);
+    align_opts = {'centered', 'inner or top', 'outer or bottom', 'spread'};
+    align_val = 1;
+    for k = 1:numel(align_opts)
+        if strcmp(align_opts{k}, data.om_section_alignment)
+            align_val = k;
+        end
+    end
+    h.pop_section_align = uicontrol('Parent', dlg, 'Style', 'popupmenu', ...
+              'String', align_opts, ...
+              'Position', [ctrl_x y-2 ctrl_w 25], ...
+              'Value', align_val, 'FontSize', 9);
+
+    y = y - row_h;
+    uicontrol('Parent', dlg, 'Style', 'text', ...
+              'String', 'Section Interleave Order:', ...
+              'Position', [lbl_x y 180 20], ...
+              'HorizontalAlignment', 'left', 'FontSize', 9);
+    h.edit_section_order = uicontrol('Parent', dlg, 'Style', 'edit', ...
+              'String', data.section_order, ...
+              'Position', [ctrl_x y-2 ctrl_w 25], ...
+              'FontSize', 9);
+
+    % ---- Global Proportions (one row per winding) ----
+    h.edit_proportion = cell(1, n_w);
+    for p = 1:n_w
+        y = y - row_h;
+        wname = 'Primary';
+        if p == 2; wname = 'Secondary';
+        elseif p > 2; wname = sprintf('Winding %d', p);
+        end
+        if p <= numel(data.windings)
+            wname = data.windings(p).name;
+        end
+        uicontrol('Parent', dlg, 'Style', 'text', ...
+                  'String', sprintf('%s Proportion:', wname), ...
+                  'Position', [lbl_x y 180 20], ...
+                  'HorizontalAlignment', 'left', 'FontSize', 9);
+        prop_val = 100.0 / n_w;
+        if numel(data.om_proportions) >= p
+            prop_val = data.om_proportions{p} * 100;
+        end
+        h.edit_proportion{p} = uicontrol('Parent', dlg, 'Style', 'edit', ...
+                  'String', sprintf('%.1f', prop_val), ...
+                  'Position', [ctrl_x y-2 80 25], ...
+                  'FontSize', 9);
+        uicontrol('Parent', dlg, 'Style', 'text', ...
+                  'String', '%', ...
+                  'Position', [ctrl_x+85 y 20 20], ...
+                  'HorizontalAlignment', 'left', 'FontSize', 9);
+    end
+
+    y = y - sep;
+
+    % ---- Per-Winding Controls (turns alignment only) ----
+    turns_align_opts = {'centered', 'inner or top', 'outer or bottom', 'spread'};
+    h.pop_turns_align = cell(1, n_w);
+
+    % Winding header colors (cycle through for >2 windings)
+    hdr_colors = {[0.2 0.4 0.8], [0.8 0.2 0.2], [0.1 0.6 0.3], [0.6 0.3 0.7]};
+
+    for w = 1:n_w
+        % Winding header bar
+        y = y - hdr_h;
+        wname = data.windings(w).name;
+        cidx = mod(w - 1, numel(hdr_colors)) + 1;
+        uicontrol('Parent', dlg, 'Style', 'text', ...
+                  'String', sprintf('  %s', wname), ...
+                  'Position', [lbl_x y dlg_w-30 hdr_h-4], ...
+                  'HorizontalAlignment', 'left', 'FontSize', 9, ...
+                  'FontWeight', 'bold', ...
+                  'BackgroundColor', hdr_colors{cidx}, ...
+                  'ForegroundColor', [1 1 1]);
+
+        % Turns Alignment
+        y = y - row_h;
+        uicontrol('Parent', dlg, 'Style', 'text', ...
+                  'String', 'Turns Alignment:', ...
+                  'Position', [30 y 160 20], ...
+                  'HorizontalAlignment', 'left', 'FontSize', 9);
+        ta_val = 4;  % default: spread
+        if numel(data.om_turns_alignment) >= w
+            for k = 1:numel(turns_align_opts)
+                if strcmp(turns_align_opts{k}, data.om_turns_alignment{w})
+                    ta_val = k;
+                end
+            end
+        end
+        h.pop_turns_align{w} = uicontrol('Parent', dlg, 'Style', 'popupmenu', ...
+                  'String', turns_align_opts, ...
+                  'Position', [ctrl_x y-2 ctrl_w 25], ...
+                  'Value', ta_val, 'FontSize', 9);
+
+        y = y - 4;  % small gap before next winding block
+    end
+
+    % ---- Apply Button (user closes dialog manually) ----
+    uicontrol('Parent', dlg, 'Style', 'pushbutton', ...
+              'String', 'Apply', ...
+              'Position', [dlg_w/2 - 70 12 140 38], ...
+              'FontSize', 11, 'FontWeight', 'bold', ...
+              'BackgroundColor', [0.2 0.7 0.3], ...
+              'ForegroundColor', 'w', ...
+              'Callback', {@cb_winding_opts_apply, h});
+end
+
+function cb_winding_opts_apply(~, ~, h)
+% Read all controls from winding options dialog and apply to data struct.
+% Does NOT close the dialog — user closes it manually.
+    parent_fig = h.parent_fig;
+    data = guidata(parent_fig);
+    n_w = h.n_windings;
+
+    % Global controls
+    orient_opts = get(h.pop_orientation, 'String');
+    data.om_winding_orientation = orient_opts{get(h.pop_orientation, 'Value')};
+
+    align_opts = get(h.pop_section_align, 'String');
+    data.om_section_alignment = align_opts{get(h.pop_section_align, 'Value')};
+
+    new_order = strtrim(get(h.edit_section_order, 'String'));
+    if ~isempty(new_order)
+        data.section_order = new_order;
+        order_ctrl = findobj(parent_fig, 'Tag', 'section_order');
+        if ~isempty(order_ctrl)
+            set(order_ctrl, 'String', new_order);
+        end
+    end
+
+    % Per-winding turns alignment
+    turns_align_opts = {'centered', 'inner or top', 'outer or bottom', 'spread'};
+    for w = 1:n_w
+        if numel(h.pop_turns_align) >= w && ~isempty(h.pop_turns_align{w})
+            data.om_turns_alignment{w} = turns_align_opts{get(h.pop_turns_align{w}, 'Value')};
+        end
+    end
+
+    % Read global proportions
+    raw_props = zeros(1, n_w);
+    for p = 1:n_w
+        if numel(h.edit_proportion) >= p && ~isempty(h.edit_proportion{p})
+            raw_props(p) = str2double(get(h.edit_proportion{p}, 'String'));
+            if isnan(raw_props(p)) || raw_props(p) < 0
+                raw_props(p) = 100.0 / n_w;
+            end
+        end
+    end
+
+    % Normalize proportions to sum to 1.0
+    prop_sum = sum(raw_props);
+    if prop_sum < 0.01
+        prop_sum = 100.0;
+        raw_props = ones(1, n_w) * (100.0 / n_w);
+    end
+    for w = 1:n_w
+        data.om_proportions{w} = raw_props(w) / prop_sum;
+    end
+
+    % Update proportion fields to show normalized values
+    for p = 1:n_w
+        if numel(h.edit_proportion) >= p && ~isempty(h.edit_proportion{p})
+            set(h.edit_proportion{p}, 'String', ...
+                sprintf('%.1f', data.om_proportions{p} * 100));
+        end
+    end
+
+    guidata(parent_fig, data);
+
+    % Refresh visualization in main GUI
     update_visualization(data);
 end
 
@@ -2630,6 +2983,12 @@ function visualize_openmagnetics(data, ax)
                 fprintf('[OM_VIZ] Hint: PyOpenMagnetics module missing in the python environment used.\n');
                 fprintf('[OM_VIZ] If you installed it globally, try running Octave from a terminal where ''python'' works.\n');
                 fprintf('[OM_VIZ] Or create a .venv in this folder: %s\n', script_dir);
+            elseif status < 0 && isempty(strtrim(output))
+                % Negative exit codes with no output indicate a native crash
+                % (e.g., access violation in PyMKF C++ for very small toroids).
+                fprintf('[OM_VIZ] Hint: Python crashed (segfault) — this core shape may be too small\n');
+                fprintf('[OM_VIZ] or unsupported by the PyOpenMagnetics native library.\n');
+                fprintf('[OM_VIZ] Try selecting a different/larger core shape.\n');
             end
             error('Python script failed (exit=%d): %s', status, strtrim(output));
         end
@@ -2667,13 +3026,21 @@ function visualize_openmagnetics(data, ax)
             guidata(fig, data);
         end
         cwf = get_cwf_window_metrics(data);
+
+        % Check for overflow and overlap in OM turns
+        winding_warnings = check_om_turn_issues(om_meta);
+        warn_suffix = '';
+        if ~isempty(winding_warnings)
+            warn_suffix = ['\n' winding_warnings];
+        end
+
         if om.area_m2 > 0
             set_vis_metrics_text(data, sprintf( ...
-                'Window area [mm^2]  CWF gross: %.2f  |  OM: %.2f  |  usable: %.2f', ...
+                ['Window area [mm^2]  CWF gross: %.2f\nOM: %.2f\nusable: %.2f' warn_suffix], ...
                 cwf.area_m2*1e6, om.area_m2*1e6, cwf.usable_area_m2*1e6));
         else
             set_vis_metrics_text(data, sprintf( ...
-                'Window area [mm^2]  CWF gross: %.2f  |  OM: n/a (no bobbin window)  |  usable: %.2f', ...
+                ['Window area [mm^2]  CWF gross: %.2f\nOM: n/a (no bobbin window)\nusable: %.2f' warn_suffix], ...
                 cwf.area_m2*1e6, cwf.usable_area_m2*1e6));
         end
 
@@ -2818,14 +3185,11 @@ function config = build_om_viz_config(data)
     if isfield(data, 'core_gap_type'); config.core_gap_type = data.core_gap_type; end
     if isfield(data, 'core_gap_length'); config.core_gap_length = data.core_gap_length; end
     if isfield(data, 'core_num_gaps'); config.core_num_gaps = data.core_num_gaps; end
-    try
-        pack_idx = get(findobj(data.fig_gui, 'Tag', 'packing_pattern'), 'Value');
-        pack_vals = {'Layered', 'Orthocyclic', 'Random'};
-        if pack_idx >= 1 && pack_idx <= numel(pack_vals)
-            config.packing_pattern = pack_vals{pack_idx};
-        end
-    catch
-    end
+    % OM-native winding layout parameters
+    config.winding_orientation = data.om_winding_orientation;
+    config.section_alignment = data.om_section_alignment;
+    config.turns_alignment_per_winding = data.om_turns_alignment;
+    config.proportions_per_winding = data.om_proportions;
     if isfield(data, 'tape_thickness'); config.tape_thickness = data.tape_thickness; end
     if isfield(data, 'tape_layers'); config.tape_layers = data.tape_layers; end
     config.plot_type = 'magnetic';
@@ -2908,9 +3272,12 @@ function visualize_core_window(data, ax)
         return;
     end
 
-    packing_idx = get(findobj(data.fig_gui, 'Tag', 'packing_pattern'), 'Value');
-    patterns = {'layered', 'orthocyclic', 'random'};
-    pattern = patterns{packing_idx};
+    % Map OM-native winding orientation to CWF packing pattern
+    if strcmp(data.om_winding_orientation, 'overlapping')
+        pattern = 'orthocyclic';
+    else
+        pattern = 'layered';
+    end
 
     hold(ax, 'on');
     axis(ax, 'equal');
@@ -3060,10 +3427,12 @@ function run_analysis(~, ~)
 
     fprintf('\n=== RUNNING ANALYSIS ===\n');
 
-    % Get packing pattern from GUI
-    packing_idx = get(findobj(fig, 'Tag', 'packing_pattern'), 'Value');
-    patterns = {'layered', 'orthocyclic', 'random'};
-    pattern = patterns{packing_idx};
+    % Map OM-native winding orientation to analysis pattern
+    if strcmp(data.om_winding_orientation, 'overlapping')
+        pattern = 'orthocyclic';
+    else
+        pattern = 'layered';
+    end
 
     ex_cfg = resolve_excitation_config(data);
     [ex_cfg, quality_meta] = apply_excitation_quality_preset(ex_cfg);
@@ -3214,6 +3583,41 @@ function run_analysis(~, ~)
     analysis_run = run_peec_with_excitation_profile( ...
         data, geom, all_conductors, all_winding_map, excitation_profile, run_opts);
     analysis_meta.excitation_summary = analysis_run.excitation_summary;
+    analysis_meta.excitation_operating_points = numel(excitation_profile.operating_points);
+    if isfield(analysis_run, 'evaluated_operating_points')
+        analysis_meta.evaluated_operating_points = analysis_run.evaluated_operating_points;
+    end
+    if isfield(analysis_run, 'total_operating_points')
+        analysis_meta.total_operating_points = analysis_run.total_operating_points;
+    end
+    if isfield(analysis_run, 'selected_operating_indices')
+        analysis_meta.selected_operating_indices = analysis_run.selected_operating_indices;
+    end
+    if isfield(analysis_run, 'worst_source_index')
+        analysis_meta.worst_source_index = analysis_run.worst_source_index;
+    end
+    if isfield(analysis_run, 'best_source_index')
+        analysis_meta.best_source_index = analysis_run.best_source_index;
+    end
+    if isfield(analysis_run, 'worst_name')
+        analysis_meta.worst_operating_point_name = analysis_run.worst_name;
+    end
+    if isfield(analysis_run, 'best_name')
+        analysis_meta.best_operating_point_name = analysis_run.best_name;
+    end
+    if isfield(analysis_run, 'total_loss')
+        analysis_meta.worst_total_loss_w = analysis_run.total_loss;
+    end
+    if isfield(analysis_run, 'best_total_loss')
+        analysis_meta.best_total_loss_w = analysis_run.best_total_loss;
+    end
+
+    % Re-write dump with final operating-point selection and case metadata.
+    try
+        analysis_meta.debug_dump_path = write_analysis_geometry_dump( ...
+            data, all_conductors, all_winding_map, all_wire_shapes, analysis_meta, analysis_run);
+    catch
+    end
 
     display_results(data, geom, analysis_run.plot_conductors, all_winding_map, ...
         analysis_run.plot_results, analysis_meta, analysis_run);
@@ -4376,6 +4780,48 @@ function [all_conductors, all_winding_map, all_wire_shapes, meta] = build_om_geo
     meta.window_h_m = bobbin_h;
     meta.raw_bbox_m = [xmin, ymin, xmax, ymax];
     meta.local_bbox_m = compute_geometry_envelope(all_conductors);
+
+    % --- Overflow detection: check if turns exceed bobbin window ---
+    n_overflow = 0;
+    for i = 1:numel(valid_turns)
+        t = valid_turns(i);
+        xl = (t.x - cx + target_cx) - t.w/2;
+        xr = (t.x - cx + target_cx) + t.w/2;
+        yb = (t.y - cy + target_cy) - t.h/2;
+        yt_val = (t.y - cy + target_cy) + t.h/2;
+        if xl < -1e-6 || xr > bobbin_w + 1e-6 || yb < -1e-6 || yt_val > bobbin_h + 1e-6
+            n_overflow = n_overflow + 1;
+        end
+    end
+    if n_overflow > 0
+        fprintf('[WARNING] %d of %d turns extend outside the bobbin window (%.2f x %.2f mm)\n', ...
+            n_overflow, numel(valid_turns), bobbin_w*1e3, bobbin_h*1e3);
+        fprintf('  The OM winding engine placed conductors that do not fit.\n');
+        fprintf('  Consider using a larger core or smaller wire.\n');
+    end
+    meta.n_overflow = n_overflow;
+
+    % --- Overlap detection: check if any same-winding turns physically overlap ---
+    n_overlap = 0;
+    for i = 1:numel(valid_turns)
+        for j = (i+1):numel(valid_turns)
+            ti = valid_turns(i);
+            tj = valid_turns(j);
+            dist = sqrt((ti.x - tj.x)^2 + (ti.y - tj.y)^2);
+            min_dist = 0.5 * (sqrt(ti.w * ti.h) + sqrt(tj.w * tj.h));
+            if dist < min_dist * 0.95
+                n_overlap = n_overlap + 1;
+                if n_overlap <= 3
+                    fprintf('[WARNING] Turns %d and %d overlap: distance=%.3fmm, min_clearance=%.3fmm\n', ...
+                        i, j, dist*1e3, min_dist*1e3);
+                end
+            end
+        end
+    end
+    if n_overlap > 0
+        fprintf('[WARNING] %d turn pair(s) physically overlap. The OM winding layout has placement errors.\n', n_overlap);
+    end
+    meta.n_overlap = n_overlap;
 end
 
 function idx = map_winding_name_to_index(data, winding_name)
@@ -4417,8 +4863,11 @@ function env = compute_geometry_envelope(conductors)
     env.height = y_max - y_min;
 end
 
-function dump_path = write_analysis_geometry_dump(data, conductors, winding_map, wire_shapes, analysis_meta)
+function dump_path = write_analysis_geometry_dump(data, conductors, winding_map, wire_shapes, analysis_meta, analysis_run)
     dump_path = '';
+    if nargin < 6 || ~isstruct(analysis_run)
+        analysis_run = struct();
+    end
     try
         dump = struct();
         dump.generated_at = datestr(now, 30);
@@ -4430,6 +4879,7 @@ function dump_path = write_analysis_geometry_dump(data, conductors, winding_map,
         dump.winding_map = winding_map;
         dump.wire_shapes = wire_shapes;
         dump.envelope = compute_geometry_envelope(conductors);
+        dump.analysis_run = build_analysis_run_dump_meta(analysis_run);
         dump_path = fullfile(pwd(), 'analysis_geometry_dump.json');
         fid = fopen(dump_path, 'w');
         if fid ~= -1
@@ -4440,6 +4890,64 @@ function dump_path = write_analysis_geometry_dump(data, conductors, winding_map,
         end
     catch
         dump_path = '';
+    end
+end
+
+function run_meta = build_analysis_run_dump_meta(analysis_run)
+    run_meta = struct();
+    if ~isstruct(analysis_run) || isempty(fieldnames(analysis_run))
+        return;
+    end
+
+    keep_fields = { ...
+        'mode', ...
+        'selected_operating_indices', ...
+        'total_operating_points', ...
+        'evaluated_operating_points', ...
+        'max_harmonics', ...
+        'worst_index', ...
+        'worst_name', ...
+        'worst_source_index', ...
+        'worst_harmonic_count', ...
+        'total_loss', ...
+        'best_index', ...
+        'best_name', ...
+        'best_source_index', ...
+        'best_harmonic_count', ...
+        'best_total_loss', ...
+        'excitation_summary' ...
+    };
+    for i = 1:numel(keep_fields)
+        field_name = keep_fields{i};
+        if isfield(analysis_run, field_name)
+            run_meta.(field_name) = analysis_run.(field_name);
+        end
+    end
+
+    if isfield(analysis_run, 'operating_points') && isstruct(analysis_run.operating_points)
+        ops = analysis_run.operating_points;
+        op_meta = repmat(struct( ...
+            'name', '', ...
+            'source_index', 0, ...
+            'total_loss', NaN, ...
+            'harmonic_count', 0, ...
+            'line_scale', NaN, ...
+            'load_scale', NaN, ...
+            'duty', NaN, ...
+            'frequency_hz', NaN, ...
+            'conduction_mode', 'n/a'), 1, numel(ops));
+        for i = 1:numel(ops)
+            op_meta(i).name = get_struct_string(ops(i), 'name', sprintf('op_%d', i));
+            op_meta(i).source_index = get_struct_numeric(ops(i), 'source_index', i);
+            op_meta(i).total_loss = get_struct_numeric(ops(i), 'total_loss', NaN);
+            op_meta(i).harmonic_count = get_struct_numeric(ops(i), 'harmonic_count', 0);
+            op_meta(i).line_scale = get_struct_numeric(ops(i), 'line_scale', NaN);
+            op_meta(i).load_scale = get_struct_numeric(ops(i), 'load_scale', NaN);
+            op_meta(i).duty = get_struct_numeric(ops(i), 'duty', NaN);
+            op_meta(i).frequency_hz = get_struct_numeric(ops(i), 'frequency_hz', NaN);
+            op_meta(i).conduction_mode = get_struct_string(ops(i), 'conduction_mode', 'n/a');
+        end
+        run_meta.operating_points = op_meta;
     end
 end
 
@@ -4860,21 +5368,26 @@ end
 
 
 function export_mas_file(~, ~)
-    % Export current design as a MAS JSON file
+    % Export current design as a MAS-compliant JSON file
+    % Follows the OpenMagnetics MAS (Magnetic Agnostic Structure) schema
     fig = gcbf();
     data = guidata(fig);
 
     % Build MAS structure
     mas = struct();
 
-    % --- Inputs section ---
+    % =====================================================================
+    % INPUTS section
+    % =====================================================================
     mas.inputs = struct();
     mas.inputs.designRequirements = struct();
+
+    % Topology
     if isfield(data, 'excitation') && isfield(data.excitation, 'topology')
         mas.inputs.designRequirements.topology = data.excitation.topology;
     end
 
-    % Magnetizing inductance (from design_spec if available)
+    % Magnetizing inductance
     if isfield(data, 'design_spec') && isstruct(data.design_spec) ...
             && isfield(data.design_spec, 'requirements') ...
             && isfield(data.design_spec.requirements, 'Lm_uH')
@@ -4882,10 +5395,10 @@ function export_mas_file(~, ~)
         mas.inputs.designRequirements.magnetizingInductance = struct('nominal', lm_h);
     end
 
-    % Turns ratios
+    % Turns ratios (array of structs per MAS schema)
     if data.n_windings >= 2
         ratio = data.windings(1).n_turns / max(1, data.windings(2).n_turns);
-        mas.inputs.designRequirements.turnsRatios = struct('nominal', ratio);
+        mas.inputs.designRequirements.turnsRatios = {struct('nominal', ratio)};
     end
 
     % Operating point
@@ -4897,42 +5410,106 @@ function export_mas_file(~, ~)
         ex = struct();
         ex.name = data.windings(w).name;
         ex.frequency = data.f;
-        ex.current = struct('processed', struct('rms', data.windings(w).current));
-        if isfield(data.windings(w), 'voltage')
-            ex.voltage = struct('processed', struct('rms', data.windings(w).voltage));
+        % Current excitation
+        cur_proc = struct();
+        cur_proc.rms = data.windings(w).current;
+        if isfield(data, 'excitation') && isfield(data.excitation, 'waveform_label')
+            cur_proc.label = data.excitation.waveform_label;
+        end
+        ex.current = struct('processed', cur_proc);
+        % Voltage excitation
+        if isfield(data.windings(w), 'voltage') && data.windings(w).voltage > 0
+            vol_proc = struct('rms', data.windings(w).voltage);
+            ex.voltage = struct('processed', vol_proc);
         end
         op.excitationsPerWinding{end+1} = ex;
     end
     mas.inputs.operatingPoints = {op};
 
-    % --- Magnetic section ---
+    % =====================================================================
+    % MAGNETIC section
+    % =====================================================================
     mas.magnetic = struct();
 
-    % Core
+    % --- Core ---
     mas.magnetic.core = struct();
-    mas.magnetic.core.functionalDescription = struct();
-    mas.magnetic.core.functionalDescription.shape = struct('name', data.selected_core);
-    mas.magnetic.core.functionalDescription.material = data.selected_material;
-    if isfield(data, 'core_gap_type') && ~strcmp(data.core_gap_type, 'Ungapped')
-        mas.magnetic.core.functionalDescription.gapping = struct( ...
-            'type', data.core_gap_type, ...
-            'length', data.core_gap_length);
-    end
+    core_fd = struct();
 
-    % Coil
+    % Core type (required by schema)
+    core_fd.type = 'two-piece set';
+
+    % Shape: use original OM name (e.g. "E 42/21/15"), not sanitized key
+    core_shape_name = data.selected_core;
+    if isfield(data.cores, data.selected_core) && isfield(data.cores.(data.selected_core), 'name')
+        core_shape_name = data.cores.(data.selected_core).name;
+    end
+    core_fd.shape = core_shape_name;
+
+    % Material: use original OM name
+    mat_name = data.selected_material;
+    if isfield(data.materials, mat_name) && isfield(data.materials.(mat_name), 'name')
+        mat_name = data.materials.(mat_name).name;
+    end
+    core_fd.material = mat_name;
+
+    % Gapping: use build_gapping_array() for proper OM type mapping
+    if isfield(data, 'core_gap_type')
+        gapping_cells = data.api.build_gapping_array( ...
+            data.core_gap_type, data.core_gap_length, data.core_num_gaps);
+    else
+        gapping_cells = {struct('type', 'residual', 'length', 10e-6)};
+    end
+    core_fd.gapping = gapping_cells;
+
+    % Number of stacks
+    core_fd.numberStacks = 1;
+
+    mas.magnetic.core.functionalDescription = core_fd;
+
+    % Core name (optional but helpful)
+    mas.magnetic.core.name = sprintf('%s %s', core_shape_name, mat_name);
+
+    % --- Coil ---
     mas.magnetic.coil = struct();
+
+    % Bobbin: use shape name string (schema accepts name or object)
+    mas.magnetic.coil.bobbin = core_shape_name;
+
+    % Functional description (winding definitions)
     winding_desc = {};
     for w = 1:data.n_windings
         wd = struct();
         wd.name = data.windings(w).name;
         wd.numberTurns = data.windings(w).n_turns;
         wd.numberParallels = data.windings(w).n_filar;
-        wd.wire = data.windings(w).wire_type;
+
+        % Isolation side (required by schema)
+        if w == 1
+            wd.isolationSide = 'primary';
+        else
+            wd.isolationSide = 'secondary';
+        end
+
+        % Wire: use original OM wire name, not sanitized key
+        wire_key = data.windings(w).wire_type;
+        wire_om_name = wire_key;
+        if isfield(data.wires, wire_key) && isfield(data.wires.(wire_key), 'name')
+            wire_om_name = data.wires.(wire_key).name;
+        end
+        wd.wire = wire_om_name;
+
         winding_desc{end+1} = wd;
     end
     mas.magnetic.coil.functionalDescription = winding_desc;
 
-    % Ask user for save location
+    % =====================================================================
+    % OUTPUTS section (required by schema, can be empty)
+    % =====================================================================
+    mas.outputs = {};
+
+    % =====================================================================
+    % Save to file
+    % =====================================================================
     [fname, fpath] = uiputfile({'*.json', 'MAS JSON Files (*.json)'}, ...
                                'Export MAS File', 'design_export.json');
     if isequal(fname, 0)
@@ -4942,6 +5519,10 @@ function export_mas_file(~, ~)
     full_path = fullfile(fpath, fname);
     try
         json_str = jsonencode(mas);
+        % Pretty-print: add newlines after commas/braces for readability
+        json_str = strrep(json_str, ',"', sprintf(',\n  "'));
+        json_str = strrep(json_str, '{', sprintf('{\n  '));
+        json_str = strrep(json_str, '}', sprintf('\n}'));
         fid = fopen(full_path, 'w', 'n', 'UTF-8');
         fprintf(fid, '%s', json_str);
         fclose(fid);
@@ -5369,6 +5950,9 @@ function apply_om_axes_mm(ax, vb, om_meta)
     yt = cy - (y_ticks_m ./ sy);
     xlbl = arrayfun(@(v) sprintf('%.1f', v * 1e3), x_ticks_m, 'UniformOutput', false);
     ylbl = arrayfun(@(v) sprintf('%.1f', v * 1e3), y_ticks_m, 'UniformOutput', false);
+    % MATLAB/Octave sorts YTick ascending, so sort yt+ylbl together to keep labels aligned
+    [yt, sort_idx] = sort(yt);
+    ylbl = ylbl(sort_idx);
 
     set(ax, 'Box', 'on', ...
         'XColor', [0.15 0.15 0.15], ...
@@ -5388,6 +5972,86 @@ function set_vis_metrics_text(data, txt)
     ctrl = findobj(data.fig_gui, 'Tag', 'vis_metrics');
     if ~isempty(ctrl)
         set(ctrl, 'String', txt);
+    end
+end
+
+function warn_str = check_om_turn_issues(om_meta)
+    % Check OM turns metadata for overflow and overlap issues.
+    % Returns a warning string (empty if no issues).
+    warn_str = '';
+    if ~isstruct(om_meta) || ~isfield(om_meta, 'turns') || isempty(om_meta.turns)
+        return;
+    end
+    turns = om_meta.turns;
+    if ~isstruct(turns)
+        try turns = [turns{:}]; catch; return; end
+    end
+
+    bw = 0; bh = 0;
+    if isfield(om_meta, 'bobbin_window_width_m')
+        bw = om_meta.bobbin_window_width_m;
+    end
+    if isfield(om_meta, 'bobbin_window_height_m')
+        bh = om_meta.bobbin_window_height_m;
+    end
+    if bw <= 0 || bh <= 0; return; end
+
+    % Collect turn centers and radii in physical coords relative to bobbin
+    n = numel(turns);
+    tx = zeros(n,1); ty = zeros(n,1); tr = zeros(n,1);
+    xmin = inf; xmax = -inf; ymin = inf; ymax = -inf;
+    valid = false(n,1);
+    for i = 1:n
+        t = turns(i);
+        if ~isfield(t,'x_m') || ~isfield(t,'y_m'); continue; end
+        r = 0;
+        if isfield(t,'r_m'); r = double(t.r_m); end
+        if isfield(t,'width_m'); r = max(r, double(t.width_m)/2); end
+        if r <= 0; continue; end
+        tx(i) = double(t.x_m); ty(i) = double(t.y_m); tr(i) = r;
+        valid(i) = true;
+        xmin = min(xmin, tx(i)-r); xmax = max(xmax, tx(i)+r);
+        ymin = min(ymin, ty(i)-r); ymax = max(ymax, ty(i)+r);
+    end
+    if ~any(valid); return; end
+
+    % Center turns to bobbin local frame
+    cx = 0.5*(xmin+xmax); cy = 0.5*(ymin+ymax);
+    tcx = bw/2; tcy = bh/2;
+    lx = tx - cx + tcx;
+    ly = ty - cy + tcy;
+
+    n_overflow = 0;
+    for i = 1:n
+        if ~valid(i); continue; end
+        if lx(i)-tr(i) < -1e-6 || lx(i)+tr(i) > bw+1e-6 || ...
+           ly(i)-tr(i) < -1e-6 || ly(i)+tr(i) > bh+1e-6
+            n_overflow = n_overflow + 1;
+        end
+    end
+
+    n_overlap = 0;
+    for i = 1:n
+        if ~valid(i); continue; end
+        for j = (i+1):n
+            if ~valid(j); continue; end
+            dist = sqrt((tx(i)-tx(j))^2 + (ty(i)-ty(j))^2);
+            min_dist = tr(i) + tr(j);
+            if dist < min_dist * 0.95
+                n_overlap = n_overlap + 1;
+            end
+        end
+    end
+
+    parts = {};
+    if n_overflow > 0
+        parts{end+1} = sprintf('WARNING: %d turn(s) outside bobbin', n_overflow);
+    end
+    if n_overlap > 0
+        parts{end+1} = sprintf('WARNING: %d turn pair(s) overlap', n_overlap);
+    end
+    if ~isempty(parts)
+        warn_str = strjoin(parts, ' | ');
     end
 end
 

@@ -14,6 +14,7 @@ import json
 import math
 import os
 import sys
+import importlib.metadata
 
 try:
     import PyOpenMagnetics as pm
@@ -31,6 +32,14 @@ def as_float(value, default=0.0):
         return float(value)
     except Exception:
         return float(default)
+
+
+def get_pm_runtime_version():
+    """Return installed PyOpenMagnetics package version when available."""
+    try:
+        return importlib.metadata.version("PyOpenMagnetics")
+    except Exception:
+        return "unknown"
 
 
 def generate_current_waveform(rms_target, duty, phase_deg, samples):
@@ -254,12 +263,12 @@ def ensure_databases_loaded():
 
 
 def apply_user_weights(recommendations, weights):
-    """Re-score recommendations using user-specified weights.
+    """Compute a UI score without overriding the raw adviser score.
 
-    The PyOpenMagnetics advisor uses default equal weights internally.
-    We re-score using the three user-controlled weights (COST, LOSSES,
-    DIMENSIONS) applied to the per-filter scores returned by the advisor,
-    then sort descending by weighted score.
+    The adviser returns a raw score (`raw_score`) that should remain the
+    source of truth for ranking. We also compute a UI-weighted score from
+    COST/LOSSES/DIMENSIONS so users can compare how slider preferences
+    would rank the same candidates.
     """
     w_cost = as_float(weights.get("COST", 1.0), 1.0)
     w_losses = as_float(weights.get("LOSSES", 1.0), 1.0)
@@ -275,12 +284,22 @@ def apply_user_weights(recommendations, weights):
         s_dims = as_float(spf.get("DIMENSIONS", 0.0), 0.0)
 
         # Weighted sum normalized by total weight
-        rec["weighted_score"] = (
+        rec["ui_weighted_score"] = (
             w_cost * s_cost + w_losses * s_losses + w_dims * s_dims
         ) / w_total
-        rec["score"] = rec["weighted_score"]
+        rec["ui_score"] = rec["ui_weighted_score"]
 
-    recommendations.sort(key=lambda r: r.get("weighted_score", 0.0), reverse=True)
+        # Backward-compatible aliases:
+        # - score/raw_score are the adviser score (source of truth)
+        # - weighted_score maps to ui_weighted_score
+        raw = as_float(rec.get("raw_score", rec.get("score", 0.0)), 0.0)
+        rec["raw_score"] = raw
+        rec["score"] = raw
+        rec["weighted_score"] = rec["ui_weighted_score"]
+        rec["score_mode"] = "raw_mkf"
+
+    # Keep adviser ordering semantics: rank by raw score.
+    recommendations.sort(key=lambda r: as_float(r.get("raw_score", 0.0), 0.0), reverse=True)
     return recommendations
 
 
@@ -380,7 +399,7 @@ def run_recommendations(config):
         if rec:
             recommendations.append(rec)
 
-    # Re-score and re-sort using user-specified weights, then trim to requested count
+    # Compute UI-weighted scores while preserving raw adviser ranking, then trim.
     recommendations = apply_user_weights(recommendations, weights)
     recommendations = recommendations[:max_results]
 
@@ -389,8 +408,248 @@ def run_recommendations(config):
         "n_results": len(recommendations),
         "recommendations": recommendations,
         "weights": weights,
-        "inputs_used": inputs
+        "inputs_used": inputs,
+        "score_convention": {
+            "primary": "raw_score",
+            "secondary": "ui_score",
+            "ranking": "raw_score_desc"
+        },
+        "pyopenmagnetics_runtime_version": get_pm_runtime_version()
     }
+
+
+def compute_losses_for_recommendation(mas_data):
+    """Compute core and winding losses using PyOpenMagnetics APIs.
+
+    Takes the full MAS dict (magnetic + inputs) from the advisor result
+    and calls calculate_core_losses() and calculate_winding_losses().
+
+    Returns (core_losses_w, winding_losses_w) or (0.0, 0.0) on failure.
+    """
+    magnetic = mas_data.get("magnetic", {})
+    inputs_data = mas_data.get("inputs", {})
+    core = magnetic.get("core", {})
+    coil = magnetic.get("coil", {})
+
+    if not core or not coil or not inputs_data:
+        return 0.0, 0.0
+
+    core_losses = 0.0
+    winding_losses = 0.0
+
+    # Core losses via calculate_core_losses(core, coil, inputs, models)
+    try:
+        models = {"coreLosses": "Steinmetz", "reluctance": "Zhang"}
+        core_result = pm.calculate_core_losses(core, coil, inputs_data, models)
+        if isinstance(core_result, dict) and "data" not in core_result:
+            core_losses = as_float(core_result.get("coreLosses", 0.0), 0.0)
+    except Exception as exc:
+        print(f"  [LOSS] Core loss calc failed: {exc}", file=sys.stderr)
+
+    # Winding losses via calculate_winding_losses(magnetic, operating_point, temperature)
+    try:
+        ops = inputs_data.get("operatingPoints", [])
+        if not ops:
+            ops = inputs_data.get("operating_points", [])
+        if ops:
+            op = ops[0]
+            temperature = op.get("conditions", {}).get("ambientTemperature", 25.0)
+            winding_result = pm.calculate_winding_losses(magnetic, op, temperature)
+            if isinstance(winding_result, dict) and "data" not in winding_result:
+                winding_losses = as_float(
+                    winding_result.get("windingLosses", 0.0), 0.0
+                )
+    except Exception as exc:
+        print(f"  [LOSS] Winding loss calc failed: {exc}", file=sys.stderr)
+
+    return core_losses, winding_losses
+
+
+def resolve_wire_info(wire_ref):
+    """Resolve an advisor wire reference to its type and dimensions.
+
+    The advisor returns internal wire names like 'Litz TXXL180/38TXXX-3(MWXX)'.
+    This function uses find_wire_by_name() to look up the wire's actual
+    type and conducting dimensions, then finds the closest match in the
+    local wire database.
+
+    Returns a dict with:
+      - original_name: the raw advisor wire reference
+      - wire_type: 'round', 'litz', 'foil', 'rectangular', or 'unknown'
+      - conducting_diameter: in meters (for round/litz strand)
+      - conducting_width: in meters (for rectangular/foil)
+      - conducting_height: in meters (for rectangular/foil)
+      - number_conductors: strand count for litz, else 1
+      - matched_name: closest local DB wire name, or None
+    """
+    info = {
+        "original_name": str(wire_ref),
+        "wire_type": "unknown",
+        "conducting_diameter": 0.0,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 1,
+        "matched_name": None,
+    }
+
+    if not wire_ref or not isinstance(wire_ref, str):
+        return info
+
+    # Try PyOpenMagnetics find_wire_by_name
+    try:
+        wire_data = pm.find_wire_by_name(wire_ref)
+        if isinstance(wire_data, dict) and "data" not in wire_data:
+            # Extract wire type
+            wtype = wire_data.get("type", "")
+            if isinstance(wtype, str):
+                info["wire_type"] = wtype.lower().replace(" ", "_")
+
+            # Conducting diameter (round, litz strand)
+            cd = wire_data.get("conductingDiameter", {})
+            if isinstance(cd, dict):
+                info["conducting_diameter"] = as_float(
+                    cd.get("nominal", cd.get("maximum", 0)), 0
+                )
+            elif isinstance(cd, (int, float)):
+                info["conducting_diameter"] = as_float(cd, 0)
+
+            # Conducting width/height (rectangular, foil)
+            cw = wire_data.get("conductingWidth", {})
+            if isinstance(cw, dict):
+                info["conducting_width"] = as_float(
+                    cw.get("nominal", cw.get("maximum", 0)), 0
+                )
+            elif isinstance(cw, (int, float)):
+                info["conducting_width"] = as_float(cw, 0)
+
+            ch = wire_data.get("conductingHeight", {})
+            if isinstance(ch, dict):
+                info["conducting_height"] = as_float(
+                    ch.get("nominal", ch.get("maximum", 0)), 0
+                )
+            elif isinstance(ch, (int, float)):
+                info["conducting_height"] = as_float(ch, 0)
+
+            # Number of conductors (litz strand count)
+            nc = wire_data.get("numberConductors", 1)
+            info["number_conductors"] = int(as_float(nc, 1))
+    except Exception as exc:
+        print(f"  [WIRE] find_wire_by_name('{wire_ref}') failed: {exc}",
+              file=sys.stderr)
+
+    # If find_wire_by_name didn't work, try to parse from the name string
+    if info["wire_type"] == "unknown":
+        name_lower = wire_ref.lower()
+        if "litz" in name_lower:
+            info["wire_type"] = "litz"
+        elif "foil" in name_lower:
+            info["wire_type"] = "foil"
+        elif "rectangular" in name_lower:
+            info["wire_type"] = "rectangular"
+        elif "round" in name_lower:
+            info["wire_type"] = "round"
+
+    # Try to match against the local wire database
+    info["matched_name"] = match_wire_in_local_db(info)
+
+    return info
+
+
+def match_wire_in_local_db(wire_info):
+    """Find the closest wire in the local database by type and dimensions.
+
+    Searches all wires from get_wire_names() and picks the closest match
+    by conducting diameter (for round/litz) or conducting width (for foil).
+
+    Returns the matched wire name string, or None if no match.
+    """
+    target_type = wire_info.get("wire_type", "unknown")
+    target_dia = wire_info.get("conducting_diameter", 0)
+    target_width = wire_info.get("conducting_width", 0)
+    target_strands = wire_info.get("number_conductors", 1)
+
+    if target_type == "unknown":
+        return None
+
+    try:
+        all_wire_names = pm.get_wire_names()
+        if isinstance(all_wire_names, dict) and "data" in all_wire_names:
+            return None  # error response
+        if not isinstance(all_wire_names, list):
+            return None
+    except Exception:
+        return None
+
+    best_name = None
+    best_distance = float("inf")
+
+    for wname in all_wire_names:
+        if not isinstance(wname, str):
+            continue
+
+        # Quick type filter from the name
+        wname_lower = wname.lower()
+        if target_type == "litz" and "litz" not in wname_lower:
+            continue
+        if target_type == "round" and ("litz" in wname_lower or "foil" in wname_lower
+                                        or "rectangular" in wname_lower):
+            continue
+        if target_type == "foil" and "foil" not in wname_lower:
+            continue
+        if target_type == "rectangular" and "rectangular" not in wname_lower:
+            continue
+
+        # Get this wire's dimensions
+        try:
+            wd = pm.find_wire_by_name(wname)
+            if isinstance(wd, dict) and "data" not in wd:
+                cd = wd.get("conductingDiameter", {})
+                if isinstance(cd, dict):
+                    dia = as_float(cd.get("nominal", cd.get("maximum", 0)), 0)
+                else:
+                    dia = as_float(cd, 0)
+
+                cw = wd.get("conductingWidth", {})
+                if isinstance(cw, dict):
+                    width = as_float(cw.get("nominal", cw.get("maximum", 0)), 0)
+                else:
+                    width = as_float(cw, 0)
+
+                nc = int(as_float(wd.get("numberConductors", 1), 1))
+
+                # Compute distance metric
+                if target_type in ("round",):
+                    if target_dia > 0 and dia > 0:
+                        dist = abs(dia - target_dia) / target_dia
+                    else:
+                        continue
+                elif target_type == "litz":
+                    # Match by strand diameter AND strand count
+                    if target_dia > 0 and dia > 0:
+                        dia_dist = abs(dia - target_dia) / max(target_dia, 1e-9)
+                        strand_dist = abs(nc - target_strands) / max(target_strands, 1)
+                        dist = dia_dist + 0.5 * strand_dist
+                    else:
+                        continue
+                elif target_type in ("foil", "rectangular"):
+                    if target_width > 0 and width > 0:
+                        dist = abs(width - target_width) / target_width
+                    else:
+                        continue
+                else:
+                    continue
+
+                if dist < best_distance:
+                    best_distance = dist
+                    best_name = wname
+        except Exception:
+            continue
+
+    if best_name:
+        print(f"  [WIRE] Matched '{wire_info['original_name']}' -> '{best_name}' "
+              f"(dist={best_distance:.4f})", file=sys.stderr)
+
+    return best_name
 
 
 def extract_recommendation(item):
@@ -404,8 +663,9 @@ def extract_recommendation(item):
         except Exception:
             return None
 
-    # Score
-    rec["score"] = as_float(item.get("scoring", 0.0), 0.0)
+    # Scores
+    rec["raw_score"] = as_float(item.get("scoring", 0.0), 0.0)
+    rec["score"] = rec["raw_score"]
     rec["scoring_per_filter"] = item.get("scoringPerFilter", {})
 
     # Navigate to magnetic
@@ -442,18 +702,23 @@ def extract_recommendation(item):
             rec[f"{prefix}_parallels"] = int(as_float(wd.get("numberParallels", 1), 1))
             wire = wd.get("wire", "")
             if isinstance(wire, dict):
-                rec[f"{prefix}_wire"] = wire.get("name", str(wire))
+                wire_name = wire.get("name", str(wire))
             else:
-                rec[f"{prefix}_wire"] = str(wire)
+                wire_name = str(wire)
+            rec[f"{prefix}_wire"] = wire_name
 
-    # Outputs (losses if available — may be dict or list of dicts)
-    outputs = mas.get("outputs", {})
-    if isinstance(outputs, list) and outputs:
-        outputs = outputs[0] if isinstance(outputs[0], dict) else {}
-    if isinstance(outputs, dict) and outputs:
-        rec["core_losses_w"] = as_float(outputs.get("coreLosses", 0), 0)
-        rec["winding_losses_w"] = as_float(outputs.get("windingLosses", 0), 0)
-        rec["total_losses_w"] = rec["core_losses_w"] + rec["winding_losses_w"]
+            # Resolve wire to type/dimensions and find local DB match
+            wire_info = resolve_wire_info(wire_name)
+            rec[f"{prefix}_wire_info"] = wire_info
+            if wire_info.get("matched_name"):
+                rec[f"{prefix}_wire_matched"] = wire_info["matched_name"]
+
+    # Compute losses using OpenMagnetics APIs
+    core_losses, winding_losses = compute_losses_for_recommendation(mas)
+    rec["core_losses_w"] = core_losses
+    rec["winding_losses_w"] = winding_losses
+    rec["total_losses_w"] = core_losses + winding_losses
+    rec["loss_source"] = "OpenMagnetics"
 
     return rec
 

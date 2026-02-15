@@ -1,144 +1,472 @@
 {
   "status": "OK",
-  "n_results": 3,
+  "n_results": 5,
   "recommendations": [
     {
-      "score": 0.831813823287399,
+      "raw_score": 2.0837110734554694,
+      "score": 2.0837110734554694,
       "scoring_per_filter": {
-        "COST": 0.44600954396390335,
-        "DIMENSIONS": 0.42979805986330255,
-        "EFFECTIVE_CURRENT_DENSITY": 0.46554129887398277,
-        "EFFECTIVE_RESISTANCE": 0.6389960608158374,
-        "LOSSES": 1.0,
+        "COST": 0.7677798287657672,
+        "DIMENSIONS": 0.591108020567207,
+        "EFFECTIVE_CURRENT_DENSITY": 0.7374619544921047,
+        "EFFECTIVE_RESISTANCE": 0.29540794463749487,
+        "LOSSES": 0.7248232241224954,
         "MAGNETOMOTIVE_FORCE": 1.0
       },
-      "core_shape": "E 20/9/6",
+      "core_shape": "EQ 20/14/5",
       "material": "95",
       "gapping": [
         {
-          "area": 3.2487e-05,
+          "area": 6.0821e-05,
           "coordinates": [
             0.0,
-            5e-06,
+            0.0,
             0.0
           ],
-          "distanceClosestNormalSurface": 0.006345,
-          "distanceClosestParallelSurface": 0.004325,
-          "length": 1e-05,
+          "distanceClosestNormalSurface": 0.0026,
+          "distanceClosestParallelSurface": 0.004599999999999999,
+          "length": 0.0,
           "sectionDimensions": [
-            0.00575,
-            0.00565
+            0.0088,
+            0.0088
+          ],
+          "shape": "round",
+          "type": "subtractive"
+        },
+        {
+          "area": 2.7595e-05,
+          "coordinates": [
+            0.009985536,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.0026,
+          "distanceClosestParallelSurface": 0.004599999999999999,
+          "length": 5e-06,
+          "sectionDimensions": [
+            0.001971071,
+            0.014
+          ],
+          "shape": "irregular",
+          "type": "residual"
+        },
+        {
+          "area": 2.7595e-05,
+          "coordinates": [
+            -0.009985536,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.0026,
+          "distanceClosestParallelSurface": 0.004599999999999999,
+          "length": 5e-06,
+          "sectionDimensions": [
+            0.001971071,
+            0.014
+          ],
+          "shape": "irregular",
+          "type": "residual"
+        }
+      ],
+      "n_windings": 2,
+      "primary_turns": 4,
+      "primary_parallels": 1,
+      "primary_wire": "Litz SXXL20/34FX-2(MWXX)",
+      "primary_wire_info": {
+        "original_name": "Litz SXXL20/34FX-2(MWXX)",
+        "wire_type": "litz",
+        "conducting_diameter": 0.0,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 20,
+        "matched_name": null
+      },
+      "secondary_turns": 5,
+      "secondary_parallels": 5,
+      "secondary_wire": "Round 28.5 - Single Build",
+      "secondary_wire_info": {
+        "original_name": "Round 28.5 - Single Build",
+        "wire_type": "round",
+        "conducting_diameter": 0.000301999999999,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 1,
+        "matched_name": "Round 28.5 - Heavy Build"
+      },
+      "secondary_wire_matched": "Round 28.5 - Heavy Build",
+      "core_losses_w": 1.0588888308436357,
+      "winding_losses_w": 0.511502017806297,
+      "total_losses_w": 1.5703908486499327,
+      "loss_source": "OpenMagnetics",
+      "ui_weighted_score": 0.6818913955923895,
+      "ui_score": 0.6818913955923895,
+      "weighted_score": 0.6818913955923895,
+      "score_mode": "raw_mkf"
+    },
+    {
+      "raw_score": 2.0493011419109157,
+      "score": 2.0493011419109157,
+      "scoring_per_filter": {
+        "COST": 1.0,
+        "DIMENSIONS": 0.3386270538961228,
+        "EFFECTIVE_CURRENT_DENSITY": 0.3124851454386762,
+        "EFFECTIVE_RESISTANCE": 0.6663462298373863,
+        "LOSSES": 0.7106740880147928,
+        "MAGNETOMOTIVE_FORCE": 1.0
+      },
+      "core_shape": "E 16/8/8",
+      "material": "79",
+      "gapping": [
+        {
+          "area": 3.7082e-05,
+          "coordinates": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.0059,
+          "distanceClosestParallelSurface": 0.0035249999999999995,
+          "length": 0.0,
+          "sectionDimensions": [
+            0.00455,
+            0.00815
           ],
           "shape": "rectangular",
           "type": "subtractive"
         },
         {
-          "area": 1.582e-05,
+          "area": 1.793e-05,
           "coordinates": [
-            0.0086,
+            0.0069,
             0.0,
             0.0
           ],
-          "distanceClosestNormalSurface": 0.00635,
-          "distanceClosestParallelSurface": 0.004325,
+          "distanceClosestNormalSurface": 0.0059,
+          "distanceClosestParallelSurface": 0.0035249999999999995,
           "length": 5e-06,
           "sectionDimensions": [
-            0.0028,
-            0.00565
+            0.0022,
+            0.00815
           ],
           "shape": "rectangular",
           "type": "residual"
         },
         {
-          "area": 1.582e-05,
+          "area": 1.793e-05,
           "coordinates": [
-            -0.0086,
+            -0.0069,
             0.0,
             0.0
           ],
-          "distanceClosestNormalSurface": 0.00635,
-          "distanceClosestParallelSurface": 0.004325,
+          "distanceClosestNormalSurface": 0.0059,
+          "distanceClosestParallelSurface": 0.0035249999999999995,
           "length": 5e-06,
           "sectionDimensions": [
-            0.0028,
-            0.00565
+            0.0022,
+            0.00815
           ],
           "shape": "rectangular",
           "type": "residual"
         }
       ],
       "n_windings": 2,
-      "primary_turns": 15,
+      "primary_turns": 7,
+      "primary_parallels": 1,
+      "primary_wire": "Litz TXXL66/38FXXX-2(MWXX)",
+      "primary_wire_info": {
+        "original_name": "Litz TXXL66/38FXXX-2(MWXX)",
+        "wire_type": "litz",
+        "conducting_diameter": 0.0,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 66,
+        "matched_name": null
+      },
+      "secondary_turns": 8,
+      "secondary_parallels": 3,
+      "secondary_wire": "Round 24.5 - Heavy Build",
+      "secondary_wire_info": {
+        "original_name": "Round 24.5 - Heavy Build",
+        "wire_type": "round",
+        "conducting_diameter": 0.000483,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 1,
+        "matched_name": "Round 24.5 - Heavy Build"
+      },
+      "secondary_wire_matched": "Round 24.5 - Heavy Build",
+      "core_losses_w": 1.0285417777817514,
+      "winding_losses_w": 0.5627411682373545,
+      "total_losses_w": 1.5912829460191058,
+      "loss_source": "OpenMagnetics",
+      "ui_weighted_score": 0.6008918131990464,
+      "ui_score": 0.6008918131990464,
+      "weighted_score": 0.6008918131990464,
+      "score_mode": "raw_mkf"
+    },
+    {
+      "raw_score": 1.8170809706766828,
+      "score": 1.8170809706766828,
+      "scoring_per_filter": {
+        "COST": 0.7677798287657672,
+        "DIMENSIONS": 0.3386270538961228,
+        "EFFECTIVE_CURRENT_DENSITY": 0.3124851454386762,
+        "EFFECTIVE_RESISTANCE": 0.6663462298373863,
+        "LOSSES": 0.7106740880147928,
+        "MAGNETOMOTIVE_FORCE": 1.0
+      },
+      "core_shape": "E 16/8/8",
+      "material": "79",
+      "gapping": [
+        {
+          "area": 3.7082e-05,
+          "coordinates": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.0059,
+          "distanceClosestParallelSurface": 0.0035249999999999995,
+          "length": 0.0,
+          "sectionDimensions": [
+            0.00455,
+            0.00815
+          ],
+          "shape": "rectangular",
+          "type": "subtractive"
+        },
+        {
+          "area": 1.793e-05,
+          "coordinates": [
+            0.0069,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.0059,
+          "distanceClosestParallelSurface": 0.0035249999999999995,
+          "length": 5e-06,
+          "sectionDimensions": [
+            0.0022,
+            0.00815
+          ],
+          "shape": "rectangular",
+          "type": "residual"
+        },
+        {
+          "area": 1.793e-05,
+          "coordinates": [
+            -0.0069,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.0059,
+          "distanceClosestParallelSurface": 0.0035249999999999995,
+          "length": 5e-06,
+          "sectionDimensions": [
+            0.0022,
+            0.00815
+          ],
+          "shape": "rectangular",
+          "type": "residual"
+        }
+      ],
+      "n_windings": 2,
+      "primary_turns": 7,
+      "primary_parallels": 1,
+      "primary_wire": "Litz DXXL66/38TXX-3(MWXX)",
+      "primary_wire_info": {
+        "original_name": "Litz DXXL66/38TXX-3(MWXX)",
+        "wire_type": "litz",
+        "conducting_diameter": 0.0,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 66,
+        "matched_name": null
+      },
+      "secondary_turns": 8,
+      "secondary_parallels": 3,
+      "secondary_wire": "Round 24.5 - Heavy Build",
+      "secondary_wire_info": {
+        "original_name": "Round 24.5 - Heavy Build",
+        "wire_type": "round",
+        "conducting_diameter": 0.000483,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 1,
+        "matched_name": "Round 24.5 - Heavy Build"
+      },
+      "secondary_wire_matched": "Round 24.5 - Heavy Build",
+      "core_losses_w": 1.0285417777817514,
+      "winding_losses_w": 0.5627411682373545,
+      "total_losses_w": 1.5912829460191058,
+      "loss_source": "OpenMagnetics",
+      "ui_weighted_score": 0.5876665885278972,
+      "ui_score": 0.5876665885278972,
+      "weighted_score": 0.5876665885278972,
+      "score_mode": "raw_mkf"
+    },
+    {
+      "raw_score": 1.7896312174612412,
+      "score": 1.7896312174612412,
+      "scoring_per_filter": {
+        "COST": 0.5541579792435429,
+        "DIMENSIONS": 0.5363508950429425,
+        "EFFECTIVE_CURRENT_DENSITY": 0.7374619544921047,
+        "EFFECTIVE_RESISTANCE": 0.29540794463749487,
+        "LOSSES": 0.6991223431747557,
+        "MAGNETOMOTIVE_FORCE": 1.0
+      },
+      "core_shape": "EQ 20/14/5",
+      "material": "95",
+      "gapping": [
+        {
+          "area": 6.0821e-05,
+          "coordinates": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.0026,
+          "distanceClosestParallelSurface": 0.004599999999999999,
+          "length": 0.0,
+          "sectionDimensions": [
+            0.0088,
+            0.0088
+          ],
+          "shape": "round",
+          "type": "subtractive"
+        },
+        {
+          "area": 2.7595e-05,
+          "coordinates": [
+            0.009985536,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.0026,
+          "distanceClosestParallelSurface": 0.004599999999999999,
+          "length": 5e-06,
+          "sectionDimensions": [
+            0.001971071,
+            0.014
+          ],
+          "shape": "irregular",
+          "type": "residual"
+        },
+        {
+          "area": 2.7595e-05,
+          "coordinates": [
+            -0.009985536,
+            0.0,
+            0.0
+          ],
+          "distanceClosestNormalSurface": 0.0026,
+          "distanceClosestParallelSurface": 0.004599999999999999,
+          "length": 5e-06,
+          "sectionDimensions": [
+            0.001971071,
+            0.014
+          ],
+          "shape": "irregular",
+          "type": "residual"
+        }
+      ],
+      "n_windings": 2,
+      "primary_turns": 4,
       "primary_parallels": 1,
       "primary_wire": "Litz DXXL20/34TXX-2(MWXX)",
-      "secondary_turns": 15,
-      "secondary_parallels": 2,
-      "secondary_wire": "Round 25.0 - Single Build",
-      "core_losses_w": 0.0,
-      "winding_losses_w": 0.0,
-      "total_losses_w": 0.0,
-      "weighted_score": 0.831813823287399
+      "primary_wire_info": {
+        "original_name": "Litz DXXL20/34TXX-2(MWXX)",
+        "wire_type": "litz",
+        "conducting_diameter": 0.0,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 20,
+        "matched_name": null
+      },
+      "secondary_turns": 5,
+      "secondary_parallels": 5,
+      "secondary_wire": "Round 28.5 - Single Build",
+      "secondary_wire_info": {
+        "original_name": "Round 28.5 - Single Build",
+        "wire_type": "round",
+        "conducting_diameter": 0.000301999999999,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 1,
+        "matched_name": "Round 28.5 - Heavy Build"
+      },
+      "secondary_wire_matched": "Round 28.5 - Heavy Build",
+      "core_losses_w": 1.0588888308436357,
+      "winding_losses_w": 0.53285737727619,
+      "total_losses_w": 1.5917462081198257,
+      "loss_source": "OpenMagnetics",
+      "ui_weighted_score": 0.635627511667325,
+      "ui_score": 0.635627511667325,
+      "weighted_score": 0.635627511667325,
+      "score_mode": "raw_mkf"
     },
     {
-      "score": 0.6977921592976908,
+      "raw_score": 1.7677798287657671,
+      "score": 1.7677798287657671,
       "scoring_per_filter": {
-        "COST": 0.44600954396390335,
-        "DIMENSIONS": 0.3832886674369319,
-        "EFFECTIVE_CURRENT_DENSITY": 0.0,
-        "EFFECTIVE_RESISTANCE": 1.0,
-        "LOSSES": 0.8211748129333065,
+        "COST": 0.7677798287657672,
+        "DIMENSIONS": 1.0,
+        "EFFECTIVE_CURRENT_DENSITY": 1.0,
+        "EFFECTIVE_RESISTANCE": 0.0,
+        "LOSSES": 0.0,
         "MAGNETOMOTIVE_FORCE": 1.0
       },
-      "core_shape": "EL 20/5.8",
-      "material": "95",
+      "core_shape": "E 16/7/5",
+      "material": "79",
       "gapping": [
         {
-          "area": 5.3353199999999996e-05,
+          "area": 1.92e-05,
           "coordinates": [
             0.0,
             0.0,
             0.0
           ],
-          "distanceClosestNormalSurface": 0.004,
-          "distanceClosestParallelSurface": 0.0058049999999999985,
+          "distanceClosestNormalSurface": 0.0052,
+          "distanceClosestParallelSurface": 0.004,
           "length": 0.0,
           "sectionDimensions": [
-            0.00506,
-            0.01163
+            0.004,
+            0.0048
           ],
-          "shape": "oblong",
+          "shape": "rectangular",
           "type": "subtractive"
         },
         {
-          "area": 2.664e-05,
+          "area": 9.6e-06,
           "coordinates": [
-            0.0091675,
+            0.007,
             0.0,
             0.0
           ],
-          "distanceClosestNormalSurface": 0.004,
-          "distanceClosestParallelSurface": 0.0058049999999999985,
+          "distanceClosestNormalSurface": 0.0052,
+          "distanceClosestParallelSurface": 0.004,
           "length": 5e-06,
           "sectionDimensions": [
-            0.001665,
-            0.016
+            0.002,
+            0.0048
           ],
           "shape": "rectangular",
           "type": "residual"
         },
         {
-          "area": 2.664e-05,
+          "area": 9.6e-06,
           "coordinates": [
-            -0.0091675,
+            -0.007,
             0.0,
             0.0
           ],
-          "distanceClosestNormalSurface": 0.004,
-          "distanceClosestParallelSurface": 0.0058049999999999985,
+          "distanceClosestNormalSurface": 0.0052,
+          "distanceClosestParallelSurface": 0.004,
           "length": 5e-06,
           "sectionDimensions": [
-            0.001665,
-            0.016
+            0.002,
+            0.0048
           ],
           "shape": "rectangular",
           "type": "residual"
@@ -147,108 +475,54 @@
       "n_windings": 2,
       "primary_turns": 9,
       "primary_parallels": 1,
-      "primary_wire": "Litz SXXL20/34FX-3(MWXX)",
-      "secondary_turns": 9,
-      "secondary_parallels": 1,
-      "secondary_wire": "Litz SXXL07/30FX-3(MWXX)",
-      "core_losses_w": 0.0,
-      "winding_losses_w": 0.0,
-      "total_losses_w": 0.0,
-      "weighted_score": 0.6977921592976908
-    },
-    {
-      "score": 0.6954398560173929,
-      "scoring_per_filter": {
-        "COST": 0.44600954396390335,
-        "DIMENSIONS": 0.3982912821958742,
-        "EFFECTIVE_CURRENT_DENSITY": 0.0,
-        "EFFECTIVE_RESISTANCE": 1.0,
-        "LOSSES": 0.8139035632672666,
-        "MAGNETOMOTIVE_FORCE": 1.0
+      "primary_wire": "Litz TCA3 35/38 LITZ (MWXX)",
+      "primary_wire_info": {
+        "original_name": "Litz TCA3 35/38 LITZ (MWXX)",
+        "wire_type": "litz",
+        "conducting_diameter": 0.0,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 35,
+        "matched_name": null
       },
-      "core_shape": "EL 20/5.8",
-      "material": "95",
-      "gapping": [
-        {
-          "area": 5.3353199999999996e-05,
-          "coordinates": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "distanceClosestNormalSurface": 0.004,
-          "distanceClosestParallelSurface": 0.0058049999999999985,
-          "length": 0.0,
-          "sectionDimensions": [
-            0.00506,
-            0.01163
-          ],
-          "shape": "oblong",
-          "type": "subtractive"
-        },
-        {
-          "area": 2.664e-05,
-          "coordinates": [
-            0.0091675,
-            0.0,
-            0.0
-          ],
-          "distanceClosestNormalSurface": 0.004,
-          "distanceClosestParallelSurface": 0.0058049999999999985,
-          "length": 5e-06,
-          "sectionDimensions": [
-            0.001665,
-            0.016
-          ],
-          "shape": "rectangular",
-          "type": "residual"
-        },
-        {
-          "area": 2.664e-05,
-          "coordinates": [
-            -0.0091675,
-            0.0,
-            0.0
-          ],
-          "distanceClosestNormalSurface": 0.004,
-          "distanceClosestParallelSurface": 0.0058049999999999985,
-          "length": 5e-06,
-          "sectionDimensions": [
-            0.001665,
-            0.016
-          ],
-          "shape": "rectangular",
-          "type": "residual"
-        }
-      ],
-      "n_windings": 2,
-      "primary_turns": 9,
-      "primary_parallels": 1,
-      "primary_wire": "Litz SXXL20/34FX-3(MWXX)",
-      "secondary_turns": 9,
-      "secondary_parallels": 1,
-      "secondary_wire": "Litz SXXL07/30FX-2(MWXX)",
-      "core_losses_w": 0.0,
-      "winding_losses_w": 0.0,
-      "total_losses_w": 0.0,
-      "weighted_score": 0.6954398560173929
+      "secondary_turns": 11,
+      "secondary_parallels": 7,
+      "secondary_wire": "Round 30.5 - Single Build",
+      "secondary_wire_info": {
+        "original_name": "Round 30.5 - Single Build",
+        "wire_type": "round",
+        "conducting_diameter": 0.00024099999999900002,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 1,
+        "matched_name": "Round 30.5 - Heavy Build"
+      },
+      "secondary_wire_matched": "Round 30.5 - Heavy Build",
+      "core_losses_w": 1.3825528414040296,
+      "winding_losses_w": 0.9547629593108113,
+      "total_losses_w": 2.337315800714841,
+      "loss_source": "OpenMagnetics",
+      "ui_weighted_score": 0.3830910065714172,
+      "ui_score": 0.3830910065714172,
+      "weighted_score": 0.3830910065714172,
+      "score_mode": "raw_mkf"
     }
   ],
   "weights": {
-    "COST": 0.11489249269191876,
-    "LOSSES": 0.7017745073080813,
-    "DIMENSIONS": 0.183333
+    "COST": 0.05695123124256631,
+    "LOSSES": 0.6036837687574338,
+    "DIMENSIONS": 0.339365
   },
   "inputs_used": {
     "designRequirements": {
       "topology": "Two Switch Forward Converter",
       "magnetizingInductance": {
-        "nominal": 0.0003846396123561478,
-        "minimum": 0.0003077116898849183
+        "nominal": 8.311540242989989e-05,
+        "minimum": 6.649232194391991e-05
       },
       "turnsRatios": [
         {
-          "nominal": 0.9921259842519685
+          "nominal": 0.8503937007874016
         }
       ]
     },
@@ -261,46 +535,52 @@
         "excitationsPerWinding": [
           {
             "name": "Primary",
-            "frequency": 65000.0,
+            "frequency": 221000.0,
             "current": {
               "processed": {
                 "label": "Rectangular",
-                "peakToPeak": 5.0396825396825395,
+                "peakToPeak": 5.879629629629629,
                 "offset": 1.1339285714285714,
-                "dutyCycle": 0.45
+                "dutyCycle": 0.38571428571428573
               }
             },
             "voltage": {
               "processed": {
                 "label": "Rectangular",
-                "peakToPeak": 75.89079196362921,
+                "peakToPeak": 73.39301917966743,
                 "offset": 0,
-                "dutyCycle": 0.45
+                "dutyCycle": 0.38571428571428573
               }
             }
           },
           {
             "name": "Secondary",
-            "frequency": 65000.0,
+            "frequency": 221000.0,
             "current": {
               "processed": {
                 "label": "Rectangular",
                 "peakToPeak": 5.0,
-                "offset": 1.125,
-                "dutyCycle": 0.45
+                "offset": 0.9642857142857143,
+                "dutyCycle": 0.38571428571428573
               }
             },
             "voltage": {
               "processed": {
                 "label": "Rectangular",
-                "peakToPeak": 32.524625127269665,
+                "peakToPeak": 31.454151077000333,
                 "offset": 0,
-                "dutyCycle": 0.45
+                "dutyCycle": 0.38571428571428573
               }
             }
           }
         ]
       }
     ]
-  }
+  },
+  "score_convention": {
+    "primary": "raw_score",
+    "secondary": "ui_score",
+    "ranking": "raw_score_desc"
+  },
+  "pyopenmagnetics_runtime_version": "1.1.4"
 }

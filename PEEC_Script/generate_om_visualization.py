@@ -684,30 +684,59 @@ def build_magnetic_from_config(config):
     gapping = config.get('gapping', [])
     windings = config.get('windings', [])
 
-    packing_pattern = str(config.get('packing_pattern', 'Layered') or 'Layered')
-    packing_key = packing_pattern.strip().lower()
-    if packing_key == 'orthocyclic':
-        # Match OM web defaults requested by GUI:
-        # - Winding Arrangement: overlapping
-        # - Section Alignment: inner_or_top
-        # - Turns Alignment: spread
-        layers_orientation = 'overlapping'
-        turns_alignment = 'spread'
-        section_alignment = 'inner_or_top'
-    elif packing_key == 'random':
-        layers_orientation = 'overlapping'
-        turns_alignment = 'spread'
-        section_alignment = 'centered'
-    else:
-        layers_orientation = 'overlapping'
-        turns_alignment = 'centered'
-        section_alignment = 'centered'
+    # OM-native winding layout parameters (from GUI winding options dialog)
+    # Fall back to legacy packing_pattern if new fields are missing
+    layers_orientation = str(config.get('winding_orientation', '') or '').strip()
+    section_alignment = str(config.get('section_alignment', '') or '').strip()
+
+    if not layers_orientation or not section_alignment:
+        # Legacy fallback: map old packing_pattern to OM-native values
+        packing_pattern = str(config.get('packing_pattern', 'Layered') or 'Layered')
+        packing_key = packing_pattern.strip().lower()
+        if packing_key == 'orthocyclic':
+            layers_orientation = layers_orientation or 'overlapping'
+            section_alignment = section_alignment or 'inner or top'
+        elif packing_key == 'random':
+            layers_orientation = layers_orientation or 'overlapping'
+            section_alignment = section_alignment or 'centered'
+        else:
+            layers_orientation = layers_orientation or 'contiguous'
+            section_alignment = section_alignment or 'inner or top'
+
+    # Map OM web-style alignment names to API-compatible keys
+    alignment_map = {
+        'inner or top': 'inner or top',
+        'inner_or_top': 'inner or top',
+        'outer or bottom': 'outer or bottom',
+        'outer_or_bottom': 'outer or bottom',
+        'centered': 'centered',
+        'spread': 'spread',
+    }
+    section_alignment = alignment_map.get(section_alignment, section_alignment)
+
+    # Per-winding turns alignment (list, one per winding)
+    turns_alignment_per_winding = config.get('turns_alignment_per_winding', [])
+    if not turns_alignment_per_winding:
+        turns_alignment_per_winding = ['spread'] * len(windings)
+
+    # Per-winding proportions (list of floats summing to ~1.0)
+    proportions_per_winding = config.get('proportions_per_winding', [])
+    if not proportions_per_winding:
+        n_w = len(windings) or 1
+        proportions_per_winding = [1.0 / n_w] * n_w
+
+    # Use the first winding's turns alignment as the global default for the coil
+    turns_alignment = alignment_map.get(
+        str(turns_alignment_per_winding[0] if turns_alignment_per_winding else 'spread'),
+        'spread'
+    )
 
     wind_meta = {
-        'packing_pattern': packing_pattern,
         'layers_orientation': layers_orientation,
         'section_alignment': section_alignment,
         'turns_alignment': turns_alignment,
+        'turns_alignment_per_winding': turns_alignment_per_winding,
+        'proportions_per_winding': proportions_per_winding,
         'used_api_wind': False,
         'api_wind_success': False,
         'winding_mode': 'wind_by_turns',
@@ -721,9 +750,15 @@ def build_magnetic_from_config(config):
     # 2. Build core functional description
     core_type = infer_core_type(shape)
     gapping_use = gapping if isinstance(gapping, list) else []
-    if core_type == 'toroidal' and gapping_use:
+    if core_type == 'toroidal':
         # Toroids cannot be gapped in OM core model.
-        gapping_use = []
+        if gapping_use:
+            gapping_use = []
+        # PyOpenMagnetics requires overlapping layers for toroids.
+        if layers_orientation != 'overlapping':
+            print(f'NOTE: Forcing overlapping orientation for toroidal core '
+                  f'(was: {layers_orientation!r})', file=sys.stderr)
+            layers_orientation = 'overlapping'
 
     core_data = {
         'functionalDescription': {
@@ -773,19 +808,23 @@ def build_magnetic_from_config(config):
         mag_complete['coil'] = coil
 
         section_order = parse_section_order(config.get('section_order', ''), len(coil_func))
-        is_default = section_order == list(range(len(coil_func)))
         tape_thickness = float(config.get('tape_thickness', 0.0) or 0.0)
         tape_layers = int(config.get('tape_layers', 0) or 0)
         insulation_thickness = tape_thickness * max(tape_layers, 0)
-        use_sections = (section_order and not is_default) or (insulation_thickness > 0)
-        use_api_wind = use_sections or packing_key in ('orthocyclic', 'random')
-        wind_meta['used_api_wind'] = bool(use_api_wind)
 
-        if use_api_wind:
+        # Always use API wind with explicit OM-native parameters
+        wind_meta['used_api_wind'] = True
+
+        if True:
             if not section_order:
                 section_order = list(range(len(coil_func)))
-            total_turns = sum([w.get('num_turns', 0) * max(1, w.get('num_parallels', 1)) for w in windings]) or 1
-            proportions = [(w.get('num_turns', 0) * max(1, w.get('num_parallels', 1)) / total_turns) for w in windings]
+
+            # Use per-winding proportions from GUI (already normalized to sum ~1.0)
+            proportions = list(proportions_per_winding)
+            if len(proportions) != len(coil_func):
+                # Fallback: compute from turns if proportions don't match winding count
+                total_turns = sum([w.get('num_turns', 0) * max(1, w.get('num_parallels', 1)) for w in windings]) or 1
+                proportions = [(w.get('num_turns', 0) * max(1, w.get('num_parallels', 1)) / total_turns) for w in windings]
 
             # For interleaving patterns (e.g. 121), a winding can appear multiple
             # times. Compensate the per-winding proportion by the number of
@@ -794,22 +833,37 @@ def build_magnetic_from_config(config):
             if section_order:
                 counts = [max(1, section_order.count(i)) for i in range(len(proportions))]
                 proportions = [proportions[i] / counts[i] for i in range(len(proportions))]
+
+            # Build per-section turnsAlignment array from per-winding values.
+            # section_order maps sections to winding indices, so expand
+            # turns_alignment_per_winding through section_order.
+            per_section_turns_alignment = []
+            for sec_idx in section_order:
+                if sec_idx < len(turns_alignment_per_winding):
+                    ta = alignment_map.get(
+                        str(turns_alignment_per_winding[sec_idx]),
+                        turns_alignment_per_winding[sec_idx]
+                    )
+                    per_section_turns_alignment.append(ta)
+                else:
+                    per_section_turns_alignment.append(turns_alignment)
+
             base_coil = {
                 'bobbin': bobbin,
                 'functionalDescription': coil_func,
                 'layersOrientation': layers_orientation,
-                'sectionsAlignment': section_alignment,
                 'sectionAlignment': section_alignment,
                 'turnsAlignment': turns_alignment
             }
-            margin_pairs = []
-            if insulation_thickness > 0:
-                margin_pad = insulation_thickness * 0.5
-                n_pairs = max(1, len(section_order) - 1)
-                margin_pairs = [[margin_pad, margin_pad] for _ in range(n_pairs)]
 
-            def wind_once(margins):
-                out = ensure_dict(pm.wind(base_coil, 1, proportions, section_order, margins))
+            # Use three-step winding: wind_by_sections → wind_by_layers → wind_by_turns
+            # This ensures sectionAlignment is applied (pm.wind() ignores it).
+            insul_thick_val = insulation_thickness if insulation_thickness > 0 else 0.0
+
+            def sections_once(insul):
+                out = ensure_dict(pm.wind_by_sections(
+                    base_coil, 1, proportions, section_order, insul
+                ))
                 if isinstance(out, str):
                     raise RuntimeError(out)
                 if isinstance(out, dict) and out.get('errorMessage'):
@@ -817,15 +871,38 @@ def build_magnetic_from_config(config):
                 return out
 
             try:
-                coil_tmp = wind_once(margin_pairs)
+                coil_tmp = sections_once(insul_thick_val)
             except Exception:
-                if margin_pairs:
-                    # Some combinations can fail with explicit margin pairs.
-                    # Retry without margins to preserve winding mode.
-                    coil_tmp = wind_once([])
+                if insul_thick_val > 0:
+                    coil_tmp = sections_once(0.0)
                 else:
                     raise
+
+            # Apply per-section turnsAlignment before wind_by_layers
+            # The coil now has sectionsDescription — set turnsAlignment as array
+            if per_section_turns_alignment:
+                coil_tmp['turnsAlignment'] = per_section_turns_alignment
+            coil_tmp['layersOrientation'] = layers_orientation
+            coil_tmp['sectionAlignment'] = section_alignment
+
+            try:
+                coil_tmp = ensure_dict(pm.wind_by_layers(coil_tmp, {}, 0.0))
+                if isinstance(coil_tmp, str):
+                    raise RuntimeError(coil_tmp)
+            except Exception as e:
+                print(f'NOTE: wind_by_layers failed ({e}), '
+                      f'falling back to pm.wind()', file=sys.stderr)
+                # Fallback to pm.wind() which does all steps internally
+                coil_tmp = ensure_dict(pm.wind(
+                    base_coil, 1, proportions, section_order, []
+                ))
+                if isinstance(coil_tmp, str):
+                    raise RuntimeError(coil_tmp)
+
             if not coil_tmp.get('turnsDescription'):
+                coil_tmp['turnsAlignment'] = per_section_turns_alignment or turns_alignment
+                coil_tmp['layersOrientation'] = layers_orientation
+                coil_tmp['sectionAlignment'] = section_alignment
                 coil_tmp = ensure_dict(pm.wind_by_turns(coil_tmp))
             mag_complete['coil'] = coil_tmp
             wind_meta['api_wind_success'] = True
@@ -859,6 +936,12 @@ def generate_visualization(config):
         result = pm.plot_bobbin(mag_complete)
     else:
         result = pm.plot_magnetic(mag_complete)
+        # If winding failed, plot_magnetic will fail with COIL_NOT_PROCESSED.
+        # Fall back to plot_bobbin so the user still sees the core outline.
+        if not result.get('success', False) and wind_meta.get('wind_error'):
+            print(f'WARNING: plot_magnetic failed after winding error, '
+                  f'falling back to plot_bobbin', file=sys.stderr)
+            result = pm.plot_bobbin(mag_complete)
 
     if not result.get('success', False):
         error_msg = result.get('error', 'Unknown error')
