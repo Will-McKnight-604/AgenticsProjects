@@ -53,7 +53,15 @@
       "Bash(\"C:\\\\Users\\\\Will\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" -c \"\nimport PyOpenMagnetics as pm\nimport json, sys\nsys.path.insert\\(0, ''.''\\)\n\npm.load_databases\\({}\\)\n\nwith open\\(''om_recommendation_config.json''\\) as f:\n    config = json.load\\(f\\)\n\nfrom generate_om_recommendations import build_mas_inputs, strip_nulls\ninputs = build_mas_inputs\\(config\\)\nprocessed = pm.process_inputs\\(inputs\\)\nprocessed = strip_nulls\\(processed\\)\n\n# Test calculate_advised_cores with weights and standard cores\nweights = {''COST'': 0.1, ''EFFICIENCY'': 0.8, ''DIMENSIONS'': 0.1}\nresult = pm.calculate_advised_cores\\(processed, weights, 5, ''standard cores''\\)\ndata = result.get\\(''data'', []\\)\nprint\\(f''=== calculate_advised_cores \\(standard cores, loss-heavy\\): {len\\(data\\)} results ===''\\)\nfor i, item in enumerate\\(data[:5]\\):\n    mas = item.get\\(''mas'', item\\)\n    mag = mas.get\\(''magnetic'', {}\\)\n    core = mag.get\\(''core'', {}\\)\n    fd = core.get\\(''functionalDescription'', {}\\)\n    shape = fd.get\\(''shape'', {}\\)\n    shape_name = shape.get\\(''name'', shape\\) if isinstance\\(shape, dict\\) else shape\n    material = fd.get\\(''material'', ''?''\\)\n    if isinstance\\(material, dict\\):\n        material = material.get\\(''name'', ''?''\\)\n    core_type = fd.get\\(''type'', ''?''\\)\n    score = item.get\\(''scoring'', 0\\)\n    spf = item.get\\(''scoringPerFilter'', {}\\)\n    print\\(f''  #{i+1}: {shape_name:25s} | {str\\(material\\):10s} | type={core_type} | score={score:.3f} | C={spf.get\\(\"\"COST\"\",0\\):.2f} E={spf.get\\(\"\"EFFICIENCY\"\",spf.get\\(\"\"LOSSES\"\",0\\)\\):.2f} D={spf.get\\(\"\"DIMENSIONS\"\",0\\):.2f}''\\)\n\nprint\\(\\)\n\n# Test with size-heavy weights\nweights2 = {''COST'': 0.1, ''EFFICIENCY'': 0.1, ''DIMENSIONS'': 0.8}\nresult2 = pm.calculate_advised_cores\\(processed, weights2, 5, ''standard cores''\\)\ndata2 = result2.get\\(''data'', []\\)\nprint\\(f''=== calculate_advised_cores \\(standard cores, size-heavy\\): {len\\(data2\\)} results ===''\\)\nfor i, item in enumerate\\(data2[:5]\\):\n    mas = item.get\\(''mas'', item\\)\n    mag = mas.get\\(''magnetic'', {}\\)\n    core = mag.get\\(''core'', {}\\)\n    fd = core.get\\(''functionalDescription'', {}\\)\n    shape = fd.get\\(''shape'', {}\\)\n    shape_name = shape.get\\(''name'', shape\\) if isinstance\\(shape, dict\\) else shape\n    material = fd.get\\(''material'', ''?''\\)\n    if isinstance\\(material, dict\\):\n        material = material.get\\(''name'', ''?''\\)\n    core_type = fd.get\\(''type'', ''?''\\)\n    score = item.get\\(''scoring'', 0\\)\n    print\\(f''  #{i+1}: {shape_name:25s} | {str\\(material\\):10s} | type={core_type} | score={score:.3f}''\\)\n\")",
       "Bash(wc:*)",
       "Bash(C:/Users/Will/AppData/Local/Programs/Python/Python311/python.exe -m py_compile:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(git fetch:*)",
+      "Bash(git push:*)",
+      "Bash(git lfs:*)",
+      "Bash(git rm:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git reset:*)",
+      "Bash(python3:*)"
     ]
   }
 }

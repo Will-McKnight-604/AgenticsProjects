@@ -865,6 +865,25 @@ classdef openmagnetics_api_interface < handle
                 out.resistance = 1 / (5.8e7 * out.area);
             end
 
+            % Preserve strand info for litz wires
+            if isfield(wire, 'strand_name'); out.strand_name = wire.strand_name; end
+            if isfield(wire, 'strand_conductingDiameter'); out.strand_conductingDiameter = wire.strand_conductingDiameter; end
+            if isfield(wire, 'strand_outerDiameter'); out.strand_outerDiameter = wire.strand_outerDiameter; end
+            if isfield(wire, 'strand_type'); out.strand_type = wire.strand_type; end
+            if isfield(wire, 'strand_numberConductors'); out.strand_numberConductors = wire.strand_numberConductors; end
+
+            % Preserve numberConductors for litz (number of strands)
+            if isfield(wire, 'numberConductors')
+                nc = wire.numberConductors;
+                if ~isempty(nc) && isnumeric(nc) && nc > 0
+                    out.numberConductors = nc;
+                end
+            end
+
+            % Preserve coating fields
+            if isfield(wire, 'coating_type'); out.coating_type = wire.coating_type; end
+            if isfield(wire, 'coating_grade'); out.coating_grade = wire.coating_grade; end
+
         end
 
         function db = convert_core_database(obj, remote)

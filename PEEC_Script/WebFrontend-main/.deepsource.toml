@@ -1,0 +1,9 @@
+version = 1
+
+exclude_patterns = ["src/assets/ts/MAS.ts"]
+
+[[analyzers]]
+name = "javascript"
+
+  [analyzers.meta]
+  plugins = ["vue"]

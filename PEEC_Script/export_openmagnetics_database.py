@@ -102,6 +102,22 @@ def export_wires(output_dir, wire_types=None):
                     strand.get('outerDiameter'))
                 flat['strand_type'] = strand.get('type')
                 flat['strand_numberConductors'] = strand.get('numberConductors')
+                flat['strand_name'] = strand.get('name')
+            elif strand and isinstance(strand, str):
+                # Strand is a name reference (e.g. "Round 0.02 - Grade 1")
+                flat['strand_name'] = strand
+                # Try to resolve the strand wire for its dimensions
+                try:
+                    strand_wire = pm.get_wire_data_by_name(strand)
+                    flat['strand_conductingDiameter'] = extract_nominal(
+                        strand_wire.get('conductingDiameter'))
+                    flat['strand_outerDiameter'] = extract_nominal(
+                        strand_wire.get('outerDiameter'))
+                    flat['strand_type'] = strand_wire.get('type', 'round')
+                    flat['strand_numberConductors'] = strand_wire.get(
+                        'numberConductors', 1)
+                except Exception:
+                    pass
 
             safe_key = name.replace(' ', '_').replace('.', '_').replace(
                 '-', '_').replace('/', '_')

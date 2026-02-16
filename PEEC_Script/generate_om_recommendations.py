@@ -103,81 +103,173 @@ def generate_voltage_waveform(rms_target, duty, winding_index, phase_deg, sample
     return values
 
 
-def build_mas_inputs(config):
-    """Build MAS inputs structure from recommendation config."""
+def _build_excitations_for_op(op_windings, freq_hz, duty):
+    """Build MAS excitationsPerWinding from an operating point's winding list.
 
-    dr = config.get("design_requirements", {})
-    op = config.get("operating_point", {})
-    windings = config.get("windings", [])
-
+    Supports two modes:
+      1. Explicit waveform params: waveform_label, i_pp, i_offset, v_pp, v_offset
+      2. Legacy RMS mode: rms_current_a, rms_voltage_v (backward compatible)
+    """
     # Handle windings as list (may come as dict from Octave cell array encoding)
-    if isinstance(windings, dict):
-        windings = [windings[k] for k in sorted(windings.keys())]
+    if isinstance(op_windings, dict):
+        op_windings = [op_windings[k] for k in sorted(op_windings.keys())]
 
-    freq_hz = as_float(op.get("frequency_hz", 100e3), 100e3)
-    duty = as_float(op.get("duty", 0.4), 0.4)
-    samples = int(as_float(config.get("samples_per_period", 512), 512))
-    ambient_temp = as_float(op.get("ambient_temperature", 25), 25)
-
-    # Time vector
-    period = 1.0 / freq_hz
-    time_vec = [float(i) / float(samples) * period for i in range(samples)]
-
-    # Build excitations per winding using the MAS "processed" label format
-    # (matches the format used by the OpenMagnetics web tool)
     excitations = []
-    for idx, w in enumerate(windings):
+    for idx, w in enumerate(op_windings):
         if isinstance(w, str):
             continue
-        rms_i = as_float(w.get("rms_current_a", 0.0), 0.0)
-        rms_v = as_float(w.get("rms_voltage_v", 0.0), 0.0)
 
-        # For forward converter: primary current is rectangular (on during D),
-        # secondary is also rectangular. Voltage is rectangular.
-        # Compute peak-to-peak and offset from RMS and duty cycle.
+        waveform_label = w.get("waveform_label", None)
 
-        # Current: approximate as rectangular pulse with duty D
-        # I_peak = I_rms / sqrt(D), offset = I_peak * D / 2
-        if rms_i > 0 and duty > 0:
-            i_peak = rms_i / math.sqrt(duty)
-            i_offset = i_peak * duty / 2.0
-            i_pp = i_peak
-        else:
-            i_peak = 0
-            i_offset = 0
-            i_pp = 0
+        if waveform_label and ("i_pp" in w or "v_pp" in w):
+            # Explicit waveform mode (new format from topology wizard)
+            i_pp = as_float(w.get("i_pp", 0.0), 0.0)
+            i_offset = as_float(w.get("i_offset", 0.0), 0.0)
+            v_pp = as_float(w.get("v_pp", 0.0), 0.0)
+            v_offset = as_float(w.get("v_offset", 0.0), 0.0)
 
-        # Voltage: rectangular pulse
-        if rms_v > 0 and duty > 0:
-            v_peak = rms_v / math.sqrt(duty)
-            v_pp = v_peak * (1.0 + duty / max(1.0 - duty, 0.01))
-            v_offset = 0
-        else:
-            v_pp = 0
-            v_offset = 0
+            # For secondary with RMS fallback
+            if i_pp == 0 and "rms_current_a" in w:
+                rms_i = as_float(w.get("rms_current_a", 0.0), 0.0)
+                if rms_i > 0 and duty > 0:
+                    i_peak = rms_i / math.sqrt(duty)
+                    i_pp = i_peak
+                    i_offset = i_peak * duty / 2.0
 
-        excitations.append({
-            "name": w.get("name", f"Winding {idx+1}"),
-            "frequency": freq_hz,
-            "current": {
-                "processed": {
-                    "label": "Rectangular",
-                    "peakToPeak": i_pp,
-                    "offset": i_offset,
-                    "dutyCycle": duty
+            if v_pp == 0 and "rms_voltage_v" in w:
+                rms_v = as_float(w.get("rms_voltage_v", 0.0), 0.0)
+                if rms_v > 0 and duty > 0:
+                    v_pp = rms_v / math.sqrt(duty)
+                    v_offset = 0
+
+            # Determine voltage label (default Rectangular for all topologies)
+            v_label = w.get("voltage_label", "Rectangular")
+
+            excitations.append({
+                "name": w.get("name", f"Winding {idx+1}"),
+                "frequency": freq_hz,
+                "current": {
+                    "processed": {
+                        "label": waveform_label,
+                        "peakToPeak": i_pp,
+                        "offset": i_offset,
+                        "dutyCycle": duty
+                    }
+                },
+                "voltage": {
+                    "processed": {
+                        "label": v_label,
+                        "peakToPeak": v_pp,
+                        "offset": v_offset,
+                        "dutyCycle": duty
+                    }
                 }
+            })
+        else:
+            # Legacy RMS-based mode (backward compatible)
+            rms_i = as_float(w.get("rms_current_a", 0.0), 0.0)
+            rms_v = as_float(w.get("rms_voltage_v", 0.0), 0.0)
+
+            if rms_i > 0 and duty > 0:
+                i_peak = rms_i / math.sqrt(duty)
+                i_offset = i_peak * duty / 2.0
+                i_pp = i_peak
+            else:
+                i_pp = 0
+                i_offset = 0
+
+            if rms_v > 0 and duty > 0:
+                v_peak = rms_v / math.sqrt(duty)
+                v_pp = v_peak * (1.0 + duty / max(1.0 - duty, 0.01))
+                v_offset = 0
+            else:
+                v_pp = 0
+                v_offset = 0
+
+            excitations.append({
+                "name": w.get("name", f"Winding {idx+1}"),
+                "frequency": freq_hz,
+                "current": {
+                    "processed": {
+                        "label": "Rectangular",
+                        "peakToPeak": i_pp,
+                        "offset": i_offset,
+                        "dutyCycle": duty
+                    }
+                },
+                "voltage": {
+                    "processed": {
+                        "label": "Rectangular",
+                        "peakToPeak": v_pp,
+                        "offset": v_offset,
+                        "dutyCycle": duty
+                    }
+                }
+            })
+
+    return excitations
+
+
+def build_mas_inputs(config):
+    """Build MAS inputs structure from recommendation config.
+
+    Supports two config formats:
+      - New: config.operating_points[] array (each with .windings, .duty, .vin, etc.)
+      - Legacy: config.operating_point + config.windings (single operating point)
+    """
+
+    dr = config.get("design_requirements", {})
+    samples = int(as_float(config.get("samples_per_period", 512), 512))
+
+    # --- Build operating points ---
+    operating_points_cfg = config.get("operating_points", None)
+
+    # Handle Octave cell array encoding (dict with numeric keys)
+    if isinstance(operating_points_cfg, dict):
+        operating_points_cfg = [operating_points_cfg[k]
+                                for k in sorted(operating_points_cfg.keys())]
+
+    mas_op_points = []
+
+    if operating_points_cfg and isinstance(operating_points_cfg, list):
+        # New multi-operating-point format
+        for op_cfg in operating_points_cfg:
+            if isinstance(op_cfg, str):
+                continue
+            freq_hz = as_float(op_cfg.get("frequency_hz", 100e3), 100e3)
+            duty = as_float(op_cfg.get("duty", 0.4), 0.4)
+            ambient_temp = as_float(op_cfg.get("ambient_temperature", 25), 25)
+            op_windings = op_cfg.get("windings", [])
+
+            excitations = _build_excitations_for_op(op_windings, freq_hz, duty)
+            mas_op_points.append({
+                "name": op_cfg.get("name", "operating_point"),
+                "conditions": {
+                    "ambientTemperature": ambient_temp
+                },
+                "excitationsPerWinding": excitations
+            })
+    else:
+        # Legacy single operating point format
+        op = config.get("operating_point", {})
+        windings = config.get("windings", [])
+        if isinstance(windings, dict):
+            windings = [windings[k] for k in sorted(windings.keys())]
+
+        freq_hz = as_float(op.get("frequency_hz", 100e3), 100e3)
+        duty = as_float(op.get("duty", 0.4), 0.4)
+        ambient_temp = as_float(op.get("ambient_temperature", 25), 25)
+
+        excitations = _build_excitations_for_op(windings, freq_hz, duty)
+        mas_op_points.append({
+            "name": "nominal",
+            "conditions": {
+                "ambientTemperature": ambient_temp
             },
-            "voltage": {
-                "processed": {
-                    "label": "Rectangular",
-                    "peakToPeak": v_pp,
-                    "offset": v_offset,
-                    "dutyCycle": duty
-                }
-            }
+            "excitationsPerWinding": excitations
         })
 
-    # Build turns ratios
+    # --- Build turns ratios ---
     turns_ratios = []
     tr = dr.get("turnsRatios", None)
     if tr is not None:
@@ -188,12 +280,12 @@ def build_mas_inputs(config):
         else:
             turns_ratios = [{"nominal": float(tr)}]
 
-    # Build magnetizing inductance
+    # --- Build magnetizing inductance ---
     mag_ind = dr.get("magnetizingInductance", {})
     if isinstance(mag_ind, (int, float)):
         mag_ind = {"nominal": float(mag_ind)}
 
-    # Map internal topology names to MAS schema enum values
+    # --- Map topology names ---
     topology_map = {
         "two_switch_forward": "Two Switch Forward Converter",
         "2_switch_forward": "Two Switch Forward Converter",
@@ -210,24 +302,24 @@ def build_mas_inputs(config):
     topo_key = raw_topo.lower().replace("-", "_").replace(" ", "_")
     topology = topology_map.get(topo_key, raw_topo)
 
-    inputs = {
-        "designRequirements": {
-            "topology": topology,
-            "magnetizingInductance": mag_ind,
-        },
-        "operatingPoints": [
-            {
-                "name": "nominal",
-                "conditions": {
-                    "ambientTemperature": ambient_temp
-                },
-                "excitationsPerWinding": excitations
-            }
-        ]
+    # --- Assemble MAS inputs ---
+    design_req = {
+        "topology": topology,
+        "magnetizingInductance": mag_ind,
+        "turnsRatios": turns_ratios,
     }
 
-    # turnsRatios is required by MAS schema (empty array for inductors)
-    inputs["designRequirements"]["turnsRatios"] = turns_ratios
+    # Forward optional design requirements
+    for key in ("operatingTemperature", "insulation", "maximumDimensions",
+                "maximumWeight", "leakageInductance", "market"):
+        val = dr.get(key)
+        if val is not None:
+            design_req[key] = val
+
+    inputs = {
+        "designRequirements": design_req,
+        "operatingPoints": mas_op_points,
+    }
 
     return inputs
 
@@ -298,8 +390,10 @@ def apply_user_weights(recommendations, weights):
         rec["weighted_score"] = rec["ui_weighted_score"]
         rec["score_mode"] = "raw_mkf"
 
-    # Keep adviser ordering semantics: rank by raw score.
-    recommendations.sort(key=lambda r: as_float(r.get("raw_score", 0.0), 0.0), reverse=True)
+    # Rank by UI-weighted score so weight sliders directly influence which
+    # recommendations survive the trim to max_results.  The pool is 3x
+    # max_results, giving enough variety for weights to meaningfully reorder.
+    recommendations.sort(key=lambda r: as_float(r.get("ui_weighted_score", 0.0), 0.0), reverse=True)
     return recommendations
 
 
@@ -333,8 +427,19 @@ def run_recommendations(config):
     freq = 0
     if ops and ops[0].get("excitationsPerWinding"):
         freq = ops[0]["excitationsPerWinding"][0].get("frequency", 0)
+    n_ops = len(ops)
+    has_insulation = "insulation" in dr
+    has_max_dims = "maximumDimensions" in dr
+    op_temp = dr.get("operatingTemperature", {})
+    pri_label = "?"
+    if ops and ops[0].get("excitationsPerWinding"):
+        pri_label = ops[0]["excitationsPerWinding"][0].get("current", {}).get(
+            "processed", {}).get("label", "?")
     print(f"[ADVISOR] Inputs: Lm={mag_ind}, turnsRatios={turns_ratios}, "
-          f"freq={freq}Hz, weights={api_weights}", file=sys.stderr)
+          f"freq={freq}Hz, weights={api_weights}, "
+          f"ops={n_ops}, pri_current={pri_label}, "
+          f"insulation={has_insulation}, maxDims={has_max_dims}, "
+          f"opTemp={op_temp}", file=sys.stderr)
 
     # Process inputs through PyOpenMagnetics
     try:
@@ -410,9 +515,9 @@ def run_recommendations(config):
         "weights": weights,
         "inputs_used": inputs,
         "score_convention": {
-            "primary": "raw_score",
-            "secondary": "ui_score",
-            "ranking": "raw_score_desc"
+            "primary": "ui_weighted_score",
+            "secondary": "raw_score",
+            "ranking": "ui_weighted_score_desc"
         },
         "pyopenmagnetics_runtime_version": get_pm_runtime_version()
     }

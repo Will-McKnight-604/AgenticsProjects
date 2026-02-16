@@ -1,1 +1,107 @@
-{"inputs":{"designRequirements":{"topology":"two_switch_forward","magnetizingInductance":{"nominal":0.00008311540242989989},"turnsRatios":{"nominal":0.8}},"operatingPoints":[{"name":"nominal","conditions":{"ambientTemperature":25},"excitationsPerWinding":[{"name":"Primary","frequency":221000,"current":{"processed":{"rms":3.651596918186624}},"voltage":{"processed":{"rms":28}}},{"name":"Secondary","frequency":221000,"current":{"processed":{"rms":3.105295017040594}},"voltage":{"processed":{"rms":12}}}]}]},"magnetic":{"core":{"functionalDescription":{"shape":{"name":"EQ_20_14_5"},"material":"W_95"}},"coil":{"functionalDescription":[{"name":"Primary","numberTurns":4,"numberParallels":2,"wire":"Litz_180x0_04___Grade_1___Unserved"},{"name":"Secondary","numberTurns":5,"numberParallels":5,"wire":"Round_28_5___Single_Build"}]}}}
+{
+  "inputs":{
+  "designRequirements":{
+  "topology":"two_switch_forward",
+  "magnetizingInductance":{
+  "nominal":0.00008311540242989989
+},
+  "turnsRatios":[{
+  "nominal":0.8
+}]
+},
+  "operatingPoints":[{
+  "name":"nominal",
+  "conditions":{
+  "ambientTemperature":25
+},
+  "excitationsPerWinding":[{
+  "name":"Primary",
+  "frequency":221000,
+  "current":{
+  "processed":{
+  "rms":3.651596918186624
+}
+},
+  "voltage":{
+  "processed":{
+  "rms":28
+}
+}
+},{
+  "name":"Secondary",
+  "frequency":221000,
+  "current":{
+  "processed":{
+  "rms":3.105295017040594
+}
+},
+  "voltage":{
+  "processed":{
+  "rms":12
+}
+}
+}]
+}]
+},
+  "magnetic":{
+  "core":{
+  "functionalDescription":{
+  "type":"two-piece set",
+  "shape":"EQ 20/14/5",
+  "material":"95",
+  "gapping":[{
+  "type":"subtractive",
+  "length":0
+}],
+  "numberStacks":1
+},
+  "name":"EQ 20/14/5 95"
+},
+  "coil":{
+  "bobbin":"EQ 20/14/5",
+  "functionalDescription":[{
+  "name":"Primary",
+  "numberTurns":4,
+  "numberParallels":2,
+  "isolationSide":"primary",
+  "wire":{
+  "name":"Litz 60x0.05 - Grade 2 - Double Served",
+  "type":"litz",
+  "numberConductors":60,
+  "standard":"IEC 60317",
+  "outerDiameter":{
+  "minimum":0.000673665,
+  "maximum":0.000715335
+},
+  "strand":"Round 0.05 - Grade 2",
+  "coating":{
+  "type":"served"
+}
+}
+},{
+  "name":"Secondary",
+  "numberTurns":5,
+  "numberParallels":5,
+  "isolationSide":"secondary",
+  "wire":{
+  "name":"Round 28.5 - Single Build",
+  "type":"round",
+  "material":"copper",
+  "numberConductors":1,
+  "standard":"NEMA MW 1000 C",
+  "conductingDiameter":{
+  "nominal":0.000301999999999
+},
+  "outerDiameter":{
+  "nominal":0.00032900000000000003
+},
+  "coating":{
+  "type":"enamelled",
+  "grade":1
+}
+}
+}]
+}
+},
+  "outputs":[]
+}

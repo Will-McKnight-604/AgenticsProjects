@@ -35,9 +35,12 @@ function topology_wizard()
     data.converter.n_outputs = 1;
 
     % Insulation
-    data.insulation.class = 'Basic';        % Functional/Basic/Reinforced
+    data.insulation.class = 'Basic';        % Functional/Basic/Supplementary/Reinforced/Double
     data.insulation.pollution_degree = 2;   % 1/2/3
     data.insulation.overvoltage_cat = 'II'; % I/II/III/IV
+    data.insulation.standard = 'IEC 62368-1'; % IEC 60664-1/61558-1/60335-1/62368-1
+    data.insulation.cti = 'Group II';       % Group I/II/IIIA/IIIB
+    data.insulation.altitude_max = 2000;    % m (default per IEC)
 
     % Thermal
     data.thermal.ambient_temp = 25;    % C
@@ -54,6 +57,10 @@ function topology_wizard()
     data.requirements.i_pri_rms = 0;
     data.requirements.i_sec_rms = 0;
     data.requirements.i_mag_peak = 0;
+    data.requirements.i_mag_pp = 0;
+    data.requirements.i_pri_rms_worst = 0;
+    data.requirements.i_sec_rms_worst = 0;
+    data.requirements.i_mag_pp_worst = 0;
     data.requirements.pin_nom = 0;
     data.requirements.pout_nom = 0;
 
@@ -75,6 +82,11 @@ function topology_wizard()
     data.manual.n_windings = 2;
     data.manual.turns_ratio = 2.0;
     data.manual.fsw_khz = 200;
+
+    % Constraints (optional size limits)
+    data.constraints.max_width_mm = [];    % mm (empty = unconstrained)
+    data.constraints.max_height_mm = [];   % mm
+    data.constraints.max_depth_mm = [];    % mm
 
     % ---------- Optional fields visibility ----------
     data.show_optional = false;
@@ -401,11 +413,20 @@ function build_optional_fields(data)
     % --- Insulation ---
     make_label(panel, 'Insulation class', [0.02 y 0.35 0.06]);
     data.pop_insulation = uicontrol('Parent', panel, 'Style', 'popupmenu', ...
-              'String', {'Functional', 'Basic', 'Reinforced'}, ...
+              'String', {'Functional', 'Basic', 'Supplementary', 'Reinforced', 'Double'}, ...
               'Units', 'normalized', ...
               'Position', [0.38 y 0.25 0.07], ...
               'Value', 2, ...
               'Callback', @cb_insulation_class);
+    y = y - dy;
+
+    make_label(panel, 'CTI group', [0.02 y 0.35 0.06]);
+    data.pop_cti = uicontrol('Parent', panel, 'Style', 'popupmenu', ...
+              'String', {'Group I', 'Group II', 'Group IIIA', 'Group IIIB'}, ...
+              'Units', 'normalized', ...
+              'Position', [0.38 y 0.25 0.07], ...
+              'Value', 2, ...
+              'Callback', @cb_cti);
     y = y - dy;
 
     make_label(panel, 'Pollution degree', [0.02 y 0.35 0.06]);
@@ -426,6 +447,15 @@ function build_optional_fields(data)
               'Callback', @cb_overvoltage_cat);
     y = y - dy;
 
+    make_label(panel, 'Insulation standard', [0.02 y 0.35 0.06]);
+    data.pop_ins_std = uicontrol('Parent', panel, 'Style', 'popupmenu', ...
+              'String', {'IEC 62368-1', 'IEC 60664-1', 'IEC 61558-1', 'IEC 60335-1'}, ...
+              'Units', 'normalized', ...
+              'Position', [0.38 y 0.25 0.07], ...
+              'Value', 1, ...
+              'Callback', @cb_insulation_standard);
+    y = y - dy;
+
     % --- Thermal ---
     make_label(panel, 'Ambient temperature', [0.02 y 0.35 0.06]);
     data.edit_ambient = make_edit(panel, num2str(data.thermal.ambient_temp), ...
@@ -437,6 +467,22 @@ function build_optional_fields(data)
     data.edit_max_rise = make_edit(panel, num2str(data.thermal.max_rise), ...
                                    [0.38 y 0.20 0.07], @cb_max_rise);
     make_label(panel, 'C', [0.59 y 0.05 0.06]);
+    y = y - dy;
+
+    % --- Size Constraints ---
+    make_label(panel, 'Max width (optional)', [0.02 y 0.35 0.06]);
+    data.edit_max_width = make_edit(panel, '', [0.38 y 0.20 0.07], @cb_max_width);
+    make_label(panel, 'mm', [0.59 y 0.05 0.06]);
+    y = y - dy;
+
+    make_label(panel, 'Max height (optional)', [0.02 y 0.35 0.06]);
+    data.edit_max_height = make_edit(panel, '', [0.38 y 0.20 0.07], @cb_max_height);
+    make_label(panel, 'mm', [0.59 y 0.05 0.06]);
+    y = y - dy;
+
+    make_label(panel, 'Max depth (optional)', [0.02 y 0.35 0.06]);
+    data.edit_max_depth = make_edit(panel, '', [0.38 y 0.20 0.07], @cb_max_depth);
+    make_label(panel, 'mm', [0.59 y 0.05 0.06]);
 
     guidata(data.fig, data);
 end
@@ -819,6 +865,22 @@ function cb_overvoltage_cat(src, ~)
     guidata(fig, data);
 end
 
+function cb_insulation_standard(src, ~)
+    fig = gcbf();
+    data = guidata(fig);
+    items = get(src, 'String');
+    data.insulation.standard = items{get(src, 'Value')};
+    guidata(fig, data);
+end
+
+function cb_cti(src, ~)
+    fig = gcbf();
+    data = guidata(fig);
+    items = get(src, 'String');
+    data.insulation.cti = items{get(src, 'Value')};
+    guidata(fig, data);
+end
+
 function cb_ambient_temp(src, ~)
     fig = gcbf();
     data = guidata(fig);
@@ -835,6 +897,42 @@ function cb_max_rise(src, ~)
     val = str2double(get(src, 'String'));
     if ~isnan(val) && val > 0
         data.thermal.max_rise = val;
+    end
+    guidata(fig, data);
+end
+
+function cb_max_width(src, ~)
+    fig = gcbf();
+    data = guidata(fig);
+    val = str2double(get(src, 'String'));
+    if isnan(val) || val <= 0
+        data.constraints.max_width_mm = [];
+    else
+        data.constraints.max_width_mm = val;
+    end
+    guidata(fig, data);
+end
+
+function cb_max_height(src, ~)
+    fig = gcbf();
+    data = guidata(fig);
+    val = str2double(get(src, 'String'));
+    if isnan(val) || val <= 0
+        data.constraints.max_height_mm = [];
+    else
+        data.constraints.max_height_mm = val;
+    end
+    guidata(fig, data);
+end
+
+function cb_max_depth(src, ~)
+    fig = gcbf();
+    data = guidata(fig);
+    val = str2double(get(src, 'String'));
+    if isnan(val) || val <= 0
+        data.constraints.max_depth_mm = [];
+    else
+        data.constraints.max_depth_mm = val;
     end
     guidata(fig, data);
 end
@@ -1091,8 +1189,14 @@ function data = compute_requirements(data)
     i_pri_rms = iout * ns_np * sqrt(d_nom);
     i_sec_rms = iout * sqrt(d_nom);  % secondary conducts during on-time
 
-    % Peak magnetizing current
+    % Peak magnetizing current and pk-pk ripple
     i_mag_peak = vin_nom * d_nom / (2 * lm * fsw);
+    i_mag_pp = vin_nom * d_nom / (lm * fsw);  % full peak-to-peak magnetizing ripple
+
+    % Worst-case currents at Vin_min (max duty / max stress)
+    i_pri_rms_worst = iout * ns_np * sqrt(d_min_vin);
+    i_sec_rms_worst = iout * sqrt(d_min_vin);
+    i_mag_pp_worst = vin_min * d_min_vin / (lm * fsw);
 
     % Store results
     data.requirements.Lm_uH = lm * 1e6;
@@ -1106,6 +1210,10 @@ function data = compute_requirements(data)
     data.requirements.i_pri_rms = i_pri_rms;
     data.requirements.i_sec_rms = i_sec_rms;
     data.requirements.i_mag_peak = i_mag_peak;
+    data.requirements.i_mag_pp = i_mag_pp;
+    data.requirements.i_pri_rms_worst = i_pri_rms_worst;
+    data.requirements.i_sec_rms_worst = i_sec_rms_worst;
+    data.requirements.i_mag_pp_worst = i_mag_pp_worst;
     data.requirements.pin_nom = pin_nom;
     data.requirements.pout_nom = pout;
     data.requirements.vin_nom = vin_nom;
@@ -1585,31 +1693,113 @@ function config = build_recommendation_config(data)
     % Design requirements (MAS format)
     config.design_requirements = struct();
     config.design_requirements.topology = 'Two Switch Forward Converter';
+
+    % Magnetizing inductance with ±20% tolerance
     config.design_requirements.magnetizingInductance = struct();
     config.design_requirements.magnetizingInductance.nominal = r.Lm_uH * 1e-6;
     config.design_requirements.magnetizingInductance.minimum = r.Lm_uH * 0.8 * 1e-6;
-    config.design_requirements.turnsRatios = struct('nominal', r.turns_ratio);
+    config.design_requirements.magnetizingInductance.maximum = r.Lm_uH * 1.2 * 1e-6;
 
-    % Operating point with waveforms
+    % Turns ratio with ±5% tolerance
+    config.design_requirements.turnsRatios = struct( ...
+        'nominal', r.turns_ratio, ...
+        'minimum', r.turns_ratio * 0.95, ...
+        'maximum', r.turns_ratio * 1.05);
+
+    % Operating temperature (ambient + max rise)
+    max_op_temp = data.thermal.ambient_temp + data.thermal.max_rise;
+    config.design_requirements.operatingTemperature = struct('maximum', max_op_temp);
+
+    % Insulation requirements — all 7 fields required by PyOpenMagnetics advisor
+    config.design_requirements.insulation = struct();
+    config.design_requirements.insulation.insulationType = data.insulation.class;
+    config.design_requirements.insulation.pollutionDegree = sprintf('P%d', data.insulation.pollution_degree);
+    config.design_requirements.insulation.overvoltageCategory = sprintf('OVC-%s', data.insulation.overvoltage_cat);
+    config.design_requirements.insulation.standards = {data.insulation.standard};
+    config.design_requirements.insulation.cti = data.insulation.cti;
+    config.design_requirements.insulation.altitude = struct('maximum', data.insulation.altitude_max);
+    % mainSupplyVoltage from converter Vin range (RMS for DC ≈ DC value)
+    config.design_requirements.insulation.mainSupplyVoltage = struct( ...
+        'nominal', r.vin_nom, ...
+        'minimum', c.vin_min, ...
+        'maximum', c.vin_max);
+
+    % Maximum dimensions (optional, mm → m)
+    has_dims = false;
+    dims = struct();
+    if ~isempty(data.constraints.max_width_mm)
+        dims.width = data.constraints.max_width_mm * 1e-3;
+        has_dims = true;
+    end
+    if ~isempty(data.constraints.max_height_mm)
+        dims.height = data.constraints.max_height_mm * 1e-3;
+        has_dims = true;
+    end
+    if ~isempty(data.constraints.max_depth_mm)
+        dims.depth = data.constraints.max_depth_mm * 1e-3;
+        has_dims = true;
+    end
+    if has_dims
+        config.design_requirements.maximumDimensions = dims;
+    end
+
+    % --- Operating points (nominal + worst-case) ---
+    config.operating_points = {};
+
+    % Nominal operating point
+    nom_op = struct();
+    nom_op.name = 'nominal';
+    nom_op.frequency_hz = r.fsw_hz;
+    nom_op.duty = r.duty_nom;
+    nom_op.ambient_temperature = data.thermal.ambient_temp;
+    nom_op.vin = r.vin_nom;
+    nom_op.windings = {};
+    % Primary: Triangular current (magnetizing ramp), Rectangular voltage
+    nom_op.windings{1} = struct();
+    nom_op.windings{1}.name = 'Primary';
+    nom_op.windings{1}.waveform_label = 'Triangular';
+    nom_op.windings{1}.i_pp = r.i_mag_pp;           % magnetizing ripple pk-pk
+    nom_op.windings{1}.i_offset = r.i_pri_rms;       % average primary current as offset
+    nom_op.windings{1}.v_pp = r.vin_nom;              % two-switch forward: pk-pk = Vin
+    nom_op.windings{1}.v_offset = 0;
+    % Secondary: Rectangular current, Rectangular voltage
+    nom_op.windings{2} = struct();
+    nom_op.windings{2}.name = 'Secondary';
+    nom_op.windings{2}.waveform_label = 'Rectangular';
+    nom_op.windings{2}.rms_current_a = r.i_sec_rms;
+    nom_op.windings{2}.rms_voltage_v = c.vout;
+    config.operating_points{1} = nom_op;
+
+    % Worst-case operating point (Vin_min, max duty, max stress)
+    worst_op = struct();
+    worst_op.name = 'worst_case';
+    worst_op.frequency_hz = r.fsw_hz;
+    worst_op.duty = r.duty_min_vin;
+    worst_op.ambient_temperature = data.thermal.ambient_temp;
+    worst_op.vin = c.vin_min;
+    worst_op.windings = {};
+    % Primary worst-case
+    worst_op.windings{1} = struct();
+    worst_op.windings{1}.name = 'Primary';
+    worst_op.windings{1}.waveform_label = 'Triangular';
+    worst_op.windings{1}.i_pp = r.i_mag_pp_worst;
+    worst_op.windings{1}.i_offset = r.i_pri_rms_worst;
+    worst_op.windings{1}.v_pp = c.vin_min;
+    worst_op.windings{1}.v_offset = 0;
+    % Secondary worst-case
+    worst_op.windings{2} = struct();
+    worst_op.windings{2}.name = 'Secondary';
+    worst_op.windings{2}.waveform_label = 'Rectangular';
+    worst_op.windings{2}.rms_current_a = r.i_sec_rms_worst;
+    worst_op.windings{2}.rms_voltage_v = c.vout;
+    config.operating_points{2} = worst_op;
+
+    % Legacy single operating point (backward compat)
     config.operating_point = struct();
     config.operating_point.frequency_hz = r.fsw_hz;
     config.operating_point.duty = r.duty_nom;
     config.operating_point.n_windings = 2;
     config.operating_point.ambient_temperature = data.thermal.ambient_temp;
-
-    % Winding info
-    config.windings = {};
-    config.windings{1} = struct();
-    config.windings{1}.name = 'Primary';
-    config.windings{1}.rms_current_a = r.i_pri_rms;
-    config.windings{1}.rms_voltage_v = r.vin_nom;
-    config.windings{1}.phase_deg = 0;
-
-    config.windings{2} = struct();
-    config.windings{2}.name = 'Secondary';
-    config.windings{2}.rms_current_a = r.i_sec_rms;
-    config.windings{2}.rms_voltage_v = c.vout;
-    config.windings{2}.phase_deg = 180;
 
     config.samples_per_period = 512;
 
@@ -1627,18 +1817,22 @@ function data = display_recommendations(data, results)
     recs = results.recommendations;
     n = numel(recs);
 
-    % Ensure highest-scoring recommendations are shown first (raw adviser score)
-    raw_scores = zeros(n, 1);
+    % Ensure highest-scoring recommendations are shown first (UI weighted score)
+    ui_scores = zeros(n, 1);
     for k = 1:n
-        if isfield(recs(k), 'raw_score')
-            raw_scores(k) = double(recs(k).raw_score);
+        if isfield(recs(k), 'ui_score')
+            ui_scores(k) = double(recs(k).ui_score);
+        elseif isfield(recs(k), 'ui_weighted_score')
+            ui_scores(k) = double(recs(k).ui_weighted_score);
+        elseif isfield(recs(k), 'raw_score')
+            ui_scores(k) = double(recs(k).raw_score);
         elseif isfield(recs(k), 'score')
-            raw_scores(k) = double(recs(k).score);
+            ui_scores(k) = double(recs(k).score);
         end
     end
-    [~, order] = sort(raw_scores, 'descend');
+    [~, order] = sort(ui_scores, 'descend');
     recs = recs(order);
-    raw_scores = raw_scores(order);
+    raw_scores = ui_scores(order);
 
     % Build display strings
     items = cell(n, 1);

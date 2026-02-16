@@ -5490,13 +5490,9 @@ function export_mas_file(~, ~)
             wd.isolationSide = 'secondary';
         end
 
-        % Wire: use original OM wire name, not sanitized key
+        % Wire: build full wire object per MAS schema
         wire_key = data.windings(w).wire_type;
-        wire_om_name = wire_key;
-        if isfield(data.wires, wire_key) && isfield(data.wires.(wire_key), 'name')
-            wire_om_name = data.wires.(wire_key).name;
-        end
-        wd.wire = wire_om_name;
+        wd.wire = build_mas_wire_object(data, wire_key);
 
         winding_desc{end+1} = wd;
     end
@@ -5529,6 +5525,166 @@ function export_mas_file(~, ~)
         msgbox(sprintf('MAS file exported to:\n%s', full_path), 'Export Complete');
     catch err
         errordlg(sprintf('Export failed:\n%s', err.message), 'Error');
+    end
+end
+
+
+function wire_obj = build_mas_wire_object(data, wire_key)
+    % Build a full MAS-compliant wire object from our internal wire database.
+    % The MAS schema accepts either a name string or a full wire object.
+    % The web app needs the full object to display wire details properly.
+    %
+    % Schema requirements by type:
+    %   round: type, conductingDiameter {nominal}, outerDiameter {nominal}
+    %   litz:  type, numberConductors, strand (round object or name), outerDiameter {nominal}
+    %   foil:  type, conductingWidth {nominal}
+    %   rectangular: type, conductingWidth {nominal}, conductingHeight {nominal}
+
+    wire_obj = struct();
+
+    % Get the original OM name
+    wire_om_name = wire_key;
+    if isfield(data.wires, wire_key) && isfield(data.wires.(wire_key), 'name')
+        wire_om_name = data.wires.(wire_key).name;
+    end
+    wire_obj.name = wire_om_name;
+
+    % Get wire info from database
+    wire_info = data.api.get_wire_info(wire_key);
+
+    % Determine wire type
+    wire_type = 'round';  % default
+    if isfield(wire_info, 'type') && ~isempty(wire_info.type)
+        wire_type = wire_info.type;
+    elseif isfield(wire_info, 'conductor_shape')
+        if strcmp(wire_info.conductor_shape, 'rectangular')
+            wire_type = 'foil';
+        end
+    end
+    wire_obj.type = wire_type;
+
+    % Material (only set when known; litz wires often have null material in PyMKF)
+    if isfield(wire_info, 'material') && ~isempty(wire_info.material) && ischar(wire_info.material)
+        wire_obj.material = wire_info.material;
+    elseif ~strcmp(wire_type, 'litz')
+        wire_obj.material = 'copper';
+    end
+
+    % Number of conductors (must be integer per schema)
+    if isfield(wire_info, 'numberConductors') && ~isempty(wire_info.numberConductors) ...
+            && isnumeric(wire_info.numberConductors) && wire_info.numberConductors > 0
+        wire_obj.numberConductors = int32(wire_info.numberConductors);
+    else
+        wire_obj.numberConductors = int32(1);
+    end
+
+    % Standard (must be one of: "IEC 60317", "NEMA MW 1000 C", "IPC-6012")
+    if isfield(wire_info, 'standard') && ~isempty(wire_info.standard) && ischar(wire_info.standard)
+        wire_obj.standard = wire_info.standard;
+    end
+
+    % Build type-specific fields with dimensionWithTolerance format {nominal: value}
+    switch wire_type
+        case 'round'
+            if isfield(wire_info, 'diameter') && wire_info.diameter > 0
+                wire_obj.conductingDiameter = struct('nominal', wire_info.diameter);
+            end
+            if isfield(wire_info, 'outer_diameter') && wire_info.outer_diameter > 0
+                wire_obj.outerDiameter = struct('nominal', wire_info.outer_diameter);
+            end
+
+        case 'litz'
+            % Litz requires: strand, outerDiameter, numberConductors
+            % Use min/max for outerDiameter (matches PyMKF ndjson format)
+            if isfield(wire_info, 'outer_diameter') && wire_info.outer_diameter > 0
+                od = wire_info.outer_diameter;
+                % Approximate min/max from nominal (±3% typical for litz)
+                wire_obj.outerDiameter = struct('minimum', od * 0.97, 'maximum', od * 1.03);
+            end
+
+            % Strand: prefer name string reference (matches PyMKF ndjson format
+            % exactly, e.g. "strand": "Round 0.1 - Grade 1")
+            % MKF resolves this via find_wire_by_name() internally
+            if isfield(wire_info, 'strand_name') && ~isempty(wire_info.strand_name)
+                wire_obj.strand = wire_info.strand_name;
+            else
+                % Fallback: parse from wire name and build strand name
+                % e.g. "Litz 75x0.1 - Grade 1 - Double Served" -> "Round 0.1 - Grade 1"
+                strand_name = build_strand_name_from_litz(wire_om_name);
+                if ~isempty(strand_name)
+                    wire_obj.strand = strand_name;
+                elseif isfield(wire_info, 'strand_conductingDiameter') ...
+                        && ~isempty(wire_info.strand_conductingDiameter) ...
+                        && isnumeric(wire_info.strand_conductingDiameter) ...
+                        && wire_info.strand_conductingDiameter > 0
+                    % Build minimal strand object as last resort
+                    strand = struct();
+                    strand.type = 'round';
+                    strand.material = 'copper';
+                    strand.numberConductors = 1;
+                    strand.conductingDiameter = struct('nominal', wire_info.strand_conductingDiameter);
+                    wire_obj.strand = strand;
+                end
+            end
+
+        case 'foil'
+            % Foil: conductingWidth = thickness (OM convention)
+            if isfield(wire_info, 'foil_thickness') && wire_info.foil_thickness > 0
+                wire_obj.conductingWidth = struct('nominal', wire_info.foil_thickness);
+            elseif isfield(wire_info, 'thickness') && wire_info.thickness > 0
+                wire_obj.conductingWidth = struct('nominal', wire_info.thickness);
+            end
+            if isfield(wire_info, 'foil_width') && wire_info.foil_width > 0
+                wire_obj.conductingHeight = struct('nominal', wire_info.foil_width);
+            end
+
+        case 'rectangular'
+            if isfield(wire_info, 'rect_width') && wire_info.rect_width > 0
+                wire_obj.conductingWidth = struct('nominal', wire_info.rect_width);
+            end
+            if isfield(wire_info, 'rect_height') && wire_info.rect_height > 0
+                wire_obj.conductingHeight = struct('nominal', wire_info.rect_height);
+            end
+    end
+
+    % Coating info
+    if isfield(wire_info, 'coating') && isstruct(wire_info.coating)
+        wire_obj.coating = wire_info.coating;
+    elseif isfield(wire_info, 'coating_type') && ~isempty(wire_info.coating_type)
+        coat = struct('type', wire_info.coating_type);
+        if isfield(wire_info, 'coating_grade') && ~isempty(wire_info.coating_grade)
+            coat.grade = wire_info.coating_grade;
+        end
+        wire_obj.coating = coat;
+    end
+end
+
+
+function strand_d_m = parse_litz_strand_diameter(wire_name)
+    % Parse strand diameter from litz wire name.
+    % e.g. "Litz 1000x0.02 - Grade 1" -> 0.02 mm -> 2e-5 m
+    % e.g. "Litz 30x0.1 - Grade 1"    -> 0.1 mm  -> 1e-4 m
+    strand_d_m = 0;
+    tok = regexp(wire_name, 'Litz\s+\d+x(\d+\.?\d*)', 'tokens');
+    if ~isempty(tok)
+        strand_d_mm = str2double(tok{1}{1});
+        if ~isnan(strand_d_mm) && strand_d_mm > 0
+            strand_d_m = strand_d_mm * 1e-3;  % mm to m
+        end
+    end
+end
+
+
+function strand_name = build_strand_name_from_litz(litz_name)
+    % Build a strand wire name from a litz wire name.
+    % e.g. "Litz 75x0.1 - Grade 1 - Double Served" -> "Round 0.1 - Grade 1"
+    % e.g. "Litz 1000x0.02 - Grade 2 - Single Served" -> "Round 0.02 - Grade 2"
+    strand_name = '';
+    tok = regexp(litz_name, 'Litz\s+\d+x(\d+\.?\d*)\s*-\s*(Grade\s+\d+)', 'tokens');
+    if ~isempty(tok)
+        strand_d_str = tok{1}{1};
+        grade_str = tok{1}{2};
+        strand_name = sprintf('Round %s - %s', strand_d_str, grade_str);
     end
 end
 
