@@ -69,6 +69,7 @@ function topology_wizard()
     data.rec.weight_cost = 1/3;
     data.rec.weight_losses = 1/3;
     data.rec.weight_dimensions = 1/3;
+    data.rec.wire_family_mode = 'auto_all';  % auto_all | round_litz_rect | foil_planar
     data.rec.results = {};       % cell array of result structs
     data.rec.selected_idx = 0;   % index of selected recommendation
 
@@ -312,6 +313,15 @@ function build_wizard_panel(data)
               'Position', [0.48 0.76 0.12 0.14], ...
               'Value', 2, ...
               'Callback', @cb_n_results);
+
+    % Preferred wire family
+    make_label(rec_panel, 'Wire family mode', [0.62 0.75 0.20 0.15]);
+    data.pop_wire_family = uicontrol('Parent', rec_panel, 'Style', 'popupmenu', ...
+              'String', {'Auto (All)', 'Round/Litz/Rectangular', 'Foil/Planar'}, ...
+              'Units', 'normalized', ...
+              'Position', [0.80 0.76 0.18 0.14], ...
+              'Value', 1, ...
+              'Callback', @cb_wire_family_mode);
 
     % Priority sliders (linked: always sum to 100%)
     make_label(rec_panel, 'Cost', [0.02 0.52 0.08 0.14]);
@@ -942,6 +952,21 @@ function cb_n_results(src, ~)
     data = guidata(fig);
     items = get(src, 'String');
     data.rec.n_results = str2double(items{get(src, 'Value')});
+    guidata(fig, data);
+end
+
+function cb_wire_family_mode(src, ~)
+    fig = gcbf();
+    data = guidata(fig);
+    v = get(src, 'Value');
+    switch v
+        case 2
+            data.rec.wire_family_mode = 'round_litz_rect';
+        case 3
+            data.rec.wire_family_mode = 'foil_planar';
+        otherwise
+            data.rec.wire_family_mode = 'auto_all';
+    end
     guidata(fig, data);
 end
 
@@ -1662,6 +1687,26 @@ function cb_get_recommendations(~, ~)
             error('Recommendation failed: %s', results.error);
         end
 
+        % Surface any recommendation fallbacks so behavior is explicit.
+        notes = '';
+        if isfield(results, 'compatibility_filter') && isstruct(results.compatibility_filter)
+            cf = results.compatibility_filter;
+            if isfield(cf, 'fallback_to_incompatible') && logical(cf.fallback_to_incompatible)
+                notes = [notes sprintf('No recommendations matched local GUI core DB. Showing raw adviser cores.\n')];
+            elseif isfield(cf, 'skipped_incompatible_cores') && cf.skipped_incompatible_cores > 0
+                notes = [notes sprintf('Filtered out %d core(s) not present in local GUI DB.\n', cf.skipped_incompatible_cores)];
+            end
+        end
+        if isfield(results, 'wire_family_filter') && isstruct(results.wire_family_filter)
+            wf = results.wire_family_filter;
+            if isfield(wf, 'fallback_to_unfiltered') && logical(wf.fallback_to_unfiltered)
+                notes = [notes sprintf('Wire-family filter returned 0 matches. Showing unfiltered wire families.\n')];
+            end
+        end
+        if ~isempty(notes)
+            warndlg(strtrim(notes), 'Recommendation Notes');
+        end
+
         % Display recommendations in a selection dialog
         data = display_recommendations(data, results);
 
@@ -1684,6 +1729,7 @@ function config = build_recommendation_config(data)
     config.mode = 'recommend';
     config.topology = 'two_switch_forward';
     config.max_results = data.rec.n_results;
+    config.wire_family_mode = data.rec.wire_family_mode;
 
     config.weights = struct();
     config.weights.COST = data.rec.weight_cost;
@@ -1880,23 +1926,44 @@ function data = display_recommendations(data, results)
         end
         has_losses = (total_loss > 0);
 
+        % Extract MKF-computed inductance and flux density
+        Lm_uH = 0; Llk_uH = 0; B_peak_mT = 0; B_pp_mT = 0;
+        has_magnetics = false;
+        if isfield(r, 'Lm_uH') && ~isempty(r.Lm_uH)
+            Lm_uH = double(r.Lm_uH);
+            has_magnetics = true;
+        end
+        if isfield(r, 'Llk_uH') && ~isempty(r.Llk_uH)
+            Llk_uH = double(r.Llk_uH);
+        end
+        if isfield(r, 'B_peak_mT') && ~isempty(r.B_peak_mT)
+            B_peak_mT = double(r.B_peak_mT);
+        end
+        if isfield(r, 'B_pp_mT') && ~isempty(r.B_pp_mT)
+            B_pp_mT = double(r.B_pp_mT);
+        end
+
         rel_pct = 100 * raw_score / max_raw;
 
         % Build the display line
         line = sprintf('#%d  %s  |  %s  |  Turns: %s', k, core_name, material, turns);
+        if has_magnetics
+            line = sprintf('%s  |  Lm=%.1fuH  Llk=%.2fuH  Bpk=%.1fmT  dB=%.1fmT', ...
+                           line, Lm_uH, Llk_uH, B_peak_mT, B_pp_mT);
+        end
         if has_losses
-            line = sprintf('%s  |  OM Loss: %.2fW (Core:%.2f + Wind:%.2f)', ...
+            line = sprintf('%s  |  Loss: %.2fW (C:%.2f+W:%.2f)', ...
                            line, total_loss, core_loss, winding_loss);
         end
-        line = sprintf('%s  |  Score: %.0f pts (%.0f%%)', line, raw_score * 100, rel_pct);
+        line = sprintf('%s  |  Score: %.0f%%', line, rel_pct);
         items{k} = line;
     end
 
     [sel, ok] = listdlg('ListString', items, ...
                          'SelectionMode', 'single', ...
                          'Name', 'Select Design Recommendation', ...
-                         'ListSize', [1100, 320], ...
-                         'PromptString', 'Choose a recommended design (losses via OpenMagnetics Core + Winding calculation):');
+                         'ListSize', [1400, 320], ...
+                         'PromptString', 'Choose a recommended design (Lm, B, losses computed by OpenMagnetics):');
 
     if ok && ~isempty(sel)
         data.rec.selected_idx = sel;

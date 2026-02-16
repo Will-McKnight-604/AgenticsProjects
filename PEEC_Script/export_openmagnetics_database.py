@@ -145,8 +145,8 @@ def export_cores(output_dir):
     print("EXPORTING CORE SHAPES")
     print("=" * 60)
 
-    shape_names = pm.get_core_shape_names(include_toroidal=False)
-    print(f"Total core shapes (non-toroidal): {len(shape_names)}")
+    shape_names = pm.get_core_shape_names(include_toroidal=True)
+    print(f"Total core shapes (incl. toroidal): {len(shape_names)}")
 
     exported = {}
     failed = []

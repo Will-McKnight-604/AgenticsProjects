@@ -13,6 +13,7 @@ Usage:
 import json
 import math
 import os
+import re
 import sys
 import importlib.metadata
 
@@ -40,6 +41,118 @@ def get_pm_runtime_version():
         return importlib.metadata.version("PyOpenMagnetics")
     except Exception:
         return "unknown"
+
+
+def sanitize_local_key(raw):
+    """Match MATLAB make_valid_name/sanitize_field_name behavior."""
+    if raw is None:
+        raw = "Unknown"
+    if not isinstance(raw, str):
+        raw = str(raw)
+    name = re.sub(r"[^a-zA-Z0-9_]", "_", raw)
+    if not name:
+        name = "Unknown"
+    if not name[0].isalpha():
+        name = f"W_{name}"
+    return name
+
+
+def _load_local_json_map(path):
+    try:
+        if not os.path.exists(path):
+            return {}
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {}
+
+
+def _build_name_to_key_map(db_map):
+    """Build case-insensitive name->key map from local exported DB JSON."""
+    out = {}
+    if not isinstance(db_map, dict):
+        return out
+    for key, val in db_map.items():
+        if isinstance(key, str):
+            out[key.strip().lower()] = key
+        if isinstance(val, dict):
+            name = val.get("name")
+            if isinstance(name, str) and name.strip():
+                out[name.strip().lower()] = key
+    return out
+
+
+def load_local_catalog_index(base_dir):
+    """Load local core/material/wire catalogs used by interactive GUI."""
+    core_db = _load_local_json_map(os.path.join(base_dir, "openmagnetics_core_database.json"))
+    material_db = _load_local_json_map(os.path.join(base_dir, "openmagnetics_material_database.json"))
+    wire_db = _load_local_json_map(os.path.join(base_dir, "openmagnetics_wire_database.json"))
+
+    return {
+        "core_keys": set(core_db.keys()),
+        "core_name_to_key": _build_name_to_key_map(core_db),
+        "material_keys": set(material_db.keys()),
+        "material_name_to_key": _build_name_to_key_map(material_db),
+        "wire_keys": set(wire_db.keys()),
+        "wire_name_to_key": _build_name_to_key_map(wire_db),
+    }
+
+
+def resolve_local_key(raw_name, keys_set, name_to_key):
+    """Resolve raw advisor name to local GUI DB key."""
+    if not raw_name:
+        return ""
+    if not isinstance(raw_name, str):
+        raw_name = str(raw_name)
+    norm = raw_name.strip().lower()
+    if norm in name_to_key:
+        return name_to_key[norm]
+    safe = sanitize_local_key(raw_name)
+    if safe in keys_set:
+        return safe
+    return ""
+
+
+def apply_local_ids(rec, local_idx):
+    """Attach dual ID fields (raw + local key) for core/material/wires."""
+    if not isinstance(rec, dict):
+        return rec
+
+    # Core/material dual IDs
+    core_raw = rec.get("core_shape_raw", rec.get("core_shape", ""))
+    mat_raw = rec.get("material_raw", rec.get("material", ""))
+    rec["core_shape_raw"] = core_raw
+    rec["material_raw"] = mat_raw
+    rec["core_shape_local_key"] = resolve_local_key(
+        core_raw, local_idx.get("core_keys", set()), local_idx.get("core_name_to_key", {})
+    )
+    rec["material_local_key"] = resolve_local_key(
+        mat_raw, local_idx.get("material_keys", set()), local_idx.get("material_name_to_key", {})
+    )
+
+    # Wire dual IDs for all winding entries (primary, secondary, secondary_2, ...)
+    wire_fields = [k for k in list(rec.keys()) if k.endswith("_wire")]
+    for wf in wire_fields:
+        prefix = wf[:-5]
+        raw_wire = rec.get(wf, "")
+        rec[f"{prefix}_wire_raw"] = raw_wire
+        matched_wire = rec.get(f"{prefix}_wire_matched", "")
+        local_wire_key = ""
+        if matched_wire:
+            local_wire_key = resolve_local_key(
+                matched_wire, local_idx.get("wire_keys", set()), local_idx.get("wire_name_to_key", {})
+            )
+        if not local_wire_key:
+            local_wire_key = resolve_local_key(
+                raw_wire, local_idx.get("wire_keys", set()), local_idx.get("wire_name_to_key", {})
+            )
+        if local_wire_key:
+            rec[f"{prefix}_wire_local_key"] = local_wire_key
+
+    return rec
 
 
 def generate_current_waveform(rms_target, duty, phase_deg, samples):
@@ -390,17 +503,72 @@ def apply_user_weights(recommendations, weights):
         rec["weighted_score"] = rec["ui_weighted_score"]
         rec["score_mode"] = "raw_mkf"
 
-    # Rank by UI-weighted score so weight sliders directly influence which
-    # recommendations survive the trim to max_results.  The pool is 3x
-    # max_results, giving enough variety for weights to meaningfully reorder.
+    # Rank by UI-weighted score so weight sliders influence the ordering
+    # of the returned recommendation set.
     recommendations.sort(key=lambda r: as_float(r.get("ui_weighted_score", 0.0), 0.0), reverse=True)
     return recommendations
+
+
+def _normalize_wire_family_mode(raw_mode):
+    mode = str(raw_mode or "auto_all").strip().lower()
+    if mode in ("auto", "all", "auto_all"):
+        return "auto_all"
+    if mode in ("round_litz_rect", "round/litz/rectangular", "round_litz_rectangular"):
+        return "round_litz_rect"
+    if mode in ("foil_planar", "foil/planar"):
+        return "foil_planar"
+    return "auto_all"
+
+
+def _extract_wire_types(rec):
+    out = []
+    if not isinstance(rec, dict):
+        return out
+    for key, value in rec.items():
+        if not key.endswith("_wire_info") or not isinstance(value, dict):
+            continue
+        wtype = str(value.get("wire_type", "")).strip().lower()
+        if wtype:
+            out.append(wtype)
+    return out
+
+
+def _extract_wire_names(rec):
+    out = []
+    if not isinstance(rec, dict):
+        return out
+    for key, value in rec.items():
+        if not key.endswith("_wire"):
+            continue
+        if isinstance(value, str) and value.strip():
+            out.append(value.strip().lower())
+    return out
+
+
+def recommendation_matches_wire_family(rec, wire_family_mode):
+    """Return True if recommendation matches requested wire family mode."""
+    mode = _normalize_wire_family_mode(wire_family_mode)
+    if mode == "auto_all":
+        return True
+
+    wire_types = _extract_wire_types(rec)
+    wire_names = _extract_wire_names(rec)
+    has_planar_name = any("planar" in name for name in wire_names)
+    has_foil = any(wt == "foil" for wt in wire_types)
+    has_planar = has_planar_name
+
+    if mode == "foil_planar":
+        return has_foil or has_planar
+
+    # round_litz_rect mode: keep non-foil/non-planar solutions.
+    return not (has_foil or has_planar)
 
 
 def run_recommendations(config):
     """Run PyOpenMagnetics advisor to get design recommendations."""
 
     max_results = int(as_float(config.get("max_results", 5), 5))
+    wire_family_mode = _normalize_wire_family_mode(config.get("wire_family_mode", "auto_all"))
 
     weights = config.get("weights", {})
     if isinstance(weights, str):
@@ -465,19 +633,50 @@ def run_recommendations(config):
     if isinstance(processed, dict):
         processed = strip_nulls(processed)
 
-    # Use "standard cores" mode to get E/ETD/PQ/RM cores (not just stocked toroids).
-    # "available cores" only returns commercially stocked cores (mostly toroids).
-    core_mode = "standard cores"
+    # Match web-tool default behavior for faster recommendations.
+    core_mode = "available cores"
 
-    # Request a larger pool so user weights can meaningfully re-rank results.
-    pool_size = max(max_results * 3, 15)
+    # For available-cores mode, include both stock and non-stock entries
+    # so we get mixed core families (not predominantly toroids).
+    settings_overridden = False
+    previous_settings = None
+    try:
+        settings_obj = pm.get_settings()
+        if isinstance(settings_obj, dict) and "data" not in settings_obj:
+            previous_settings = dict(settings_obj)
+            if settings_obj.get("useOnlyCoresInStock", True):
+                settings_obj["useOnlyCoresInStock"] = False
+                pm.set_settings(settings_obj)
+                settings_overridden = True
+                print(
+                    "[ADVISOR] Set useOnlyCoresInStock=False "
+                    "(available cores mode; mixed families enabled)",
+                    file=sys.stderr,
+                )
+    except Exception as exc:
+        print(f"[ADVISOR] Warning: could not update useOnlyCoresInStock: {exc}",
+              file=sys.stderr)
+
+    # Request a moderately larger pool so we get some core family diversity
+    # after compatibility filtering.  Keep it small to avoid MKF crashes
+    # (each result requires full winding computation which can segfault).
+    pool_size = max(max_results * 2, 10)
+    maximum_number_results = pool_size
 
     try:
-        results = pm.calculate_advised_magnetics(
-            processed,
-            pool_size,
-            core_mode
-        )
+        try:
+            results = pm.calculate_advised_magnetics(
+                processed,
+                maximum_number_results,
+                core_mode
+            )
+        finally:
+            if settings_overridden and previous_settings is not None:
+                try:
+                    pm.set_settings(previous_settings)
+                except Exception as exc:
+                    print(f"[ADVISOR] Warning: failed to restore settings: {exc}",
+                          file=sys.stderr)
     except Exception as exc:
         return {
             "status": "ERROR",
@@ -485,8 +684,14 @@ def run_recommendations(config):
             "recommendations": []
         }
 
+    # Load local GUI catalogs for compatibility filtering + dual IDs.
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    local_idx = load_local_catalog_index(base_dir)
+    core_filter_active = len(local_idx.get("core_keys", set())) > 0
+
     # Parse results
-    recommendations = []
+    compatible_recommendations = []
+    incompatible_recommendations = []
     result_data = results if isinstance(results, list) else results.get("data", []) if isinstance(results, dict) else []
 
     if isinstance(result_data, str):
@@ -499,10 +704,69 @@ def run_recommendations(config):
                 "recommendations": []
             }
 
+    if isinstance(result_data, dict):
+        result_data = [result_data]
+
     for item in result_data:
         rec = extract_recommendation(item)
         if rec:
-            recommendations.append(rec)
+            rec = apply_local_ids(rec, local_idx)
+            if core_filter_active and not rec.get("core_shape_local_key"):
+                incompatible_recommendations.append(rec)
+                print(
+                    f"[ADVISOR] Incompatible core not in local DB: "
+                    f"{rec.get('core_shape_raw', rec.get('core_shape', 'Unknown'))}",
+                    file=sys.stderr,
+                )
+            else:
+                compatible_recommendations.append(rec)
+
+    compatibility_fallback_used = False
+    skipped_incompatible_cores = 0
+    if compatible_recommendations:
+        recommendations = compatible_recommendations
+        skipped_incompatible_cores = len(incompatible_recommendations)
+        if skipped_incompatible_cores > 0:
+            print(
+                f"[ADVISOR] Filtered out {skipped_incompatible_cores} recommendation(s) "
+                f"with cores missing from local GUI database",
+                file=sys.stderr,
+            )
+    elif incompatible_recommendations:
+        recommendations = incompatible_recommendations
+        compatibility_fallback_used = True
+        print(
+            "[ADVISOR] No core recommendations matched local GUI DB. "
+            "Falling back to unfiltered adviser results.",
+            file=sys.stderr,
+        )
+    else:
+        recommendations = []
+
+    wire_filter_applied = (wire_family_mode != "auto_all")
+    wire_filter_fallback_used = False
+    wire_filtered_out = 0
+    if wire_filter_applied and recommendations:
+        before_wire_filter = len(recommendations)
+        filtered = [
+            rec for rec in recommendations
+            if recommendation_matches_wire_family(rec, wire_family_mode)
+        ]
+        if filtered:
+            recommendations = filtered
+            wire_filtered_out = before_wire_filter - len(filtered)
+            print(
+                f"[ADVISOR] Wire family filter '{wire_family_mode}' kept "
+                f"{len(filtered)}/{before_wire_filter} recommendation(s)",
+                file=sys.stderr,
+            )
+        else:
+            wire_filter_fallback_used = True
+            print(
+                f"[ADVISOR] Wire family filter '{wire_family_mode}' matched 0 results. "
+                "Falling back to unfiltered wire families.",
+                file=sys.stderr,
+            )
 
     # Compute UI-weighted scores while preserving raw adviser ranking, then trim.
     recommendations = apply_user_weights(recommendations, weights)
@@ -513,6 +777,19 @@ def run_recommendations(config):
         "n_results": len(recommendations),
         "recommendations": recommendations,
         "weights": weights,
+        "compatibility_filter": {
+            "core_filter_active": core_filter_active,
+            "compatible_count": len(compatible_recommendations),
+            "incompatible_count": len(incompatible_recommendations),
+            "skipped_incompatible_cores": skipped_incompatible_cores,
+            "fallback_to_incompatible": compatibility_fallback_used,
+        },
+        "wire_family_filter": {
+            "requested_mode": wire_family_mode,
+            "applied": wire_filter_applied,
+            "filtered_out_count": wire_filtered_out,
+            "fallback_to_unfiltered": wire_filter_fallback_used,
+        },
         "inputs_used": inputs,
         "score_convention": {
             "primary": "ui_weighted_score",
@@ -786,12 +1063,14 @@ def extract_recommendation(item):
         rec["core_shape"] = shape.get("name", "Unknown")
     else:
         rec["core_shape"] = str(shape)
+    rec["core_shape_raw"] = rec["core_shape"]
 
     material = core_fd.get("material", "Unknown")
     if isinstance(material, dict):
         rec["material"] = material.get("name", str(material))
     else:
         rec["material"] = str(material)
+    rec["material_raw"] = rec["material"]
 
     # Gapping
     rec["gapping"] = core_fd.get("gapping", [])
@@ -811,6 +1090,7 @@ def extract_recommendation(item):
             else:
                 wire_name = str(wire)
             rec[f"{prefix}_wire"] = wire_name
+            rec[f"{prefix}_wire_raw"] = wire_name
 
             # Resolve wire to type/dimensions and find local DB match
             wire_info = resolve_wire_info(wire_name)
@@ -824,6 +1104,78 @@ def extract_recommendation(item):
     rec["winding_losses_w"] = winding_losses
     rec["total_losses_w"] = core_losses + winding_losses
     rec["loss_source"] = "OpenMagnetics"
+
+    # Extract MKF-computed outputs per operating point (inductance, flux density, etc.)
+    outputs = mas.get("outputs", [])
+    if isinstance(outputs, list) and outputs:
+        rec["operating_point_outputs"] = []
+        for oi, op_out in enumerate(outputs):
+            if not isinstance(op_out, dict):
+                continue
+            op_data = {"index": oi}
+
+            # Inductance
+            ind = op_out.get("inductance", {})
+            if isinstance(ind, dict):
+                mi = ind.get("magnetizingInductance", {})
+                if isinstance(mi, dict):
+                    lm_obj = mi.get("magnetizingInductance", mi)
+                    if isinstance(lm_obj, dict):
+                        op_data["Lm_H"] = as_float(lm_obj.get("nominal"), 0.0)
+                    elif isinstance(lm_obj, (int, float)):
+                        op_data["Lm_H"] = float(lm_obj)
+                li = ind.get("leakageInductance", {})
+                if isinstance(li, dict):
+                    lpw = li.get("leakageInductancePerWinding", [])
+                    if isinstance(lpw, list) and lpw:
+                        first_leak = lpw[0]
+                        if isinstance(first_leak, dict):
+                            op_data["Llk_H"] = as_float(first_leak.get("nominal"), 0.0)
+
+            # Core losses + magnetic flux density
+            cl = op_out.get("coreLosses", {})
+            if isinstance(cl, dict):
+                op_data["core_loss_W"] = as_float(cl.get("coreLosses"), 0.0)
+                mfd = cl.get("magneticFluxDensity", {})
+                if isinstance(mfd, dict):
+                    proc = mfd.get("processed", {})
+                    if isinstance(proc, dict):
+                        op_data["B_peak_T"] = as_float(proc.get("peak"), 0.0)
+                        op_data["B_pp_T"] = as_float(proc.get("peakToPeak"), 0.0)
+                        op_data["B_offset_T"] = as_float(proc.get("offset"), 0.0)
+
+            # Winding losses
+            wl = op_out.get("windingLosses", {})
+            if isinstance(wl, dict):
+                op_data["winding_loss_W"] = as_float(wl.get("windingLosses"), 0.0)
+
+            rec["operating_point_outputs"].append(op_data)
+
+        # Promote nominal (first) operating point values to top-level for easy access
+        nom = rec["operating_point_outputs"][0]
+        rec["Lm_uH"] = nom.get("Lm_H", 0.0) * 1e6
+        rec["Llk_uH"] = nom.get("Llk_H", 0.0) * 1e6
+        rec["B_peak_mT"] = nom.get("B_peak_T", 0.0) * 1e3
+        rec["B_pp_mT"] = nom.get("B_pp_T", 0.0) * 1e3
+        rec["B_offset_mT"] = nom.get("B_offset_T", 0.0) * 1e3
+
+    # Core effective parameters for saturation context
+    core_pd = core.get("processedDescription", {})
+    if isinstance(core_pd, dict):
+        eff = core_pd.get("effectiveParameters", {})
+        if isinstance(eff, dict):
+            rec["Ae_m2"] = as_float(eff.get("effectiveArea"), 0.0)
+            rec["le_m"] = as_float(eff.get("effectiveLength"), 0.0)
+            rec["Ve_m3"] = as_float(eff.get("effectiveVolume"), 0.0)
+
+    # Material saturation flux density (if available)
+    mat_data = core_fd.get("material", {})
+    if isinstance(mat_data, dict):
+        sat = mat_data.get("saturation", mat_data.get("bSat", None))
+        if isinstance(sat, (int, float)):
+            rec["B_sat_T"] = float(sat)
+        elif isinstance(sat, dict):
+            rec["B_sat_T"] = as_float(sat.get("nominal", sat.get("typical")), 0.0)
 
     return rec
 

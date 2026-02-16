@@ -1,5 +1,426 @@
 {
-  "status": "ERROR",
-  "error": "Could not parse advisor results: Exception: Missing main_supply_voltage in insulation requirements",
-  "recommendations": []
+  "status": "OK",
+  "n_results": 3,
+  "recommendations": [
+    {
+      "raw_score": 3.0,
+      "score": 3.0,
+      "scoring_per_filter": {
+        "COST": 1.0,
+        "DIMENSIONS": 1.0,
+        "EFFECTIVE_CURRENT_DENSITY": 1.0,
+        "EFFECTIVE_RESISTANCE": 0.0,
+        "LOSSES": 1.0,
+        "MAGNETOMOTIVE_FORCE": 1.0
+      },
+      "core_shape": "T 63/38/25",
+      "core_shape_raw": "T 63/38/25",
+      "material": "N87",
+      "material_raw": "N87",
+      "gapping": [],
+      "n_windings": 2,
+      "primary_turns": 5,
+      "primary_parallels": 1,
+      "primary_wire": "Litz TXXL180/38TXXX-2(MWXX)",
+      "primary_wire_raw": "Litz TXXL180/38TXXX-2(MWXX)",
+      "primary_wire_info": {
+        "original_name": "Litz TXXL180/38TXXX-2(MWXX)",
+        "wire_type": "litz",
+        "conducting_diameter": 0.0,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 180,
+        "matched_name": null
+      },
+      "secondary_turns": 6,
+      "secondary_parallels": 1,
+      "secondary_wire": "Round T10A01PXXX-3",
+      "secondary_wire_raw": "Round T10A01PXXX-3",
+      "secondary_wire_info": {
+        "original_name": "Round T10A01PXXX-3",
+        "wire_type": "round",
+        "conducting_diameter": 0.002588,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 1,
+        "matched_name": "Round 10.0 - Heavy Build"
+      },
+      "secondary_wire_matched": "Round 10.0 - Heavy Build",
+      "core_losses_w": 0.055682875044516876,
+      "winding_losses_w": 0.14739132415893724,
+      "total_losses_w": 0.20307419920345413,
+      "loss_source": "OpenMagnetics",
+      "operating_point_outputs": [
+        {
+          "index": 0,
+          "Lm_H": 0.00014254331690928028,
+          "Llk_H": 8.769832326642621e-07,
+          "core_loss_W": 0.046383138964389385,
+          "B_peak_T": 0.009536644457904324,
+          "B_pp_T": 0.019067873303167435,
+          "B_offset_T": -2.707806320607735e-06,
+          "winding_loss_W": 0.14739132415893724
+        },
+        {
+          "index": 1,
+          "Lm_H": 0.00014254331690928028,
+          "Llk_H": 8.769832326642621e-07,
+          "core_loss_W": 0.03384322176523764,
+          "B_peak_T": 0.008533117183881422,
+          "B_pp_T": 0.01702262443438917,
+          "B_offset_T": 2.180496668683675e-05,
+          "winding_loss_W": 0.15910182894869626
+        }
+      ],
+      "Lm_uH": 142.5433169092803,
+      "Llk_uH": 0.876983232664262,
+      "B_peak_mT": 9.536644457904325,
+      "B_pp_mT": 19.067873303167435,
+      "B_offset_mT": -0.002707806320607735,
+      "Ae_m2": 0.00031250000000000006,
+      "le_m": 0.15865042900628457,
+      "Ve_m3": 4.957825906446395e-05,
+      "core_shape_local_key": "T_63_38_25",
+      "material_local_key": "N87",
+      "primary_wire_local_key": "Litz_TXXL180_38TXXX_2(MWXX)",
+      "secondary_wire_local_key": "Round_10_0___Heavy_Build",
+      "ui_weighted_score": 1.0,
+      "ui_score": 1.0,
+      "weighted_score": 1.0,
+      "score_mode": "raw_mkf"
+    },
+    {
+      "raw_score": 2.993110381102614,
+      "score": 2.993110381102614,
+      "scoring_per_filter": {
+        "COST": 1.0,
+        "DIMENSIONS": 0.9997184440121124,
+        "EFFECTIVE_CURRENT_DENSITY": 1.0,
+        "EFFECTIVE_RESISTANCE": 0.0,
+        "LOSSES": 0.9933919370905018,
+        "MAGNETOMOTIVE_FORCE": 1.0
+      },
+      "core_shape": "T 63/38/25",
+      "core_shape_raw": "T 63/38/25",
+      "material": "N87",
+      "material_raw": "N87",
+      "gapping": [],
+      "n_windings": 2,
+      "primary_turns": 5,
+      "primary_parallels": 1,
+      "primary_wire": "Litz TXXL180/38TXXX-3(MWXX)",
+      "primary_wire_raw": "Litz TXXL180/38TXXX-3(MWXX)",
+      "primary_wire_info": {
+        "original_name": "Litz TXXL180/38TXXX-3(MWXX)",
+        "wire_type": "litz",
+        "conducting_diameter": 0.0,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 180,
+        "matched_name": null
+      },
+      "secondary_turns": 6,
+      "secondary_parallels": 1,
+      "secondary_wire": "Round T10A01PXXX-3",
+      "secondary_wire_raw": "Round T10A01PXXX-3",
+      "secondary_wire_info": {
+        "original_name": "Round T10A01PXXX-3",
+        "wire_type": "round",
+        "conducting_diameter": 0.002588,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 1,
+        "matched_name": "Round 10.0 - Heavy Build"
+      },
+      "secondary_wire_matched": "Round 10.0 - Heavy Build",
+      "core_losses_w": 0.055682875044516876,
+      "winding_losses_w": 0.14777662835336136,
+      "total_losses_w": 0.20345950339787824,
+      "loss_source": "OpenMagnetics",
+      "operating_point_outputs": [
+        {
+          "index": 0,
+          "Lm_H": 0.00014254331690928028,
+          "Llk_H": 9.334905968078922e-07,
+          "core_loss_W": 0.046383138964389385,
+          "B_peak_T": 0.009536644457904324,
+          "B_pp_T": 0.019067873303167435,
+          "B_offset_T": -2.707806320607735e-06,
+          "winding_loss_W": 0.14777662835336136
+        },
+        {
+          "index": 1,
+          "Lm_H": 0.00014254331690928028,
+          "Llk_H": 9.334905968078922e-07,
+          "core_loss_W": 0.03384322176523764,
+          "B_peak_T": 0.008533117183881422,
+          "B_pp_T": 0.01702262443438917,
+          "B_offset_T": 2.180496668683675e-05,
+          "winding_loss_W": 0.15954908890423752
+        }
+      ],
+      "Lm_uH": 142.5433169092803,
+      "Llk_uH": 0.9334905968078923,
+      "B_peak_mT": 9.536644457904325,
+      "B_pp_mT": 19.067873303167435,
+      "B_offset_mT": -0.002707806320607735,
+      "Ae_m2": 0.00031250000000000006,
+      "le_m": 0.15865042900628457,
+      "Ve_m3": 4.957825906446395e-05,
+      "core_shape_local_key": "T_63_38_25",
+      "material_local_key": "N87",
+      "primary_wire_local_key": "Litz_TXXL180_38TXXX_3(MWXX)",
+      "secondary_wire_local_key": "Round_10_0___Heavy_Build",
+      "ui_weighted_score": 0.99723390960106,
+      "ui_score": 0.99723390960106,
+      "weighted_score": 0.99723390960106,
+      "score_mode": "raw_mkf"
+    },
+    {
+      "raw_score": 2.4126141338374056,
+      "score": 2.4126141338374056,
+      "scoring_per_filter": {
+        "COST": 1.0,
+        "DIMENSIONS": 0.7226089380408687,
+        "EFFECTIVE_CURRENT_DENSITY": 1.0,
+        "EFFECTIVE_RESISTANCE": 0.0,
+        "LOSSES": 0.690005195796537,
+        "MAGNETOMOTIVE_FORCE": 1.0
+      },
+      "core_shape": "T 102/66/15",
+      "core_shape_raw": "T 102/66/15",
+      "material": "3C90",
+      "material_raw": "3C90",
+      "gapping": [],
+      "n_windings": 2,
+      "primary_turns": 5,
+      "primary_parallels": 1,
+      "primary_wire": "Litz TXXL180/38TXXX-2(MWXX)",
+      "primary_wire_raw": "Litz TXXL180/38TXXX-2(MWXX)",
+      "primary_wire_info": {
+        "original_name": "Litz TXXL180/38TXXX-2(MWXX)",
+        "wire_type": "litz",
+        "conducting_diameter": 0.0,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 180,
+        "matched_name": null
+      },
+      "secondary_turns": 6,
+      "secondary_parallels": 1,
+      "secondary_wire": "Round T10A01PXXX-3",
+      "secondary_wire_raw": "Round T10A01PXXX-3",
+      "secondary_wire_info": {
+        "original_name": "Round T10A01PXXX-3",
+        "wire_type": "round",
+        "conducting_diameter": 0.002588,
+        "conducting_width": 0.0,
+        "conducting_height": 0.0,
+        "number_conductors": 1,
+        "matched_name": "Round 10.0 - Heavy Build"
+      },
+      "secondary_wire_matched": "Round 10.0 - Heavy Build",
+      "core_losses_w": 0.106661711966781,
+      "winding_losses_w": 0.13071743311497344,
+      "total_losses_w": 0.23737914508175445,
+      "loss_source": "OpenMagnetics",
+      "operating_point_outputs": [
+        {
+          "index": 0,
+          "Lm_H": 7.278659360338965e-05,
+          "Llk_H": 1.2380433480355967e-06,
+          "core_loss_W": 0.09020456601960726,
+          "B_peak_T": 0.010976800711215845,
+          "B_pp_T": 0.021947367982467124,
+          "B_offset_T": -3.116719982283918e-06,
+          "winding_loss_W": 0.13071743311497344
+        },
+        {
+          "index": 1,
+          "Lm_H": 7.278659360338965e-05,
+          "Llk_H": 1.2380433480355967e-06,
+          "core_loss_W": 0.06569675979191089,
+          "B_peak_T": 0.0098217278819998,
+          "B_pp_T": 0.01959326016849583,
+          "B_offset_T": 2.5097797751886218e-05,
+          "winding_loss_W": 0.14115162382762728
+        }
+      ],
+      "Lm_uH": 72.78659360338965,
+      "Llk_uH": 1.2380433480355968,
+      "B_peak_mT": 10.976800711215844,
+      "B_pp_mT": 21.947367982467124,
+      "B_offset_mT": -0.003116719982283918,
+      "Ae_m2": 0.0002715,
+      "le_m": 0.26357962363618365,
+      "Ve_m3": 7.156186781722386e-05,
+      "core_shape_local_key": "T_102_66_15",
+      "material_local_key": "3C90",
+      "primary_wire_local_key": "Litz_TXXL180_38TXXX_2(MWXX)",
+      "secondary_wire_local_key": "Round_10_0___Heavy_Build",
+      "ui_weighted_score": 0.7657663269012878,
+      "ui_score": 0.7657663269012878,
+      "weighted_score": 0.7657663269012878,
+      "score_mode": "raw_mkf"
+    }
+  ],
+  "weights": {
+    "COST": 0.202803,
+    "LOSSES": 0.40174378081877427,
+    "DIMENSIONS": 0.39545321918122567
+  },
+  "compatibility_filter": {
+    "core_filter_active": true,
+    "compatible_count": 10,
+    "incompatible_count": 0,
+    "skipped_incompatible_cores": 0,
+    "fallback_to_incompatible": false
+  },
+  "wire_family_filter": {
+    "requested_mode": "auto_all",
+    "applied": false,
+    "filtered_out_count": 0,
+    "fallback_to_unfiltered": false
+  },
+  "inputs_used": {
+    "designRequirements": {
+      "topology": "Two Switch Forward Converter",
+      "magnetizingInductance": {
+        "nominal": 8.311540242989989e-05,
+        "minimum": 6.649232194391991e-05,
+        "maximum": 9.973848291587985e-05
+      },
+      "turnsRatios": [
+        {
+          "nominal": 0.8503937007874016,
+          "minimum": 0.8078740157480315,
+          "maximum": 0.8929133858267717
+        }
+      ],
+      "operatingTemperature": {
+        "maximum": 65
+      },
+      "insulation": {
+        "insulationType": "Basic",
+        "pollutionDegree": "P2",
+        "overvoltageCategory": "OVC-II",
+        "standards": [
+          "IEC 62368-1"
+        ],
+        "cti": "Group II",
+        "altitude": {
+          "maximum": 2000
+        },
+        "mainSupplyVoltage": {
+          "nominal": 28,
+          "minimum": 24,
+          "maximum": 42
+        }
+      }
+    },
+    "operatingPoints": [
+      {
+        "name": "nominal",
+        "conditions": {
+          "ambientTemperature": 25.0
+        },
+        "excitationsPerWinding": [
+          {
+            "name": "Primary",
+            "frequency": 221000.0,
+            "current": {
+              "processed": {
+                "label": "Triangular",
+                "peakToPeak": 0.5879629629629629,
+                "offset": 3.651596918186624,
+                "dutyCycle": 0.38571428571428573
+              }
+            },
+            "voltage": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 28.0,
+                "offset": 0.0,
+                "dutyCycle": 0.38571428571428573
+              }
+            }
+          },
+          {
+            "name": "Secondary",
+            "frequency": 221000.0,
+            "current": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 5.0,
+                "offset": 0.9642857142857143,
+                "dutyCycle": 0.38571428571428573
+              }
+            },
+            "voltage": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 31.454151077000333,
+                "offset": 0,
+                "dutyCycle": 0.38571428571428573
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "worst_case",
+        "conditions": {
+          "ambientTemperature": 25.0
+        },
+        "excitationsPerWinding": [
+          {
+            "name": "Primary",
+            "frequency": 221000.0,
+            "current": {
+              "processed": {
+                "label": "Triangular",
+                "peakToPeak": 0.5879629629629629,
+                "offset": 3.9441754603121284,
+                "dutyCycle": 0.45
+              }
+            },
+            "voltage": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 24.0,
+                "offset": 0.0,
+                "dutyCycle": 0.45
+              }
+            }
+          },
+          {
+            "name": "Secondary",
+            "frequency": 221000.0,
+            "current": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 5.0,
+                "offset": 1.125,
+                "dutyCycle": 0.45
+              }
+            },
+            "voltage": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 32.524625127269665,
+                "offset": 0,
+                "dutyCycle": 0.45
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "score_convention": {
+    "primary": "ui_weighted_score",
+    "secondary": "raw_score",
+    "ranking": "ui_weighted_score_desc"
+  },
+  "pyopenmagnetics_runtime_version": "1.1.4"
 }

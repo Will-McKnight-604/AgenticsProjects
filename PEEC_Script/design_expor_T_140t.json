@@ -1,0 +1,107 @@
+{
+  "inputs":{
+  "designRequirements":{
+  "topology":"two_switch_forward",
+  "magnetizingInductance":{
+  "nominal":0.000146948031496063
+},
+  "turnsRatios":[{
+  "nominal":0.8571428571428571
+}]
+},
+  "operatingPoints":[{
+  "name":"nominal",
+  "conditions":{
+  "ambientTemperature":25
+},
+  "excitationsPerWinding":[{
+  "name":"Primary",
+  "frequency":125000,
+  "current":{
+  "processed":{
+  "rms":3.651596918186624
+}
+},
+  "voltage":{
+  "processed":{
+  "rms":28
+}
+}
+},{
+  "name":"Secondary",
+  "frequency":125000,
+  "current":{
+  "processed":{
+  "rms":3.105295017040594
+}
+},
+  "voltage":{
+  "processed":{
+  "rms":12
+}
+}
+}]
+}]
+},
+  "magnetic":{
+  "core":{
+  "functionalDescription":{
+  "type":"two-piece set",
+  "shape":"T_140_103_25",
+  "material":"N30",
+  "gapping":[{
+  "type":"residual",
+  "length":0.00001
+}],
+  "numberStacks":1
+},
+  "name":"T_140_103_25 N30"
+},
+  "coil":{
+  "bobbin":"T_140_103_25",
+  "functionalDescription":[{
+  "name":"Primary",
+  "numberTurns":6,
+  "numberParallels":1,
+  "isolationSide":"primary",
+  "wire":{
+  "name":"Round 10.0 - Heavy Build",
+  "type":"round",
+  "material":"copper",
+  "numberConductors":1,
+  "standard":"NEMA MW 1000 C",
+  "conductingDiameter":{
+  "nominal":0.002588
+},
+  "outerDiameter":{
+  "nominal":0.002677
+},
+  "coating":{
+  "type":"enamelled",
+  "grade":2
+}
+}
+},{
+  "name":"Secondary",
+  "numberTurns":7,
+  "numberParallels":1,
+  "isolationSide":"secondary",
+  "wire":{
+  "name":"Litz TXXL180/38TXXX-2(MWXX)",
+  "type":"litz",
+  "numberConductors":180,
+  "standard":"NEMA MW 1000 C",
+  "outerDiameter":{
+  "minimum":0.0021336508,
+  "maximum":0.0022656291999999997
+},
+  "strand":"Round 38.0 - Single Build",
+  "coating":{
+  "type":"insulated"
+}
+}
+}]
+}
+},
+  "outputs":[]
+}

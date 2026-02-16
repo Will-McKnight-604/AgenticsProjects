@@ -302,8 +302,13 @@ function data = apply_design_spec(data, spec)
         pri_wire_applied = false;
         sec_wire_applied = false;
 
-        % Core shape
-        if isfield(rec, 'core_shape') && ~isempty(rec.core_shape)
+        % Core shape (prefer explicit local key from recommendation payload)
+        if isfield(rec, 'core_shape_local_key') && ~isempty(rec.core_shape_local_key) ...
+                && isfield(data.cores, rec.core_shape_local_key)
+            data.selected_core = rec.core_shape_local_key;
+            core_applied = true;
+            fprintf('[DESIGN_SPEC] Core applied via local key: "%s"\n', rec.core_shape_local_key);
+        elseif isfield(rec, 'core_shape') && ~isempty(rec.core_shape)
             % Try to find matching core in database
             core_name = sanitize_field_name(rec.core_shape);
             if isfield(data.cores, core_name)
@@ -332,7 +337,12 @@ function data = apply_design_spec(data, spec)
         elseif isfield(rec, 'material') && ~isempty(rec.material)
             rec_material = rec.material;
         end
-        if ~isempty(rec_material)
+        if isfield(rec, 'material_local_key') && ~isempty(rec.material_local_key) ...
+                && isfield(data.materials, rec.material_local_key)
+            data.selected_material = rec.material_local_key;
+            material_applied = true;
+            fprintf('[DESIGN_SPEC] Material applied via local key: "%s"\n', rec.material_local_key);
+        elseif ~isempty(rec_material)
             mat_name = sanitize_field_name(rec_material);
             if isfield(data.materials, mat_name)
                 data.selected_material = mat_name;
@@ -373,10 +383,12 @@ function data = apply_design_spec(data, spec)
         % Wire and turns from recommendation
         % Strategy: (1) try direct name match, (2) try Python-resolved match,
         % (3) show picker dialog as fallback.
-        if isfield(rec, 'primary_wire') && ~isempty(rec.primary_wire)
+        if (isfield(rec, 'primary_wire') && ~isempty(rec.primary_wire)) || ...
+           (isfield(rec, 'primary_wire_local_key') && ~isempty(rec.primary_wire_local_key))
             [pri_wire_applied, data] = apply_wire_from_rec(data, rec, 'primary', 1);
         end
-        if isfield(rec, 'secondary_wire') && ~isempty(rec.secondary_wire) && data.n_windings >= 2
+        if ((isfield(rec, 'secondary_wire') && ~isempty(rec.secondary_wire)) || ...
+            (isfield(rec, 'secondary_wire_local_key') && ~isempty(rec.secondary_wire_local_key))) && data.n_windings >= 2
             [sec_wire_applied, data] = apply_wire_from_rec(data, rec, 'secondary', 2);
         end
 
@@ -472,7 +484,31 @@ function [applied, data] = apply_wire_from_rec(data, rec, prefix, winding_idx)
     %   3. Fallback: show wire picker dialog
 
     applied = false;
-    raw_wire = rec.([prefix '_wire']);
+
+    % Prefer explicit local key from recommendation payload
+    local_key_field = [prefix '_wire_local_key'];
+    if isfield(rec, local_key_field) && ~isempty(rec.(local_key_field))
+        local_key = rec.(local_key_field);
+        if isfield(data.wires, local_key)
+            data = set_winding_wire(data, winding_idx, local_key);
+            applied = true;
+            fprintf('[DESIGN_SPEC] %s wire applied via local key: "%s"\n', prefix, local_key);
+            return;
+        end
+    end
+
+    raw_wire = '';
+    raw_field = [prefix '_wire'];
+    raw_field_alt = [prefix '_wire_raw'];
+    if isfield(rec, raw_field) && ~isempty(rec.(raw_field))
+        raw_wire = rec.(raw_field);
+    elseif isfield(rec, raw_field_alt) && ~isempty(rec.(raw_field_alt))
+        raw_wire = rec.(raw_field_alt);
+    end
+    if isempty(raw_wire)
+        fprintf('[DESIGN_SPEC] %s wire missing from recommendation payload\n', prefix);
+        return;
+    end
 
     % --- Attempt 1: direct match ---
     wire_key = sanitize_field_name(raw_wire);
