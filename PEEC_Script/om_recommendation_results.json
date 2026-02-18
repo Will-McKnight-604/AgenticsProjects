@@ -46,9 +46,9 @@
         "matched_name": "Round 10.0 - Heavy Build"
       },
       "secondary_wire_matched": "Round 10.0 - Heavy Build",
-      "core_losses_w": 0.055682875044516876,
+      "core_losses_w": 0.0,
       "winding_losses_w": 0.14739132415893724,
-      "total_losses_w": 0.20307419920345413,
+      "total_losses_w": 0.14739132415893724,
       "loss_source": "OpenMagnetics",
       "operating_point_outputs": [
         {
@@ -77,6 +77,8 @@
       "B_peak_mT": 9.536644457904325,
       "B_pp_mT": 19.067873303167435,
       "B_offset_mT": -0.002707806320607735,
+      "core_loss_W": 0.046383138964389385,
+      "winding_loss_W": 0.14739132415893724,
       "Ae_m2": 0.00031250000000000006,
       "le_m": 0.15865042900628457,
       "Ve_m3": 4.957825906446395e-05,
@@ -133,9 +135,9 @@
         "matched_name": "Round 10.0 - Heavy Build"
       },
       "secondary_wire_matched": "Round 10.0 - Heavy Build",
-      "core_losses_w": 0.055682875044516876,
+      "core_losses_w": 0.0,
       "winding_losses_w": 0.14777662835336136,
-      "total_losses_w": 0.20345950339787824,
+      "total_losses_w": 0.14777662835336136,
       "loss_source": "OpenMagnetics",
       "operating_point_outputs": [
         {
@@ -164,6 +166,8 @@
       "B_peak_mT": 9.536644457904325,
       "B_pp_mT": 19.067873303167435,
       "B_offset_mT": -0.002707806320607735,
+      "core_loss_W": 0.046383138964389385,
+      "winding_loss_W": 0.14777662835336136,
       "Ae_m2": 0.00031250000000000006,
       "le_m": 0.15865042900628457,
       "Ve_m3": 4.957825906446395e-05,
@@ -171,9 +175,9 @@
       "material_local_key": "N87",
       "primary_wire_local_key": "Litz_TXXL180_38TXXX_3(MWXX)",
       "secondary_wire_local_key": "Round_10_0___Heavy_Build",
-      "ui_weighted_score": 0.99723390960106,
-      "ui_score": 0.99723390960106,
-      "weighted_score": 0.99723390960106,
+      "ui_weighted_score": 0.9966341540496597,
+      "ui_score": 0.9966341540496597,
+      "weighted_score": 0.9966341540496597,
       "score_mode": "raw_mkf"
     },
     {
@@ -220,9 +224,9 @@
         "matched_name": "Round 10.0 - Heavy Build"
       },
       "secondary_wire_matched": "Round 10.0 - Heavy Build",
-      "core_losses_w": 0.106661711966781,
+      "core_losses_w": 0.0,
       "winding_losses_w": 0.13071743311497344,
-      "total_losses_w": 0.23737914508175445,
+      "total_losses_w": 0.13071743311497344,
       "loss_source": "OpenMagnetics",
       "operating_point_outputs": [
         {
@@ -251,6 +255,8 @@
       "B_peak_mT": 10.976800711215844,
       "B_pp_mT": 21.947367982467124,
       "B_offset_mT": -0.003116719982283918,
+      "core_loss_W": 0.09020456601960726,
+      "winding_loss_W": 0.13071743311497344,
       "Ae_m2": 0.0002715,
       "le_m": 0.26357962363618365,
       "Ve_m3": 7.156186781722386e-05,
@@ -258,16 +264,16 @@
       "material_local_key": "3C90",
       "primary_wire_local_key": "Litz_TXXL180_38TXXX_2(MWXX)",
       "secondary_wire_local_key": "Round_10_0___Heavy_Build",
-      "ui_weighted_score": 0.7657663269012878,
-      "ui_score": 0.7657663269012878,
-      "weighted_score": 0.7657663269012878,
+      "ui_weighted_score": 0.7759286831371913,
+      "ui_score": 0.7759286831371913,
+      "weighted_score": 0.7759286831371913,
       "score_mode": "raw_mkf"
     }
   ],
   "weights": {
-    "COST": 0.202803,
-    "LOSSES": 0.40174378081877427,
-    "DIMENSIONS": 0.39545321918122567
+    "COST": 0.25083228914316125,
+    "LOSSES": 0.49868171085683866,
+    "DIMENSIONS": 0.250486
   },
   "compatibility_filter": {
     "core_filter_active": true,

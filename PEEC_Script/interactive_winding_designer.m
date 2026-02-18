@@ -139,6 +139,12 @@ function interactive_winding_designer(design_spec)
     data.Nx = 6;
     data.Ny = 6;
 
+    % Core loss model parameters
+    data.core_loss_method = 'iGSE';        % 'iGSE' or 'i2GSE'
+    data.steinmetz.k = [];                  % auto-filled from material DB
+    data.steinmetz.alpha = [];
+    data.steinmetz.beta = [];
+
     % Excitation model parameters
     data.excitation = struct();
     data.excitation.source = 'converter';              % 'manual' | 'converter'
@@ -627,7 +633,7 @@ function build_gui(data)
 
     % ========== LEFT PANEL: CORE SELECTION (with supplier cascade) ==========
     core_panel = uipanel('Parent', fig, ...
-                        'Position', [0.02 0.10 0.29 0.82], ...
+                        'Position', [0.02 0.06 0.29 0.86], ...
                         'Title', 'Core Selection (OpenMagnetics)', ...
                         'FontSize', 11, 'FontWeight', 'bold');
 
@@ -890,6 +896,88 @@ function build_gui(data)
               'Position', [210 24 80 25], ...
               'Tag', 'edge_margin', ...
               'Callback', @update_edge_margin);
+
+    % --- Core Loss Model ---
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'Core Loss Model:', ...
+              'Position', [20 35 180 16], ...
+              'FontWeight', 'bold', 'HorizontalAlignment', 'left', ...
+              'FontSize', 8);
+
+    % Try to auto-fill Steinmetz params from selected material
+    try
+        [sk, sa, sb] = data.api.get_steinmetz_coefficients(data.selected_material, data.f);
+        if ~isempty(sk)
+            data.steinmetz.k = sk;
+            data.steinmetz.alpha = sa;
+            data.steinmetz.beta = sb;
+        end
+    catch
+    end
+
+    steinmetz_k_str = '';
+    steinmetz_a_str = '';
+    steinmetz_b_str = '';
+    if ~isempty(data.steinmetz.k)
+        steinmetz_k_str = num2str(data.steinmetz.k, '%.4g');
+        steinmetz_a_str = num2str(data.steinmetz.alpha, '%.4g');
+        steinmetz_b_str = num2str(data.steinmetz.beta, '%.4g');
+    end
+
+    % Core loss method dropdown
+    loss_methods = {'iGSE', 'i2GSE'};
+    loss_idx = find(strcmp(loss_methods, data.core_loss_method), 1);
+    if isempty(loss_idx); loss_idx = 1; end
+
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'Method:', ...
+              'Position', [20 14 50 18], ...
+              'HorizontalAlignment', 'left', 'FontSize', 8);
+
+    uicontrol('Parent', core_panel, 'Style', 'popupmenu', ...
+              'String', loss_methods, ...
+              'Position', [75 14 70 22], ...
+              'Value', loss_idx, ...
+              'Tag', 'core_loss_method', ...
+              'FontSize', 8, ...
+              'Callback', @update_core_loss_method);
+
+    % Steinmetz k, alpha, beta fields
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'k:', ...
+              'Position', [150 14 15 18], ...
+              'HorizontalAlignment', 'right', 'FontSize', 8);
+
+    uicontrol('Parent', core_panel, 'Style', 'edit', ...
+              'String', steinmetz_k_str, ...
+              'Position', [168 14 62 22], ...
+              'Tag', 'steinmetz_k', ...
+              'FontSize', 8, ...
+              'Callback', @update_steinmetz_k);
+
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'a:', ...
+              'Position', [235 14 15 18], ...
+              'HorizontalAlignment', 'right', 'FontSize', 8);
+
+    uicontrol('Parent', core_panel, 'Style', 'edit', ...
+              'String', steinmetz_a_str, ...
+              'Position', [253 14 45 22], ...
+              'Tag', 'steinmetz_alpha', ...
+              'FontSize', 8, ...
+              'Callback', @update_steinmetz_alpha);
+
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'b:', ...
+              'Position', [303 14 15 18], ...
+              'HorizontalAlignment', 'right', 'FontSize', 8);
+
+    uicontrol('Parent', core_panel, 'Style', 'edit', ...
+              'String', steinmetz_b_str, ...
+              'Position', [321 14 45 22], ...
+              'Tag', 'steinmetz_beta', ...
+              'FontSize', 8, ...
+              'Callback', @update_steinmetz_beta);
 
     % ========== CENTER PANEL: WINDING CONFIGURATION ==========
     winding_panel = uipanel('Parent', fig, ...
@@ -2240,6 +2328,28 @@ function select_material(src, ~)
     data.selected_material = mat_list{idx};
 
     set(findobj(fig, 'Tag', 'material_info'), 'String', get_material_info_text(data));
+
+    % Auto-fill Steinmetz coefficients for new material
+    try
+        [sk, sa, sb] = data.api.get_steinmetz_coefficients(data.selected_material, data.f);
+        if ~isempty(sk)
+            data.steinmetz.k = sk;
+            data.steinmetz.alpha = sa;
+            data.steinmetz.beta = sb;
+            set(findobj(fig, 'Tag', 'steinmetz_k'), 'String', num2str(sk, '%.4g'));
+            set(findobj(fig, 'Tag', 'steinmetz_alpha'), 'String', num2str(sa, '%.4g'));
+            set(findobj(fig, 'Tag', 'steinmetz_beta'), 'String', num2str(sb, '%.4g'));
+        else
+            data.steinmetz.k = [];
+            data.steinmetz.alpha = [];
+            data.steinmetz.beta = [];
+            set(findobj(fig, 'Tag', 'steinmetz_k'), 'String', '');
+            set(findobj(fig, 'Tag', 'steinmetz_alpha'), 'String', '');
+            set(findobj(fig, 'Tag', 'steinmetz_beta'), 'String', '');
+        end
+    catch
+    end
+
     guidata(fig, data);
 end
 
@@ -2558,6 +2668,44 @@ function update_edge_margin(src, ~)
     update_all_summaries(fig, data);
     guidata(fig, data);
     update_visualization(data);
+end
+
+function update_core_loss_method(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    items = get(src, 'String');
+    data.core_loss_method = items{get(src, 'Value')};
+    guidata(fig, data);
+end
+
+function update_steinmetz_k(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val = str2double(get(src, 'String'));
+    if ~isnan(val) && val > 0
+        data.steinmetz.k = val;
+    end
+    guidata(fig, data);
+end
+
+function update_steinmetz_alpha(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val = str2double(get(src, 'String'));
+    if ~isnan(val) && val > 0
+        data.steinmetz.alpha = val;
+    end
+    guidata(fig, data);
+end
+
+function update_steinmetz_beta(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val = str2double(get(src, 'String'));
+    if ~isnan(val) && val > 0
+        data.steinmetz.beta = val;
+    end
+    guidata(fig, data);
 end
 
 function update_wire_insulation(src, ~, winding)
@@ -3653,6 +3801,48 @@ function run_analysis(~, ~)
         analysis_meta.debug_dump_path = write_analysis_geometry_dump( ...
             data, all_conductors, all_winding_map, all_wire_shapes, analysis_meta, analysis_run);
     catch
+    end
+
+    % --- Compute magnetic parameters (Lm, Llk, Bpk, core loss) ---
+    try
+        fprintf('\n[ANALYSIS] Computing magnetic parameters (Lm, Llk, Bpk, core loss)...\n');
+        mag_results = compute_magnetic_params(data, geom);
+        analysis_run.mag_results = mag_results;
+        if mag_results.valid
+            fprintf('  Lm = %.2f uH (%s), Llk_pri = %.3f uH (PEEC), k = %.4f\n', ...
+                mag_results.Lm_H*1e6, mag_results.Lm_source, ...
+                mag_results.Llk_pri_H*1e6, mag_results.coupling_k);
+            if isfield(mag_results, 'R_core') && mag_results.R_core > 0
+                R_pct = mag_results.R_gap_total / mag_results.R_total * 100;
+                fprintf('  Reluctance: R_core=%.0f, R_gap=%.0f (%.1f%%), R_total=%.0f [H^-1]\n', ...
+                    mag_results.R_core, mag_results.R_gap_total, R_pct, mag_results.R_total);
+            end
+            fprintf('  Bpk = %.1f mT, deltaB = %.1f mT\n', ...
+                mag_results.Bpk_T*1e3, mag_results.deltaB_T*1e3);
+            fprintf('  Core loss (%s) = %.3f W\n', mag_results.method, mag_results.Pcore_W);
+        else
+            fprintf('  Magnetic parameter computation did not complete.\n');
+        end
+    catch ME
+        fprintf('  Magnetic parameter computation failed: %s\n', ME.message);
+        analysis_run.mag_results = struct('valid', false);
+    end
+
+    % --- Attach MKF reference values from topology wizard recommendation ---
+    analysis_run.mkf_ref = struct('valid', false);
+    if isfield(data, 'design_spec') && ~isempty(data.design_spec)
+        spec = data.design_spec;
+        if isfield(spec, 'recommendation') && isstruct(spec.recommendation)
+            rec = spec.recommendation;
+            mkf = struct('valid', true);
+            if isfield(rec, 'Lm_uH'), mkf.Lm_uH = rec.Lm_uH; else mkf.Lm_uH = 0; end
+            if isfield(rec, 'Llk_uH'), mkf.Llk_uH = rec.Llk_uH; else mkf.Llk_uH = 0; end
+            if isfield(rec, 'B_peak_mT'), mkf.B_peak_mT = rec.B_peak_mT; else mkf.B_peak_mT = 0; end
+            if isfield(rec, 'B_pp_mT'), mkf.B_pp_mT = rec.B_pp_mT; else mkf.B_pp_mT = 0; end
+            if isfield(rec, 'core_loss_W'), mkf.core_loss_W = rec.core_loss_W; else mkf.core_loss_W = 0; end
+            if isfield(rec, 'winding_loss_W'), mkf.winding_loss_W = rec.winding_loss_W; else mkf.winding_loss_W = 0; end
+            analysis_run.mkf_ref = mkf;
+        end
     end
 
     display_results(data, geom, analysis_run.plot_conductors, all_winding_map, ...
@@ -5356,6 +5546,113 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
         y_cfg = y_cfg - 0.05;
     end
 
+    % --- Magnetic Parameters: PEEC vs MKF Comparison ---
+    has_mag = isstruct(analysis_run) && isfield(analysis_run, 'mag_results') ...
+              && isstruct(analysis_run.mag_results) && analysis_run.mag_results.valid;
+    has_mkf = isstruct(analysis_run) && isfield(analysis_run, 'mkf_ref') ...
+              && isstruct(analysis_run.mkf_ref) && analysis_run.mkf_ref.valid;
+
+    if has_mag || has_mkf
+        y_cfg = y_cfg - 0.02;
+        text(0.05, y_cfg, 'Magnetic Parameters:', 'FontSize', 9, 'FontWeight', 'bold', ...
+             'Color', [0.0 0.2 0.6]);
+        y_cfg = y_cfg - 0.06;
+
+        % Header
+        text(0.05, y_cfg, '                    PEEC       MKF', 'FontSize', 8, ...
+             'FontName', 'FixedWidth', 'Color', [0.3 0.3 0.3]);
+        y_cfg = y_cfg - 0.05;
+
+        if has_mag
+            mr = analysis_run.mag_results;
+        end
+        if has_mkf
+            mk = analysis_run.mkf_ref;
+        end
+
+        % Lm
+        peec_str = '  ---';
+        mkf_str = '  ---';
+        if has_mag, peec_str = sprintf('%7.1f', mr.Lm_H*1e6); end
+        if has_mkf && mk.Lm_uH > 0, mkf_str = sprintf('%7.1f', mk.Lm_uH); end
+        text(0.05, y_cfg, sprintf('Lm (uH)       %s    %s', peec_str, mkf_str), ...
+             'FontSize', 8, 'FontName', 'FixedWidth');
+        y_cfg = y_cfg - 0.045;
+
+        % Llk
+        peec_str = '  ---';
+        mkf_str = '  ---';
+        if has_mag, peec_str = sprintf('%7.2f', mr.Llk_pri_H*1e6); end
+        if has_mkf && mk.Llk_uH > 0, mkf_str = sprintf('%7.2f', mk.Llk_uH); end
+        text(0.05, y_cfg, sprintf('Llk,pri (uH)  %s    %s', peec_str, mkf_str), ...
+             'FontSize', 8, 'FontName', 'FixedWidth');
+        y_cfg = y_cfg - 0.045;
+
+        % Bpk
+        peec_str = '  ---';
+        mkf_str = '  ---';
+        if has_mag, peec_str = sprintf('%7.1f', mr.Bpk_T*1e3); end
+        if has_mkf && mk.B_peak_mT > 0, mkf_str = sprintf('%7.1f', mk.B_peak_mT); end
+        text(0.05, y_cfg, sprintf('Bpk (mT)      %s    %s', peec_str, mkf_str), ...
+             'FontSize', 8, 'FontName', 'FixedWidth');
+        y_cfg = y_cfg - 0.045;
+
+        % deltaB
+        peec_str = '  ---';
+        mkf_str = '  ---';
+        if has_mag, peec_str = sprintf('%7.1f', mr.deltaB_T*1e3); end
+        if has_mkf && mk.B_pp_mT > 0, mkf_str = sprintf('%7.1f', mk.B_pp_mT); end
+        text(0.05, y_cfg, sprintf('dB (mT)       %s    %s', peec_str, mkf_str), ...
+             'FontSize', 8, 'FontName', 'FixedWidth');
+        y_cfg = y_cfg - 0.045;
+
+        % Core loss
+        peec_str = '  ---';
+        mkf_str = '  ---';
+        if has_mag && mr.Pcore_W > 0
+            peec_str = sprintf('%7.3f', mr.Pcore_W);
+        end
+        if has_mkf && mk.core_loss_W > 0
+            mkf_str = sprintf('%7.3f', mk.core_loss_W);
+        end
+        method_label = '';
+        if has_mag, method_label = sprintf(' (%s)', mr.method); end
+        text(0.05, y_cfg, sprintf('Pcore (W)%s %s    %s', method_label, peec_str, mkf_str), ...
+             'FontSize', 8, 'FontName', 'FixedWidth');
+        y_cfg = y_cfg - 0.045;
+
+        % Total loss (PEEC winding + PEEC core)
+        peec_str = '  ---';
+        mkf_str = '  ---';
+        if has_mag && mr.Pcore_W > 0
+            peec_total = total_loss_display + mr.Pcore_W;
+            peec_str = sprintf('%7.3f', peec_total);
+        end
+        if has_mkf && mk.core_loss_W > 0 && mk.winding_loss_W > 0
+            mkf_str = sprintf('%7.3f', mk.core_loss_W + mk.winding_loss_W);
+        end
+        text(0.05, y_cfg, sprintf('Total (W)     %s    %s', peec_str, mkf_str), ...
+             'FontSize', 8, 'FontName', 'FixedWidth', 'FontWeight', 'bold');
+        y_cfg = y_cfg - 0.045;
+
+        % Coupling coefficient, Lm source, and reluctance breakdown
+        info_parts = {};
+        if has_mag
+            info_parts{end+1} = sprintf('k: %.4f', mr.coupling_k);
+            if isfield(mr, 'Lm_source') && ~isempty(mr.Lm_source)
+                info_parts{end+1} = sprintf('Lm: %s', mr.Lm_source);
+            end
+            if isfield(mr, 'R_core') && mr.R_core > 0 && isfield(mr, 'R_total') && mr.R_total > 0
+                gap_pct = mr.R_gap_total / mr.R_total * 100;
+                info_parts{end+1} = sprintf('R_gap: %.1f%%', gap_pct);
+            end
+        end
+        if ~isempty(info_parts)
+            text(0.05, y_cfg, strjoin(info_parts, '  |  '), ...
+                 'FontSize', 7, 'FontName', 'FixedWidth', 'Color', [0.4 0.4 0.4]);
+        end
+    end
+
     replot_state = struct();
     replot_state.data = data;
     replot_state.geom = geom;
@@ -6462,4 +6759,293 @@ function safe = make_safe_field(name)
     if isempty(safe)
         safe = 'unknown';
     end
+end
+
+
+% ================================================================
+% CORE LOSS & MAGNETIC PARAMETER COMPUTATION
+% ================================================================
+
+function [B_waveform, t] = compute_flux_waveform_forward(Vin, duty, fsw, N, Ae, n_samples)
+% Compute B(t) for a 2-switch forward converter primary.
+% V(t) = +Vin for 0<t<D/f, -Vin for D/f<t<2D/f, 0 for 2D/f<t<1/f
+% B(t) = (1/N*Ae) * integral(V(t) dt) + B_offset
+    if nargin < 6, n_samples = 512; end
+    T = 1/fsw;
+    t = linspace(0, T, n_samples+1)';
+    t = t(1:end-1);  % one full period, no duplicate endpoint
+    dt = T / n_samples;
+
+    % Voltage waveform: +Vin during D, -Vin during reset (D), 0 during 1-2D
+    V = zeros(size(t));
+    t_on  = duty * T;
+    t_reset = 2 * duty * T;
+    for i = 1:length(t)
+        if t(i) < t_on
+            V(i) = Vin;
+        elseif t(i) < t_reset
+            V(i) = -Vin;
+        else
+            V(i) = 0;
+        end
+    end
+
+    % Integrate voltage to get flux: B(t) = (1/N*Ae) * integral V dt
+    flux = cumsum(V) * dt;   % Volt-seconds
+    B_waveform = flux / (N * Ae);
+
+    % Remove DC offset so B swings symmetrically
+    B_waveform = B_waveform - mean(B_waveform);
+end
+
+
+function Pcore = compute_core_loss_igse(B_waveform, t, k, alpha, beta, Ve)
+% iGSE core loss computation.
+% Reference: Venkatachalam, Sullivan, Abdallah, Tacca (IEEE COMPEL 2002)
+%
+% Pv = (1/T) * integral(ki * |dB/dt|^alpha * deltaB^(beta-alpha) dt)
+%
+% Inputs:
+%   B_waveform - B(t) values [T] over one period
+%   t          - time vector [s]
+%   k, alpha, beta - Steinmetz parameters
+%   Ve         - core effective volume [m^3]
+% Output:
+%   Pcore      - total core loss [W]
+
+    T = t(end) - t(1) + (t(2) - t(1));  % full period
+    deltaB = max(B_waveform) - min(B_waveform);
+
+    if deltaB < 1e-12 || k <= 0
+        Pcore = 0;
+        return;
+    end
+
+    % Compute ki coefficient
+    theta = linspace(0, 2*pi, 2000);
+    dtheta = theta(2) - theta(1);
+    int_val = sum(abs(cos(theta)).^alpha .* 2^(beta - alpha)) * dtheta;
+    ki = k / ((2*pi)^(alpha - 1) * int_val);
+
+    % dB/dt
+    dBdt = diff(B_waveform) ./ diff(t);
+    t_mid = (t(1:end-1) + t(2:end)) / 2;
+
+    % Core loss density [W/m^3]
+    integrand = ki * abs(dBdt).^alpha .* deltaB^(beta - alpha);
+    Pv = (1/T) * trapz(t_mid, integrand);
+
+    Pcore = Pv * Ve;
+end
+
+
+function Pcore = compute_core_loss_i2gse(B_waveform, t, k, alpha, beta, Ve)
+% i²GSE core loss computation with relaxation.
+% Reference: Muhlethaler, Biela, Kolar, Ecklebe (IEEE TPE 2012)
+%
+% Extends iGSE with relaxation loss during constant-B intervals.
+
+    T = t(end) - t(1) + (t(2) - t(1));
+    deltaB = max(B_waveform) - min(B_waveform);
+
+    if deltaB < 1e-12 || k <= 0
+        Pcore = 0;
+        return;
+    end
+
+    % Compute ki (same as iGSE)
+    theta = linspace(0, 2*pi, 2000);
+    dtheta = theta(2) - theta(1);
+    int_val = sum(abs(cos(theta)).^alpha .* 2^(beta - alpha)) * dtheta;
+    ki = k / ((2*pi)^(alpha - 1) * int_val);
+
+    % dB/dt
+    dBdt = diff(B_waveform) ./ diff(t);
+    dt_vec = diff(t);
+
+    % Identify segments: active (|dB/dt| > threshold) vs relaxation
+    threshold = 0.01 * max(abs(dBdt));  % 1% of peak dB/dt
+
+    Pv_total = 0;
+    N = length(dBdt);
+
+    % Relaxation time constant estimate (material-dependent, typical ~10us)
+    tau_relax = 10e-6;
+
+    last_active_dB = 0;
+    relax_start = false;
+
+    for i = 1:N
+        if abs(dBdt(i)) > threshold
+            % Active segment: standard iGSE contribution
+            Pv_total = Pv_total + ki * abs(dBdt(i))^alpha * deltaB^(beta - alpha) * dt_vec(i);
+            last_active_dB = abs(dBdt(i)) * dt_vec(i);  % flux change in this step
+            relax_start = true;
+        else
+            % Relaxation segment: add decaying loss term
+            if relax_start && last_active_dB > 0
+                % Relaxation contribution proportional to last flux change
+                relax_loss = ki * (last_active_dB / dt_vec(i))^alpha * ...
+                             deltaB^(beta - alpha) * dt_vec(i) * ...
+                             exp(-dt_vec(i) / tau_relax);
+                Pv_total = Pv_total + relax_loss;
+                relax_start = false;
+            end
+        end
+    end
+
+    Pv = Pv_total / T;
+    Pcore = Pv * Ve;
+end
+
+
+function mag_results = compute_magnetic_params(data, geom)
+% Compute magnetic parameters (Lm, Llk, Bpk, core loss) from PEEC + core data.
+%
+% Lm: Computed from reluctance network: Lm = N^2 / (R_core + sum(R_gap))
+%     Includes gap reluctance with Partridge fringing correction.
+%     The PEEC L matrix is air-core only (uses mu_0, not mu_r), so it
+%     CANNOT provide Lm. Only the reluctance network model can.
+%
+% Llk: Extracted from PEEC air-core L matrix (Margueron/Keradec 2007).
+%      Leakage flux travels through air, so free-space PEEC is correct.
+%
+% Returns struct with:
+%   .Lm_H, .Llk_pri_H, .Llk_sec_H - inductances [H]
+%   .Bpk_T, .deltaB_T - flux density [T]
+%   .Pcore_W - core loss [W]
+%   .method - core loss method used
+%   .valid - true if computation succeeded
+
+    mag_results = struct('valid', false, 'Lm_H', 0, 'Llk_pri_H', 0, 'Llk_sec_H', 0, ...
+                         'Bpk_T', 0, 'deltaB_T', 0, 'Pcore_W', 0, 'method', '', ...
+                         'Lm_source', '', 'R_core', 0, 'R_gap_total', 0, ...
+                         'R_total', 0, 'n_gaps_used', 0);
+
+    % --- Get core parameters ---
+    core_params = data.api.get_core_params(data.selected_core);
+    Ae = core_params.Ae;
+    Ve = core_params.Ve;
+    MLT = core_params.MLT;
+
+    if Ae <= 0 || MLT <= 0
+        fprintf('  Magnetic params: missing Ae (%.2e) or MLT (%.4f) for core %s\n', ...
+                Ae, MLT, data.selected_core);
+        return;
+    end
+
+    % --- Get material permeability for reluctance model ---
+    mu_r = data.api.get_initial_permeability(data.selected_material);
+    if mu_r <= 0
+        fprintf('  Magnetic params: no initial permeability for material %s\n', ...
+                data.selected_material);
+    else
+        fprintf('  Core: Ae=%.2e m2, le=%.4f m, mu_r=%.0f (%s)\n', ...
+                Ae, core_params.le, mu_r, data.selected_material);
+    end
+
+    % --- Build gapping array from GUI gap settings ---
+    gapping = data.api.build_gapping_array(data.core_gap_type, ...
+                                            data.core_gap_length, ...
+                                            data.core_num_gaps);
+    if isempty(gapping)
+        % Default: add residual gap (ungapped core still has ~10um air gap)
+        gapping = {struct('type', 'residual', 'length', 10e-6)};
+    end
+    n_gaps = length(gapping);
+    total_gap = 0;
+    for gi = 1:n_gaps
+        total_gap = total_gap + gapping{gi}.length;
+    end
+    fprintf('  Gap: %s, %d gap(s), total=%.1f um\n', ...
+            data.core_gap_type, n_gaps, total_gap * 1e6);
+
+    % --- Extract leakage inductance from PEEC + Lm from reluctance network ---
+    try
+        mp = compute_winding_inductance_matrix(geom, MLT, core_params, mu_r, gapping);
+        mag_results.Lm_H = mp.Lm;
+        mag_results.Lm_source = mp.Lm_source;
+        mag_results.Llk_pri_H = mp.Llk_pri;
+        mag_results.Llk_sec_H = mp.Llk_sec;
+        mag_results.coupling_k = mp.coupling_k;
+        mag_results.n_eff = mp.n_eff;
+        mag_results.L_winding = mp.L_winding;
+        mag_results.R_core = mp.R_core;
+        mag_results.R_gap_total = mp.R_gap_total;
+        mag_results.R_total = mp.R_total;
+        mag_results.n_gaps_used = mp.n_gaps_used;
+    catch ME
+        fprintf('  Magnetic params: inductance extraction failed: %s\n', ME.message);
+        return;
+    end
+
+    % --- Compute B(t) and peak flux density ---
+    fsw = data.f;
+    Npri = data.windings(1).n_turns;
+    if Npri <= 0
+        fprintf('  Magnetic params: Npri = 0\n');
+        return;
+    end
+
+    % Get Vin and duty from design spec if available (forward converter)
+    Vin = 0; duty = 0;
+    if isfield(data, 'design_spec') && ~isempty(data.design_spec)
+        spec = data.design_spec;
+        if isfield(spec, 'converter')
+            if isfield(spec.converter, 'vin_nom'), Vin = spec.converter.vin_nom; end
+        end
+        if isfield(spec, 'requirements')
+            if isfield(spec.requirements, 'duty_nom'), duty = spec.requirements.duty_nom; end
+        end
+    end
+
+    if Vin > 0 && duty > 0 && fsw > 0
+        % Forward converter: compute B(t) from voltage waveform
+        [B_waveform, t_B] = compute_flux_waveform_forward(Vin, duty, fsw, Npri, Ae);
+        mag_results.Bpk_T = max(abs(B_waveform));
+        mag_results.deltaB_T = max(B_waveform) - min(B_waveform);
+    else
+        % Fallback: estimate from Lm and current
+        % deltaB = Lm * I_pp / (Npri * Ae)
+        % For simple sinusoidal estimate:
+        I_rms = data.windings(1).current;
+        I_pk = I_rms * sqrt(2);
+        mag_results.Bpk_T = mag_results.Lm_H * I_pk / (Npri * Ae);
+        mag_results.deltaB_T = 2 * mag_results.Bpk_T;
+
+        % Synthesize triangular B waveform for core loss
+        n_samples = 512;
+        T = 1/fsw;
+        t_B = linspace(0, T, n_samples)';
+        % Manual triangular wave (no dependency on signal package)
+        phase = mod(t_B * fsw, 1);  % 0 to 1
+        tri = zeros(size(phase));
+        for ti = 1:length(phase)
+            if phase(ti) < 0.5
+                tri(ti) = 4 * phase(ti) - 1;  % -1 to +1
+            else
+                tri(ti) = 3 - 4 * phase(ti);  % +1 to -1
+            end
+        end
+        B_waveform = mag_results.deltaB_T/2 * tri;
+    end
+
+    % --- Compute core loss ---
+    sk = data.steinmetz.k;
+    sa = data.steinmetz.alpha;
+    sb = data.steinmetz.beta;
+
+    if ~isempty(sk) && ~isempty(sa) && ~isempty(sb) && Ve > 0
+        if strcmp(data.core_loss_method, 'i2GSE')
+            mag_results.Pcore_W = compute_core_loss_i2gse(B_waveform, t_B, sk, sa, sb, Ve);
+            mag_results.method = 'i2GSE';
+        else
+            mag_results.Pcore_W = compute_core_loss_igse(B_waveform, t_B, sk, sa, sb, Ve);
+            mag_results.method = 'iGSE';
+        end
+    else
+        mag_results.method = 'N/A (no Steinmetz data)';
+    end
+
+    mag_results.valid = true;
 end

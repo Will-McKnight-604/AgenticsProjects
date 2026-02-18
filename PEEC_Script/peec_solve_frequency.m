@@ -760,3 +760,108 @@ function results = peec_solve_frequency(geom, conductors, f, sigma, mu0)
     results.L       = L;          % Inductance matrix used
     results.Z       = Z;          % Impedance matrix
 end
+
+% NOTE: compute_winding_inductance_matrix() moved to separate file:
+%       compute_winding_inductance_matrix.m
+
+%{
+function mag_params = compute_winding_inductance_matrix(geom, MLT)
+% COMPUTE_WINDING_INDUCTANCE_MATRIX  Extract Lm and Llk from PEEC geometry.
+%
+% Aggregates the filament-level partial inductance matrix into a winding-level
+% Nw x Nw inductance matrix, then decomposes into magnetizing and leakage.
+%
+% Reference: Margueron, Keradec, Magot - "Analytical Calculation of Static
+%            Leakage Inductances of HF Transformers Using PEEC Formulas"
+%            IEEE Trans. Industry Applications, 2007.
+%
+% Inputs:
+%   geom - PEEC geometry struct (from peec_build_geometry)
+%   MLT  - Mean turn length [m] (converts per-unit-length to Henries)
+%
+% Outputs:
+%   mag_params - struct with fields:
+%     .L_winding  - Nw x Nw winding inductance matrix [H]
+%     .Lm         - Magnetizing inductance referred to primary [H]
+%     .Llk_pri    - Primary leakage inductance [H]
+%     .Llk_sec    - Secondary leakage inductance [H] (if 2+ windings)
+%     .n_eff      - Effective turns ratio from inductance matrix
+%     .coupling_k - Coupling coefficient
+
+    Nc = geom.Nc;
+    Nfpc = geom.Nx * geom.Ny;  % filaments per conductor (parallel)
+    L_fil = geom.L;             % Nf x Nf filament inductance matrix
+    winding_map = geom.winding_map;
+
+    % --- Step 1: Conductor-level inductance (average over parallel filaments) ---
+    L_cond = zeros(Nc);
+    for k = 1:Nc
+        fils_k = ((k-1)*Nfpc + 1) : (k*Nfpc);
+        for l = k:Nc
+            fils_l = ((l-1)*Nfpc + 1) : (l*Nfpc);
+            % Mean of mutual inductances between all filament pairs
+            val = mean(mean(L_fil(fils_k, fils_l)));
+            L_cond(k, l) = val;
+            L_cond(l, k) = val;  % symmetric
+        end
+    end
+
+    % --- Step 2: Winding-level inductance (sum over series turns) ---
+    winding_ids = unique(winding_map);
+    Nw = length(winding_ids);
+    L_winding = zeros(Nw);
+
+    for w1 = 1:Nw
+        conds_w1 = find(winding_map == winding_ids(w1));
+        for w2 = w1:Nw
+            conds_w2 = find(winding_map == winding_ids(w2));
+            val = sum(sum(L_cond(conds_w1, conds_w2)));
+            L_winding(w1, w2) = val;
+            L_winding(w2, w1) = val;
+        end
+    end
+
+    % --- Step 3: Convert per-unit-length to actual inductance ---
+    L_winding = L_winding * MLT;
+
+    % --- Step 4: Extract Lm and Llk ---
+    mag_params.L_winding = L_winding;
+    mag_params.winding_ids = winding_ids;
+
+    if Nw >= 2
+        L11 = L_winding(1,1);
+        L22 = L_winding(2,2);
+        M   = L_winding(1,2);
+
+        % Turns ratio from inductance (n = N1/N2)
+        n_eff = sqrt(L11 / L22);
+
+        % Coupling coefficient
+        coupling_k = M / sqrt(L11 * L22);
+
+        % Magnetizing inductance referred to primary
+        Lm = M * n_eff;
+
+        % Leakage inductances
+        Llk_pri = L11 - M * n_eff;
+        Llk_sec = L22 - M / n_eff;
+
+        % Ensure non-negative (numerical precision)
+        Llk_pri = max(Llk_pri, 0);
+        Llk_sec = max(Llk_sec, 0);
+
+        mag_params.Lm = Lm;
+        mag_params.Llk_pri = Llk_pri;
+        mag_params.Llk_sec = Llk_sec;
+        mag_params.n_eff = n_eff;
+        mag_params.coupling_k = coupling_k;
+    else
+        % Single winding: self-inductance only
+        mag_params.Lm = L_winding(1,1);
+        mag_params.Llk_pri = 0;
+        mag_params.Llk_sec = 0;
+        mag_params.n_eff = 1;
+        mag_params.coupling_k = 1;
+    end
+end
+%}

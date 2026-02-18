@@ -821,7 +821,7 @@ def compute_losses_for_recommendation(mas_data):
 
     # Core losses via calculate_core_losses(core, coil, inputs, models)
     try:
-        models = {"coreLosses": "Steinmetz", "reluctance": "Zhang"}
+        models = {"coreLosses": "iGSE", "reluctance": "Zhang"}
         core_result = pm.calculate_core_losses(core, coil, inputs_data, models)
         if isinstance(core_result, dict) and "data" not in core_result:
             core_losses = as_float(core_result.get("coreLosses", 0.0), 0.0)
@@ -1158,6 +1158,8 @@ def extract_recommendation(item):
         rec["B_peak_mT"] = nom.get("B_peak_T", 0.0) * 1e3
         rec["B_pp_mT"] = nom.get("B_pp_T", 0.0) * 1e3
         rec["B_offset_mT"] = nom.get("B_offset_T", 0.0) * 1e3
+        rec["core_loss_W"] = nom.get("core_loss_W", 0.0)
+        rec["winding_loss_W"] = nom.get("winding_loss_W", 0.0)
 
     # Core effective parameters for saturation context
     core_pd = core.get("processedDescription", {})

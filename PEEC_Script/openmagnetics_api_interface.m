@@ -124,6 +124,159 @@ classdef openmagnetics_api_interface < handle
             end
         end
 
+        function mu_r = get_initial_permeability(obj, material_name)
+            % Get initial relative permeability for a material.
+            % Returns 0 if not available.
+            mu_r = 0;
+            safe_key = make_valid_name(material_name);
+            if ~isfield(obj.material_database, safe_key)
+                return;
+            end
+            mat = obj.material_database.(safe_key);
+            if isfield(mat, 'initial_permeability') && ~isempty(mat.initial_permeability)
+                mu_r = mat.initial_permeability;
+            end
+        end
+
+        function [k, alpha, beta, ct0, ct1, ct2] = get_steinmetz_coefficients(obj, material_name, freq_hz)
+            % Get Steinmetz coefficients for a material at a given frequency.
+            % Returns empty values if no Steinmetz data available.
+            k = []; alpha = []; beta = []; ct0 = []; ct1 = []; ct2 = [];
+
+            safe_key = make_valid_name(material_name);
+            if ~isfield(obj.material_database, safe_key)
+                return;
+            end
+            mat = obj.material_database.(safe_key);
+            if ~isfield(mat, 'steinmetz_ranges')
+                return;
+            end
+
+            ranges = mat.steinmetz_ranges;
+            % Find the range that covers freq_hz
+            for ri = 1:length(ranges)
+                r = ranges(ri);
+                if freq_hz >= r.fmin && freq_hz <= r.fmax
+                    k = r.k;
+                    alpha = r.alpha;
+                    beta = r.beta;
+                    if isfield(r, 'ct0'), ct0 = r.ct0; end
+                    if isfield(r, 'ct1'), ct1 = r.ct1; end
+                    if isfield(r, 'ct2'), ct2 = r.ct2; end
+                    return;
+                end
+            end
+
+            % If no range matched, use the closest one
+            best_dist = inf;
+            best_idx = 1;
+            for ri = 1:length(ranges)
+                r = ranges(ri);
+                mid = (r.fmin + r.fmax) / 2;
+                d = abs(freq_hz - mid);
+                if d < best_dist
+                    best_dist = d;
+                    best_idx = ri;
+                end
+            end
+            r = ranges(best_idx);
+            k = r.k;
+            alpha = r.alpha;
+            beta = r.beta;
+            if isfield(r, 'ct0'), ct0 = r.ct0; end
+            if isfield(r, 'ct1'), ct1 = r.ct1; end
+            if isfield(r, 'ct2'), ct2 = r.ct2; end
+        end
+
+        function params = get_core_params(obj, core_name)
+            % Get effective magnetic parameters for a core.
+            % Returns struct with Ae, le, Ve, bobbin, MLT (mean turn length).
+            params = struct('Ae', 0, 'le', 0, 'Ve', 0, ...
+                            'bobbin_w', 0, 'bobbin_h', 0, 'MLT', 0);
+
+            safe_key = make_valid_name(core_name);
+            if ~isfield(obj.core_database, safe_key)
+                return;
+            end
+            core = obj.core_database.(safe_key);
+
+            if isfield(core, 'Ae'), params.Ae = core.Ae;
+            elseif isfield(core, 'effectiveArea'), params.Ae = core.effectiveArea; end
+            if isfield(core, 'le'), params.le = core.le;
+            elseif isfield(core, 'effectiveLength'), params.le = core.effectiveLength; end
+            if isfield(core, 'Ve'), params.Ve = core.Ve;
+            elseif isfield(core, 'effectiveVolume'), params.Ve = core.effectiveVolume; end
+            if isfield(core, 'bobbin')
+                if isfield(core.bobbin, 'width'), params.bobbin_w = core.bobbin.width; end
+                if isfield(core.bobbin, 'height'), params.bobbin_h = core.bobbin.height; end
+            end
+
+            % Determine core family for MLT calculation
+            core_family = '';
+            if isfield(core, 'family')
+                core_family = lower(core.family);
+            elseif isfield(core, 'shape')
+                core_family = lower(core.shape);
+            end
+
+            % Compute mean turn length (MLT)
+            if strcmp(core_family, 't')
+                % Toroidal core: MLT = pi * (ID + height)
+                % For toroid: A=OD, B=ID, C=height
+                if isfield(core, 'dimensions')
+                    dims = core.dimensions;
+                    B_id = obj.extract_dim(dims.B);  % inner diameter
+                    C_ht = obj.extract_dim(dims.C);  % height
+                    if B_id > 0 && C_ht > 0
+                        % MLT wraps around cross-section: approximate as
+                        % perimeter of rectangular cross-section at mean radius
+                        params.MLT = 2 * C_ht + (B_id * pi);
+                        % Better: MLT = pi * (A + B)/2 for circular path
+                        % but for wire going through the hole and around,
+                        % MLT ≈ 2*C + pi*(A-B)/2 (half inner, half outer path)
+                        A_od = obj.extract_dim(dims.A);
+                        if A_od > 0
+                            % Standard toroid MLT formula
+                            params.MLT = 2 * C_ht + (A_od - B_id);
+                        end
+                    end
+                end
+            else
+                % Non-toroidal: use core dimensions or winding window
+                if isfield(core, 'dimensions')
+                    dims = core.dimensions;
+                    if isfield(dims, 'C') && isfield(dims, 'E')
+                        C = obj.extract_dim(dims.C);
+                        E = obj.extract_dim(dims.E);
+                        if C > 0 && E > 0
+                            params.MLT = 2 * (C + E);
+                            return;
+                        end
+                    end
+                end
+                % Fallback: approximate from winding window
+                if params.bobbin_w > 0 && params.bobbin_h > 0
+                    params.MLT = 2 * (params.bobbin_w + params.bobbin_h);
+                end
+            end
+        end
+
+        function val = extract_dim(~, dim_field)
+            % Extract numeric value from a dimension field (handles nested nominal/max/min)
+            val = 0;
+            if isnumeric(dim_field) && ~isempty(dim_field)
+                val = dim_field(1);
+            elseif isstruct(dim_field)
+                if isfield(dim_field, 'nominal') && ~isempty(dim_field.nominal)
+                    val = dim_field.nominal;
+                elseif isfield(dim_field, 'maximum') && ~isempty(dim_field.maximum)
+                    val = dim_field.maximum;
+                elseif isfield(dim_field, 'minimum') && ~isempty(dim_field.minimum)
+                    val = dim_field.minimum;
+                end
+            end
+        end
+
         function info = get_wire_info(obj, wire_name)
             if isfield(obj.wire_database, wire_name)
                 info = obj.wire_database.(wire_name);
@@ -480,6 +633,7 @@ classdef openmagnetics_api_interface < handle
 
                 if isfield(core_raw, 'family')
                     entry.shape = upper(core_raw.family);
+                    entry.family = lower(core_raw.family);
                 end
 
                 % Dimensions
@@ -502,15 +656,26 @@ classdef openmagnetics_api_interface < handle
                 if isfield(core_raw, 'windingWindow') && isstruct(core_raw.windingWindow)
                     ww = core_raw.windingWindow;
                     bobbin = struct();
-                    if isfield(ww, 'width') && ~isempty(ww.width)
+                    has_rect = false;
+                    if isfield(ww, 'width') && isnumeric(ww.width) && ~isempty(ww.width)
                         bobbin.width = ww.width;
+                        has_rect = true;
                     end
-                    if isfield(ww, 'height') && ~isempty(ww.height)
+                    if isfield(ww, 'height') && isnumeric(ww.height) && ~isempty(ww.height)
                         bobbin.height = ww.height;
+                    else
+                        has_rect = false;
                     end
-                    if isfield(bobbin, 'width') && isfield(bobbin, 'height')
+                    if has_rect
                         entry.bobbin = bobbin;
                         entry.bobbin_source = 'windingWindow';
+                    end
+                    % Preserve toroidal winding window data
+                    if isfield(ww, 'radialHeight') && isnumeric(ww.radialHeight) && ~isempty(ww.radialHeight)
+                        entry.ww_radialHeight = ww.radialHeight;
+                    end
+                    if isfield(ww, 'angle') && isnumeric(ww.angle) && ~isempty(ww.angle)
+                        entry.ww_angle = ww.angle;
                     end
                 end
 
@@ -601,6 +766,42 @@ classdef openmagnetics_api_interface < handle
                 end
                 if isfield(mat_raw, 'resistivity') && ~isempty(mat_raw.resistivity)
                     entry.resistivity = mat_raw.resistivity;
+                end
+
+                % Steinmetz coefficients (frequency-ranged)
+                if isfield(mat_raw, 'steinmetz_ranges') && ~isempty(mat_raw.steinmetz_ranges)
+                    sr = mat_raw.steinmetz_ranges;
+                    if isstruct(sr)
+                        % jsondecode returns struct array for array of objects
+                        ranges = struct();
+                        for ri = 1:length(sr)
+                            r = sr(ri);
+                            ranges(ri).fmin = r.fmin;
+                            ranges(ri).fmax = r.fmax;
+                            ranges(ri).k = r.k;
+                            ranges(ri).alpha = r.alpha;
+                            ranges(ri).beta = r.beta;
+                            if isfield(r, 'ct0'), ranges(ri).ct0 = r.ct0; end
+                            if isfield(r, 'ct1'), ranges(ri).ct1 = r.ct1; end
+                            if isfield(r, 'ct2'), ranges(ri).ct2 = r.ct2; end
+                        end
+                        entry.steinmetz_ranges = ranges;
+                    elseif iscell(sr)
+                        % Alternative: cell array of structs
+                        ranges = struct();
+                        for ri = 1:length(sr)
+                            r = sr{ri};
+                            ranges(ri).fmin = r.fmin;
+                            ranges(ri).fmax = r.fmax;
+                            ranges(ri).k = r.k;
+                            ranges(ri).alpha = r.alpha;
+                            ranges(ri).beta = r.beta;
+                            if isfield(r, 'ct0'), ranges(ri).ct0 = r.ct0; end
+                            if isfield(r, 'ct1'), ranges(ri).ct1 = r.ct1; end
+                            if isfield(r, 'ct2'), ranges(ri).ct2 = r.ct2; end
+                        end
+                        entry.steinmetz_ranges = ranges;
+                    end
                 end
 
                 obj.material_database.(safe_key) = entry;

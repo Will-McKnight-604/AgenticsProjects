@@ -182,10 +182,17 @@ def export_cores(output_dir):
 
             # Calculate processed description for winding window + effective params
             try:
+                family = shape.get('family', '').lower()
+                if family == 't':
+                    core_type = 'toroidal'
+                elif family in ('u', 'ui', 'ur', 'ut'):
+                    core_type = 'closed shape'
+                else:
+                    core_type = 'two-piece set'
                 core_data = {
                     'functionalDescription': {
                         'name': name,
-                        'type': 'two-piece set',
+                        'type': core_type,
                         'shape': name,
                         'material': '3C95',
                         'gapping': [],
@@ -199,10 +206,16 @@ def export_cores(output_dir):
                     ww_list = proc.get('windingWindows', [])
                     if ww_list:
                         ww = ww_list[0]
-                        core_entry['windingWindow'] = {
+                        ww_entry = {
                             'width': ww.get('width'),
                             'height': ww.get('height'),
                         }
+                        # Toroidal cores use radialHeight/angle instead of width/height
+                        if ww.get('radialHeight') is not None:
+                            ww_entry['radialHeight'] = ww['radialHeight']
+                        if ww.get('angle') is not None:
+                            ww_entry['angle'] = ww['angle']
+                        core_entry['windingWindow'] = ww_entry
 
                     # Effective parameters
                     eff = proc.get('effectiveParameters', {})
@@ -312,8 +325,11 @@ def export_materials(output_dir):
             # Saturation
             sat = mat.get('saturation')
             if isinstance(sat, list) and len(sat) > 0:
-                entry['saturationFluxDensity'] = sat[0].get(
-                    'magneticFluxDensity', {}).get('typical')
+                mfd = sat[0].get('magneticFluxDensity') if isinstance(sat[0], dict) else None
+                if isinstance(mfd, (int, float)):
+                    entry['saturationFluxDensity'] = mfd
+                elif isinstance(mfd, dict):
+                    entry['saturationFluxDensity'] = mfd.get('typical')
 
             # Initial permeability
             perm = mat.get('permeability')
@@ -321,6 +337,40 @@ def export_materials(output_dir):
                 init = perm.get('initial', {})
                 if isinstance(init, dict):
                     entry['initialPermeability'] = init.get('value')
+                elif isinstance(init, list) and init:
+                    # Some materials return initial as list of {value, temperature}
+                    first = init[0]
+                    if isinstance(first, dict):
+                        entry['initialPermeability'] = first.get('value')
+                    elif isinstance(first, (int, float)):
+                        entry['initialPermeability'] = first
+
+            # Steinmetz coefficients from volumetricLosses
+            vol_losses = mat.get('volumetricLosses', {})
+            if isinstance(vol_losses, dict):
+                default_entries = vol_losses.get('default', [])
+                if isinstance(default_entries, list):
+                    for vl_entry in default_entries:
+                        if isinstance(vl_entry, dict) and vl_entry.get('method') == 'steinmetz':
+                            ranges = vl_entry.get('ranges', [])
+                            if isinstance(ranges, list) and ranges:
+                                steinmetz_ranges = []
+                                for r in ranges:
+                                    if isinstance(r, dict):
+                                        sr = {
+                                            'fmin': r.get('minimumFrequency', 0),
+                                            'fmax': r.get('maximumFrequency', 1e9),
+                                            'k': r.get('k'),
+                                            'alpha': r.get('alpha'),
+                                            'beta': r.get('beta'),
+                                        }
+                                        # Optional temperature coefficients
+                                        for tc in ('ct0', 'ct1', 'ct2'):
+                                            if tc in r:
+                                                sr[tc] = r[tc]
+                                        steinmetz_ranges.append(sr)
+                                entry['steinmetz_ranges'] = steinmetz_ranges
+                            break  # Only need first steinmetz entry
 
             if manufacturer:
                 mfr_counts[manufacturer] = mfr_counts.get(manufacturer, 0) + 1
@@ -330,6 +380,7 @@ def export_materials(output_dir):
             exported[safe_key] = entry
 
         except Exception as e:
+            print(f"  WARNING: Failed to export {name}: {e}")
             safe_key = name.replace(' ', '_').replace('.', '_').replace(
                 '-', '_').replace('/', '_')
             manufacturer = material_to_mfr.get(name)

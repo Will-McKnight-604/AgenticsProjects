@@ -781,6 +781,30 @@ def build_magnetic_from_config(config):
     coil_func = []
     for i, w in enumerate(windings):
         wire = resolve_wire_data(w)
+        # Pre-flight check: foil/planar wires are not supported on toroidal cores
+        wire_type = (wire.get('type', '') or '').lower()
+        if core_type == 'toroidal' and wire_type in ('foil', 'planar'):
+            print(f'WARNING: {wire_type} wire not supported on toroidal cores, '
+                  f'converting winding {i} to round wire equivalent',
+                  file=sys.stderr)
+            # Convert foil/planar to round wire with equivalent cross-section area
+            cw = wire.get('conductingWidth', {})
+            ch = wire.get('conductingHeight', {})
+            w_val = cw.get('nominal', 0) if isinstance(cw, dict) else (cw or 0)
+            h_val = ch.get('nominal', 0) if isinstance(ch, dict) else (ch or 0)
+            if w_val and h_val:
+                equiv_diam = (4 * w_val * h_val / 3.14159) ** 0.5
+            elif w_val:
+                equiv_diam = w_val
+            else:
+                equiv_diam = 0.5e-3  # fallback 0.5mm
+            wire = {
+                'type': 'round',
+                'conductingDiameter': {'nominal': equiv_diam},
+                'outerDiameter': {'nominal': equiv_diam * 1.08},
+                'numberConductors': 1,
+                'material': wire.get('material', 'copper')
+            }
         winding_entry = {
             'name': w.get('name', f'winding_{i}'),
             'numberTurns': w.get('num_turns', 10),
