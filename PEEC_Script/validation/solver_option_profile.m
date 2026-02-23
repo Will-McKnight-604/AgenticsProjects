@@ -32,18 +32,18 @@ function opts = solver_option_profile(mode)
     opts.linear_solver = 'auto';                % 'auto' | 'direct' | 'gmres' | 'bicgstab'
     opts.matrix_mode = 'auto';                  % 'auto' | 'dense' | 'matrix_free'
     opts.interaction_backend = 'auto';          % 'auto' | 'dense' | 'fft' | 'fmm'
-    opts.fft_auto_min_nf = 800;                 % don't auto-pick FFT for very small systems
+    opts.fft_auto_min_nf = 400;                 % don't auto-pick FFT for very small systems
     opts.fft_auto_min_estimated_speedup = 1.10; % estimated dense/fft matvec speedup gate
     opts.fft_auto_max_pad_ratio = 20.0;         % reject FFT when padding overhead is excessive
     opts.fmm_provider = 'auto';                 % 'auto' or external provider function name
     opts.fmm_auto_min_nf = 2500;                % only auto-pick FMM on larger irregular systems
-    opts.iter_min_size_for_use = 1e10;          % disabled: keep iterative solver opt-in only (dense systems typically slower with BiCGSTAB)
-    opts.fast_direct_guard_nf_max = 1e10;       % fast mode: direct-only (dense matvec overhead exceeds solver savings)
-    opts.standard_direct_guard_nf_max = 1e10;   % standard mode: direct-only until sparse/FFT backends available
-    opts.iter_auto_solver = 'bicgstab';         % solver used when linear_solver='auto'
+    opts.iter_min_size_for_use = 400;            % use iterative+FFT when Nf >= 400 (FFT matvec beats direct LU at this scale)
+    opts.fast_direct_guard_nf_max = 400;        % fast mode: iterative+FFT for Nf >= 400
+    opts.standard_direct_guard_nf_max = 400;    % standard mode: iterative+FFT for Nf >= 400
+    opts.iter_auto_solver = 'gmres';            % solver used when linear_solver='auto' (gmres handles indefinite saddle-point)
     opts.iter_tol = 5e-7;
-    opts.iter_maxit = 80;
-    opts.iter_restart = 30;
+    opts.iter_maxit = 500;
+    opts.iter_restart = 200;
     opts.iter_backend = 'auto';                 % 'auto' | 'octave' | 'external'
     opts.iter_external_solver_name = '';        % function name for external Krylov backend
     opts.iter_external_solver_fn = [];          % function_handle for external Krylov backend
@@ -94,12 +94,12 @@ function opts = solver_option_profile(mode)
             opts.solver_cache_entries = 10;
             opts.linear_solver = 'auto';
             opts.iter_min_size_for_use = opts.fast_direct_guard_nf_max;
-            opts.iter_tol = 1e-2;
-            opts.iter_maxit = 220;
-            opts.iter_restart = 40;
+            opts.iter_tol = 1e-4;
+            opts.iter_maxit = 500;
+            opts.iter_restart = 200;
             opts.matrix_mode = 'auto';
             opts.interaction_backend = 'auto';
-            opts.preconditioner = 'ilu_sparse_drop';
+            opts.preconditioner = 'jacobi';
             opts.precond_drop_tol = 5e-3;
             opts.op_early_stop_window = 2;
             opts.op_early_stop_tol_pct = 0.35;
