@@ -1,4 +1,4 @@
-function mag_params = compute_winding_inductance_matrix(geom, MLT, core_params, mu_r, gapping)
+function mag_params = compute_winding_inductance_matrix(geom, MLT, core_params, mu_r, gapping, options)
 % COMPUTE_WINDING_INDUCTANCE_MATRIX  Extract Lm and Llk from PEEC + core data.
 %
 % The PEEC filament inductance matrix is a FREE-SPACE (air-core) partial
@@ -36,6 +36,12 @@ function mag_params = compute_winding_inductance_matrix(geom, MLT, core_params, 
 %     .R_gap_total- Total gap reluctance [H^-1]
 %     .R_total    - Total reluctance [H^-1]
 
+    ensure_local_subdir('corrections');
+
+    if nargin < 6 || isempty(options)
+        options = struct();
+    end
+
     mu_0 = 4 * pi * 1e-7;
 
     Nc = geom.Nc;
@@ -46,7 +52,7 @@ function mag_params = compute_winding_inductance_matrix(geom, MLT, core_params, 
         error('compute_winding_inductance_matrix: geom missing winding_map (single-winding mode?)');
     end
     Nfpc = geom.Nx * geom.Ny;  % filaments per conductor (parallel)
-    L_fil = geom.L;             % Nf x Nf filament inductance matrix (AIR-CORE)
+    L_fil = ensure_dense_filament_L(geom, mu_0);  % Nf x Nf filament inductance matrix (AIR-CORE)
     winding_map = geom.winding_map;
 
     % --- Step 1: Conductor-level inductance (average over parallel filaments) ---
@@ -76,18 +82,27 @@ function mag_params = compute_winding_inductance_matrix(geom, MLT, core_params, 
         end
     end
 
-    % --- Step 3: Convert per-unit-length to actual inductance ---
-    L_winding = L_winding * MLT;
-
-    % --- Step 4: Count turns per winding for reluctance model ---
+    % --- Step 3: Count turns per winding for reluctance model ---
     N_turns = zeros(Nw, 1);
     for w = 1:Nw
         N_turns(w) = sum(winding_map == winding_ids(w));
     end
 
+    % --- Step 4: Convert per-unit-length to actual inductance ---
+    L_winding = L_winding * MLT;
+
+    % Optional 2.5D end-turn correction (phase-3 upgrade hook).
+    end_turn_meta = struct('applied', false);
+    try
+        [L_winding, end_turn_meta] = end_turn_2p5d(L_winding, N_turns, core_params, MLT, options);
+    catch
+        end_turn_meta = struct('applied', false);
+    end
+
     mag_params.L_winding = L_winding;
     mag_params.winding_ids = winding_ids;
     mag_params.N_turns = N_turns;
+    mag_params.end_turn_correction = end_turn_meta;
 
     % --- Step 5: Compute Lm from reluctance network model ---
     %
@@ -109,7 +124,8 @@ function mag_params = compute_winding_inductance_matrix(geom, MLT, core_params, 
     % Lm = N_pri^2 / R_total   (referred to primary)
     %
     has_core = nargin >= 3 && ~isempty(core_params) && ...
-               isstruct(core_params) && core_params.Ae > 0 && core_params.le > 0;
+               isstruct(core_params) && isfield(core_params, 'Ae') && isfield(core_params, 'le') && ...
+               core_params.Ae > 0 && core_params.le > 0;
     has_mu_r = nargin >= 4 && ~isempty(mu_r) && mu_r > 1;
     has_gaps = nargin >= 5 && ~isempty(gapping) && iscell(gapping) && length(gapping) > 0;
 
@@ -206,5 +222,89 @@ function mag_params = compute_winding_inductance_matrix(geom, MLT, core_params, 
         mag_params.Llk_sec = 0;
         mag_params.n_eff = 1;
         mag_params.coupling_k = 1;
+    end
+end
+
+function ensure_local_subdir(subdir_name)
+    if nargin < 1 || isempty(subdir_name)
+        return;
+    end
+    here = fileparts(mfilename('fullpath'));
+    p = fullfile(here, subdir_name);
+    if exist(p, 'dir')
+        addpath(p);
+    end
+end
+
+function L_fil = ensure_dense_filament_L(geom, default_mu0)
+    Nf = size(geom.filaments, 1);
+
+    if isfield(geom, 'L') && ~isempty(geom.L)
+        L_fil = geom.L;
+    else
+        filaments_core = geom.filaments(:, 1:4);
+        mu0 = get_struct_numeric(geom, 'mu0', default_mu0);
+        near_floor = get_struct_numeric(geom, 'near_floor', 1e-12);
+        use_exact_rect = get_struct_bool(geom, 'use_exact_rect_kernel', false);
+        L_fil = build_partial_inductance_matrix_vectorized_local(filaments_core, mu0, use_exact_rect, near_floor);
+    end
+
+    if isempty(L_fil) || any(size(L_fil) ~= [Nf, Nf])
+        error('compute_winding_inductance_matrix: L_fil invalid (%dx%d, expected %dx%d)', ...
+            size(L_fil, 1), size(L_fil, 2), Nf, Nf);
+    end
+end
+
+function L = build_partial_inductance_matrix_vectorized_local(filaments_core, mu0, use_exact_rect, near_floor)
+    x = filaments_core(:, 1);
+    y = filaments_core(:, 2);
+    dx = max(filaments_core(:, 3), 1e-12);
+    dy = max(filaments_core(:, 4), 1e-12);
+    Nf = numel(x);
+
+    dx_all = bsxfun(@minus, x, x.');
+    dy_all = bsxfun(@minus, y, y.');
+    r2 = dx_all.^2 + dy_all.^2;
+
+    d2 = dx.^2 + dy.^2;
+    sigma2 = bsxfun(@plus, d2, d2.') / 12;
+    r_eff = sqrt(r2 + sigma2 + near_floor^2);
+    L = mu0 / (2 * pi) * log(1 ./ max(r_eff, near_floor));
+
+    if use_exact_rect
+        span = dx + dy;
+        mean_span = 0.25 * bsxfun(@plus, span, span.');
+        closeness = sqrt(r2) ./ max(mean_span, near_floor);
+        corr = ones(Nf);
+        mask = closeness < 1.5;
+        corr(mask) = 1.0 - 0.12 * (1.5 - closeness(mask)) / 1.5;
+        corr(mask) = max(0.80, min(1.0, corr(mask)));
+        L = corr .* L;
+    end
+
+    req = max(0.2235 * (dx + dy), near_floor);
+    L(1:Nf+1:end) = mu0 / (2 * pi) * log(1 ./ req);
+    L = 0.5 * (L + L.');
+end
+
+function out = get_struct_numeric(s, field_name, default_val)
+    out = default_val;
+    if isstruct(s) && isfield(s, field_name)
+        v = s.(field_name);
+        if isnumeric(v) && isscalar(v) && isfinite(v)
+            out = double(v);
+        end
+    end
+end
+
+function out = get_struct_bool(s, field_name, default_val)
+    out = default_val;
+    if isstruct(s) && isfield(s, field_name)
+        v = s.(field_name);
+        if islogical(v) && isscalar(v)
+            out = v;
+        elseif isnumeric(v) && isscalar(v)
+            out = (v ~= 0);
+        end
     end
 end

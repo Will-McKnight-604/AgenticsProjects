@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(C:/Users/Will/AppData/Local/Programs/Python/Python311/python.exe -c \"import PyOpenMagnetics as pm; help\\(pm.wind_by_sections\\)\")",
+      "Bash(C:/Users/Will/AppData/Local/Programs/Python/Python311/python.exe -c \"import PyOpenMagnetics as pm; help\\(pm.wind_by_layers\\)\")",
+      "Bash(C:/Users/Will/AppData/Local/Programs/Python/Python311/python.exe -c \"import PyOpenMagnetics as pm; help\\(pm.wind_by_turns\\)\")",
+      "Bash(C:/Users/Will/AppData/Local/Programs/Python/Python311/python.exe:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(python3:*)",
+      "Bash(ls:*)",
+      "Bash(wc -l:*)",
+      "Bash(du:*)",
+      "Bash(octave:*)",
+      "Bash(where:*)",
+      "Bash(matlab -batch:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git checkout:*)"
+    ]
+  }
+}

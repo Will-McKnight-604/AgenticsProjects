@@ -1,0 +1,5 @@
+fast_direct_guard_nf_max,standard_direct_guard_nf_max,iter_min_size_for_use,precond_drop_tol,median_runtime_fast_s,median_runtime_standard_s,median_loss_error_fast_pct,median_loss_error_standard_pct,fast_solver_warning_fraction,fast_iter_quality_reject_fraction,max_fast_loss_err_pct,pass,score
+500,1000,900,0.01,3.257771,3.752988,4.634820,0.000000,0.250000,0.000000,7.526486,0,1003.257771
+500,1200,900,0.01,3.736107,3.996069,4.634820,0.000000,0.250000,0.000000,7.526486,0,1003.736107
+900,1000,900,0.01,3.421371,3.502698,4.634820,0.000000,0.250000,0.000000,7.526486,0,1003.421371
+900,1200,900,0.01,3.847717,3.957116,4.634820,0.000000,0.250000,0.000000,7.526486,0,1003.847717
