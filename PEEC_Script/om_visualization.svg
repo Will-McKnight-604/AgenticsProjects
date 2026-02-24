@@ -1,478 +1,151 @@
-<svg height="1967.1" viewBox="-983.561400 -983.561400 1967.122800 1967.122800" width="1967.1" xmlns="http://www.w3.org/2000/svg">
+<svg height="769.1" viewBox="-10.0 -384.6 515.0 769.1" width="515.0" xmlns="http://www.w3.org/2000/svg">
 	<style type="text/css">
 		<![CDATA[
-			.APpDLtog {
-				fill: #696969;
+			.AMKuNriQ {
+				fill: #c63032;
 				opacity: 1.0;
 			}
-			.AaZEBUvQ {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.AevYJTNF {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.BEuHRAtP {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.BOjVRMSz {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.BYgKGmhv {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.BgAjUcSx {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.BzXjhPHo {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.CGzeDfKT {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.CTesRtQf {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.Cgmnvdrw {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.DMbcWVaY {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.DXOoTSgc {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.DeloFKjk {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.EBcsOahM {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.EDjZxIvd {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.EDmyBYUN {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.EIuscDjY {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.ExwgIabo {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.FBbjhRQp {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.FRTMSfKk {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.FSciYCdq {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.FZsTupix {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.FhWsSgvD {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.GbdoikWs {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.GcFMnhAR {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.GjTewhQB {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.HAjzQrEa {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.HmOKUsdB {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.HnOXGxvF {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.HrocsWNt {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.IEHnZRuc {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.IJefdxAL {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.ImRkDzKC {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.JQcRjhNm {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.JbXdLozr {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.KQHnwGUs {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.KbDSmeyf {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.KdAEqaGM {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.KeQhVoUI {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.KfSMIYRq {
+			.APpmjFVv {
 				fill: none;
 				opacity: 1.0;
 				stroke: #010000;
 				stroke-width: 0.0;
 			}
-			.KnbmPLoh {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.LKZsBehE {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.LSTjsVvl {
-				fill: #696969;
+			.AqVcPnHm {
+				fill: #c63032;
 				opacity: 1.0;
 			}
-			.LfOgbwQo {
-				fill: #696969;
+			.BNqFlasy {
+				fill: none;
+				stroke: #010000;
+				stroke-width: 0.1;
+			}
+			.CRiFcheQ {
+				fill: none;
+				stroke: #010000;
+				stroke-width: 0.1;
+			}
+			.CudxEhST {
+				fill: none;
+				stroke: #010000;
+				stroke-width: 0.1;
+			}
+			.DThifFEI {
+				fill: none;
+				stroke: #010000;
+				stroke-width: 0.1;
+			}
+			.DmUAIkKB {
+				fill: none;
+				stroke: #010000;
+				stroke-width: 0.1;
+			}
+			.EXLZOwxn {
+				fill: none;
+				stroke: #010000;
+				stroke-width: 0.1;
+			}
+			.GKEejiPL {
+				fill: none;
+				stroke: #010000;
+				stroke-width: 0.1;
+			}
+			.GSIjrYku {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.LmQGRucT {
-				fill: #696969;
+			.GisuvSUZ {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.LpBWAuYf {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.LsbHfNqa {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.MGHYBgUL {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.NTCWgtyI {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.NuFjdmEL {
-				fill: #696969;
+			.HpBEnUkz {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.OJufUWYz {
-				fill: #696969;
+			.IzdgHybm {
+				fill: none;
+				stroke: #010000;
+				stroke-width: 0.1;
+			}
+			.KYCdyUVM {
+				fill: #c63032;
 				opacity: 1.0;
 			}
-			.OkBvDcxX {
-				fill: #696969;
+			.NiTcQKDR {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.OuAosxSr {
+			.OugPQlRT {
 				fill: none;
 				stroke: #010000;
 				stroke-width: 0.1;
 			}
-			.OwvoJglj {
-				fill: #696969;
+			.PqgzZMkH {
+				fill: none;
+				stroke: #010000;
+				stroke-width: 0.1;
+			}
+			.QpTFwiAf {
+				fill: none;
+				stroke: #010000;
+				stroke-width: 0.1;
+			}
+			.RInVrwhP {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.PHoNAFzS {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.PmXpuTGh {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.PytDafKs {
-				fill: #696969;
+			.RMgCsAWq {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.QCrjHaiI {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.QTASofWc {
-				fill: #696969;
+			.RZfdnDAm {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.QjrVHGlE {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.SsKzGukQ {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.SyfsAquT {
-				fill: #696969;
+			.RcukhFKn {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.TBCqaOVp {
-				fill: #696969;
+			.RjSdknZA {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.TEigGXkm {
-				fill: #696969;
+			.SRByfoZb {
+				fill: none;
+				opacity: 1.0;
+				stroke: #010000;
+				stroke-width: 0.0;
+			}
+			.TOcXnSCY {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.TXVRanJC {
-				fill: #696969;
+			.TStxfkKh {
+				fill: none;
+				stroke: #010000;
+				stroke-width: 0.1;
+			}
+			.UeVBhysr {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.TYXGCjMv {
+			.VrszIKxC {
 				fill: none;
 				stroke: #010000;
 				stroke-width: 0.1;
 			}
-			.TaGzMZou {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.TaPenQkE {
-				fill: #696969;
+			.WYMxvDsb {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.UDIJFzya {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.UJtWdPfx {
-				fill: #696969;
+			.XCgDwtVR {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.UTOMlPga {
+			.ZtgvSKub {
 				fill: none;
 				stroke: #010000;
 				stroke-width: 0.1;
-			}
-			.UhtdiBwu {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.UwicbsnI {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.VLDUnecR {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.VLYlmEOJ {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.VcCrhoWQ {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.VnJdDzjl {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.VspZvyrk {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.WCnaPtXI {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.WLKcxYvj {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.WRZCdQYo {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.WwFfGczR {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.XQhLrgcR {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.XSRnKQNL {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.XaZBDPOm {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.XbAFNiQe {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.XqrhAZNP {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.YRsljEuU {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.YWjCzAch {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.YaBlKgkU {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.YaJhvbyx {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.ZRlOatkv {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.ZVmueRKC {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.ZWvukCoT {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.ZpqSiDjz {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.aFclmxPj {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.aIzPYNcn {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.aUOMilWw {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.aUkjcQtr {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.ajLsXPCd {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.bKedtpjD {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.bOvRNTPH {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.bRgsOepa {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.baBCsRQx {
-				fill: #696969;
-				opacity: 1.0;
 			}
 			.bobbin {
 				fill: #539796;
@@ -481,23 +154,10 @@
 				fill: #539796;
 				opacity: 0.5;
 			}
-			.cTiLqvBK {
+			.ckPGfLuT {
 				fill: none;
 				stroke: #010000;
 				stroke-width: 0.1;
-			}
-			.cbogNuUi {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.chPeFsuT {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.cjvVOkNM {
-				fill: #696969;
-				opacity: 1.0;
 			}
 			.copper {
 				fill: #b87333;
@@ -506,71 +166,16 @@
 				fill: #b87333;
 				opacity: 0.5;
 			}
-			.cotxnTqw {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.ctpmPzbo {
-				fill: #696969;
-				opacity: 1.0;
-			}
 			.current_density {
 				fill: #0892D0;
 			}
-			.dAZFXSeW {
-				fill: #696969;
+			.dOfFYuVz {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.dGtNHnek {
-				fill: #696969;
+			.eikIcuyG {
+				fill: #252525;
 				opacity: 1.0;
-			}
-			.dHlWZAgb {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.dqjfumcO {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.dqlNiKPg {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.eLBTFhXZ {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.eQEXlMvS {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.ejzbwOUI {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.ekKlBqSy {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.fFzDYdor {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.fHowPlnW {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.fOYwrPLt {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
 			}
 			.ferrite {
 				fill: #7b7c7d;
@@ -582,72 +187,26 @@
 				fill: #008000;
 				opacity: 0.5;
 			}
-			.gLdhmCaz {
+			.fwGknMFJ {
+				fill: none;
+				opacity: 1.0;
+				stroke: #010000;
+				stroke-width: 0.0;
+			}
+			.hXirpnvY {
+				fill: none;
+				opacity: 1.0;
+				stroke: #010000;
+				stroke-width: 0.0;
+			}
+			.hjJnpGIW {
+				fill: #252525;
+				opacity: 1.0;
+			}
+			.hqKzoIGc {
 				fill: none;
 				stroke: #010000;
 				stroke-width: 0.1;
-			}
-			.gvFjfVGd {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.hFRKYwBj {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.hKjOxSfp {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.hQbmwrvN {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.hXDNBLdJ {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.hbFHDBnk {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.hotHWXmO {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.hwvWQPIX {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.hyGItLsK {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.iFamgwxn {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.iVQBlztJ {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.iWmYPBxH {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.iXflqrTt {
-				fill: #c63032;
-				opacity: 1.0;
-			}
-			.inmTfjZo {
-				fill: #696969;
-				opacity: 1.0;
 			}
 			.insulation {
 				fill: #fff05b;
@@ -656,93 +215,15 @@
 				fill: #fff05b;
 				opacity: 0.5;
 			}
-			.jPQxtlgL {
-				fill: #696969;
+			.jItYzsgn {
+				fill: #c63032;
 				opacity: 1.0;
 			}
-			.jXVyRMxH {
-				fill: #696969;
+			.kVynDKpF {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.juTSXUxd {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.kALnTeRQ {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.kJMmbdxX {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.kRGltrZp {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.kVaCnUrj {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.kYotLQTn {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.kuKPYxOq {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.lAXneuFf {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.lKBcXhsd {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.lRVPZtHY {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.lUVbwERc {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.lUWPTSAe {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.lXFIusVN {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.lYKRwZJg {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.ljdZgqIz {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.mFnlkrEg {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.mHFNgXRr {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.mJxNZFiX {
+			.ksHpzxhP {
 				fill: none;
 				stroke: #010000;
 				stroke-width: 0.1;
@@ -754,191 +235,57 @@
 				fill: #fff05b;
 				opacity: 0.5;
 			}
-			.mbsDaTHo {
+			.mkZWtEFj {
 				fill: none;
 				stroke: #010000;
 				stroke-width: 0.1;
 			}
-			.nHVpvMKh {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.nKwoRqjh {
-				fill: #c63032;
-				opacity: 1.0;
-			}
-			.nSCHzBJX {
+			.niomGTXQ {
 				fill: none;
 				stroke: #010000;
 				stroke-width: 0.1;
 			}
-			.nxudeKsE {
-				fill: #696969;
+			.oaGhyYsz {
+				fill: #252525;
 				opacity: 1.0;
-			}
-			.ohZzXYQe {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.osrZBqCa {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.ozBwbDQZ {
-				fill: none;
-				stroke: #7b7c7d;
-				stroke-width: 255.0;
-			}
-			.ozRpNgOl {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.pCqXsADo {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.pQaDWOfL {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.phvJHAel {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.pofNqySx {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
 			}
 			.point {
 				fill: #ff0000;
 			}
-			.pxXEPLhW {
-				fill: #696969;
+			.qJMgjpir {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.qYEgMJKT {
-				fill: #696969;
+			.qxQmwYkC {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.qmGOzBlv {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.rOuNHCUw {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.rRPNyYuL {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.rWCiMnOK {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.rYGaQWJj {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.rjgHpcGf {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.rqkxjwio {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.rsTNCXqS {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.sRXjBQfH {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.sUHzyPmD {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.svcGgmlA {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.tIkrbwLP {
-				fill: #696969;
+			.rUpIChXS {
+				fill: #252525;
 				opacity: 1.0;
 			}
 			.text {
 				fill: #000000;
 			}
-			.tfWrUdsQ {
+			.uINDOhAz {
 				fill: none;
 				stroke: #010000;
 				stroke-width: 0.1;
 			}
-			.tmHxwFli {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.tzaDjyHZ {
-				fill: #696969;
+			.uWyABerH {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.uRQBsHSi {
-				fill: #696969;
+			.vGKjWAke {
+				fill: none;
+				stroke: #010000;
+				stroke-width: 0.1;
+			}
+			.vzVBLeCi {
+				fill: #252525;
 				opacity: 1.0;
 			}
-			.udBPlxSg {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.ulZcaiGI {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.uzXkwOLY {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.vFjwMnPK {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.vFqMUCNh {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.vVWsBtOu {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.vXUSzmpo {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.vlTsSmXD {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.wcMpJXHb {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.wfBKkmjV {
+			.wPZJyYGU {
 				fill: none;
 				stroke: #010000;
 				stroke-width: 0.1;
@@ -946,86 +293,7 @@
 			.white {
 				fill: #ffffff;
 			}
-			.wsTjroxd {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.xJORdzBc {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.xMEYfTGF {
-				fill: none;
-				opacity: 1.0;
-				stroke: #010000;
-				stroke-width: 0.0;
-			}
-			.xNvUcFha {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.xbuJFXGY {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.xoFsPgHV {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.yHoAEXeT {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.yQavZPeC {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.yTeGRqcz {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.ydYekoNP {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.yzDElPGp {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.zBSAYEjO {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.zFEmUIaO {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.zLhnTcty {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.zMJwQFXA {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.zXnPSbRl {
-				fill: none;
-				stroke: #010000;
-				stroke-width: 0.1;
-			}
-			.zefCklco {
-				fill: #696969;
-				opacity: 1.0;
-			}
-			.ztylFNWs {
+			.yoBwNciW {
 				fill: none;
 				stroke: #010000;
 				stroke-width: 0.1;
@@ -1033,871 +301,401 @@
 		]]>
 	</style>
 	<g>
-		<circle class="ozBwbDQZ" cx="0.0" cy="-0.0" r="742.5" />
-	</g>
-	<g>
-		<circle class="DMbcWVaY" cx="-153.9" cy="-579.8" r="15.1" />
-		<circle class="rRPNyYuL" cx="-153.9" cy="-579.8" r="13.0" />
-		<circle class="rRPNyYuL" cx="-153.9" cy="-579.8" r="13.7" />
-		<circle class="rRPNyYuL" cx="-153.9" cy="-579.8" r="14.4" />
-		<circle class="rRPNyYuL" cx="-153.9" cy="-579.8" r="15.1" />
-		<circle class="copper" cx="-153.9" cy="-579.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="xNvUcFha" cx="-227.1" cy="-855.5" r="15.1" />
-		<circle class="lUVbwERc" cx="-227.1" cy="-855.5" r="13.0" />
-		<circle class="lUVbwERc" cx="-227.1" cy="-855.5" r="13.7" />
-		<circle class="lUVbwERc" cx="-227.1" cy="-855.5" r="14.4" />
-		<circle class="lUVbwERc" cx="-227.1" cy="-855.5" r="15.1" />
-		<circle class="copper" cx="-227.1" cy="-855.5" r="13.0" />
-	</g>
-	<g>
-		<circle class="aUOMilWw" cx="-183.0" cy="-571.3" r="15.1" />
-		<circle class="EDjZxIvd" cx="-183.0" cy="-571.3" r="13.0" />
-		<circle class="EDjZxIvd" cx="-183.0" cy="-571.3" r="13.7" />
-		<circle class="EDjZxIvd" cx="-183.0" cy="-571.3" r="14.4" />
-		<circle class="EDjZxIvd" cx="-183.0" cy="-571.3" r="15.1" />
-		<circle class="copper" cx="-183.0" cy="-571.3" r="13.0" />
-	</g>
-	<g>
-		<circle class="baBCsRQx" cx="-270.0" cy="-843.0" r="15.1" />
-		<circle class="hFRKYwBj" cx="-270.0" cy="-843.0" r="13.0" />
-		<circle class="hFRKYwBj" cx="-270.0" cy="-843.0" r="13.7" />
-		<circle class="hFRKYwBj" cx="-270.0" cy="-843.0" r="14.4" />
-		<circle class="hFRKYwBj" cx="-270.0" cy="-843.0" r="15.1" />
-		<circle class="copper" cx="-270.0" cy="-843.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="NuFjdmEL" cx="-211.5" cy="-561.3" r="15.1" />
-		<circle class="iVQBlztJ" cx="-211.5" cy="-561.3" r="13.0" />
-		<circle class="iVQBlztJ" cx="-211.5" cy="-561.3" r="13.7" />
-		<circle class="iVQBlztJ" cx="-211.5" cy="-561.3" r="14.4" />
-		<circle class="iVQBlztJ" cx="-211.5" cy="-561.3" r="15.1" />
-		<circle class="copper" cx="-211.5" cy="-561.3" r="13.0" />
-	</g>
-	<g>
-		<circle class="fFzDYdor" cx="-312.1" cy="-828.3" r="15.1" />
-		<circle class="bKedtpjD" cx="-312.1" cy="-828.3" r="13.0" />
-		<circle class="bKedtpjD" cx="-312.1" cy="-828.3" r="13.7" />
-		<circle class="bKedtpjD" cx="-312.1" cy="-828.3" r="14.4" />
-		<circle class="bKedtpjD" cx="-312.1" cy="-828.3" r="15.1" />
-		<circle class="copper" cx="-312.1" cy="-828.3" r="13.0" />
-	</g>
-	<g>
-		<circle class="dqjfumcO" cx="-239.6" cy="-550.0" r="15.1" />
-		<circle class="ztylFNWs" cx="-239.6" cy="-550.0" r="13.0" />
-		<circle class="ztylFNWs" cx="-239.6" cy="-550.0" r="13.7" />
-		<circle class="ztylFNWs" cx="-239.6" cy="-550.0" r="14.4" />
-		<circle class="ztylFNWs" cx="-239.6" cy="-550.0" r="15.1" />
-		<circle class="copper" cx="-239.6" cy="-550.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="VcCrhoWQ" cx="-353.5" cy="-811.5" r="15.1" />
-		<circle class="WCnaPtXI" cx="-353.5" cy="-811.5" r="13.0" />
-		<circle class="WCnaPtXI" cx="-353.5" cy="-811.5" r="13.7" />
-		<circle class="WCnaPtXI" cx="-353.5" cy="-811.5" r="14.4" />
-		<circle class="WCnaPtXI" cx="-353.5" cy="-811.5" r="15.1" />
-		<circle class="copper" cx="-353.5" cy="-811.5" r="13.0" />
-	</g>
-	<g>
-		<circle class="hQbmwrvN" cx="-267.0" cy="-537.2" r="15.1" />
-		<circle class="CGzeDfKT" cx="-267.0" cy="-537.2" r="13.0" />
-		<circle class="CGzeDfKT" cx="-267.0" cy="-537.2" r="13.7" />
-		<circle class="CGzeDfKT" cx="-267.0" cy="-537.2" r="14.4" />
-		<circle class="CGzeDfKT" cx="-267.0" cy="-537.2" r="15.1" />
-		<circle class="copper" cx="-267.0" cy="-537.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="ekKlBqSy" cx="-393.9" cy="-792.6" r="15.1" />
-		<circle class="UhtdiBwu" cx="-393.9" cy="-792.6" r="13.0" />
-		<circle class="UhtdiBwu" cx="-393.9" cy="-792.6" r="13.7" />
-		<circle class="UhtdiBwu" cx="-393.9" cy="-792.6" r="14.4" />
-		<circle class="UhtdiBwu" cx="-393.9" cy="-792.6" r="15.1" />
-		<circle class="copper" cx="-393.9" cy="-792.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="kRGltrZp" cx="-293.7" cy="-523.0" r="15.1" />
-		<circle class="KnbmPLoh" cx="-293.7" cy="-523.0" r="13.0" />
-		<circle class="KnbmPLoh" cx="-293.7" cy="-523.0" r="13.7" />
-		<circle class="KnbmPLoh" cx="-293.7" cy="-523.0" r="14.4" />
-		<circle class="KnbmPLoh" cx="-293.7" cy="-523.0" r="15.1" />
-		<circle class="copper" cx="-293.7" cy="-523.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="aUkjcQtr" cx="-433.4" cy="-771.8" r="15.1" />
-		<circle class="phvJHAel" cx="-433.4" cy="-771.8" r="13.0" />
-		<circle class="phvJHAel" cx="-433.4" cy="-771.8" r="13.7" />
-		<circle class="phvJHAel" cx="-433.4" cy="-771.8" r="14.4" />
-		<circle class="phvJHAel" cx="-433.4" cy="-771.8" r="15.1" />
-		<circle class="copper" cx="-433.4" cy="-771.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="udBPlxSg" cx="-319.7" cy="-507.6" r="15.1" />
-		<circle class="GbdoikWs" cx="-319.7" cy="-507.6" r="13.0" />
-		<circle class="GbdoikWs" cx="-319.7" cy="-507.6" r="13.7" />
-		<circle class="GbdoikWs" cx="-319.7" cy="-507.6" r="14.4" />
-		<circle class="GbdoikWs" cx="-319.7" cy="-507.6" r="15.1" />
-		<circle class="copper" cx="-319.7" cy="-507.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="ydYekoNP" cx="-471.7" cy="-748.9" r="15.1" />
-		<circle class="LsbHfNqa" cx="-471.7" cy="-748.9" r="13.0" />
-		<circle class="LsbHfNqa" cx="-471.7" cy="-748.9" r="13.7" />
-		<circle class="LsbHfNqa" cx="-471.7" cy="-748.9" r="14.4" />
-		<circle class="LsbHfNqa" cx="-471.7" cy="-748.9" r="15.1" />
-		<circle class="copper" cx="-471.7" cy="-748.9" r="13.0" />
-	</g>
-	<g>
-		<circle class="SyfsAquT" cx="-344.9" cy="-490.8" r="15.1" />
-		<circle class="SsKzGukQ" cx="-344.9" cy="-490.8" r="13.0" />
-		<circle class="SsKzGukQ" cx="-344.9" cy="-490.8" r="13.7" />
-		<circle class="SsKzGukQ" cx="-344.9" cy="-490.8" r="14.4" />
-		<circle class="SsKzGukQ" cx="-344.9" cy="-490.8" r="15.1" />
-		<circle class="copper" cx="-344.9" cy="-490.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="HrocsWNt" cx="-508.9" cy="-724.2" r="15.1" />
-		<circle class="xbuJFXGY" cx="-508.9" cy="-724.2" r="13.0" />
-		<circle class="xbuJFXGY" cx="-508.9" cy="-724.2" r="13.7" />
-		<circle class="xbuJFXGY" cx="-508.9" cy="-724.2" r="14.4" />
-		<circle class="xbuJFXGY" cx="-508.9" cy="-724.2" r="15.1" />
-		<circle class="copper" cx="-508.9" cy="-724.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="LmQGRucT" cx="-369.2" cy="-472.8" r="15.1" />
-		<circle class="yHoAEXeT" cx="-369.2" cy="-472.8" r="13.0" />
-		<circle class="yHoAEXeT" cx="-369.2" cy="-472.8" r="13.7" />
-		<circle class="yHoAEXeT" cx="-369.2" cy="-472.8" r="14.4" />
-		<circle class="yHoAEXeT" cx="-369.2" cy="-472.8" r="15.1" />
-		<circle class="copper" cx="-369.2" cy="-472.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="BEuHRAtP" cx="-544.8" cy="-697.6" r="15.1" />
-		<circle class="VLYlmEOJ" cx="-544.8" cy="-697.6" r="13.0" />
-		<circle class="VLYlmEOJ" cx="-544.8" cy="-697.6" r="13.7" />
-		<circle class="VLYlmEOJ" cx="-544.8" cy="-697.6" r="14.4" />
-		<circle class="VLYlmEOJ" cx="-544.8" cy="-697.6" r="15.1" />
-		<circle class="copper" cx="-544.8" cy="-697.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="ZRlOatkv" cx="-392.6" cy="-453.6" r="15.1" />
-		<circle class="kYotLQTn" cx="-392.6" cy="-453.6" r="13.0" />
-		<circle class="kYotLQTn" cx="-392.6" cy="-453.6" r="13.7" />
-		<circle class="kYotLQTn" cx="-392.6" cy="-453.6" r="14.4" />
-		<circle class="kYotLQTn" cx="-392.6" cy="-453.6" r="15.1" />
-		<circle class="copper" cx="-392.6" cy="-453.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="DeloFKjk" cx="-579.2" cy="-669.3" r="15.1" />
-		<circle class="rWCiMnOK" cx="-579.2" cy="-669.3" r="13.0" />
-		<circle class="rWCiMnOK" cx="-579.2" cy="-669.3" r="13.7" />
-		<circle class="rWCiMnOK" cx="-579.2" cy="-669.3" r="14.4" />
-		<circle class="rWCiMnOK" cx="-579.2" cy="-669.3" r="15.1" />
-		<circle class="copper" cx="-579.2" cy="-669.3" r="13.0" />
-	</g>
-	<g>
-		<circle class="XQhLrgcR" cx="-414.9" cy="-433.2" r="15.1" />
-		<circle class="EBcsOahM" cx="-414.9" cy="-433.2" r="13.0" />
-		<circle class="EBcsOahM" cx="-414.9" cy="-433.2" r="13.7" />
-		<circle class="EBcsOahM" cx="-414.9" cy="-433.2" r="14.4" />
-		<circle class="EBcsOahM" cx="-414.9" cy="-433.2" r="15.1" />
-		<circle class="copper" cx="-414.9" cy="-433.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="lAXneuFf" cx="-612.2" cy="-639.2" r="15.1" />
-		<circle class="vFjwMnPK" cx="-612.2" cy="-639.2" r="13.0" />
-		<circle class="vFjwMnPK" cx="-612.2" cy="-639.2" r="13.7" />
-		<circle class="vFjwMnPK" cx="-612.2" cy="-639.2" r="14.4" />
-		<circle class="vFjwMnPK" cx="-612.2" cy="-639.2" r="15.1" />
-		<circle class="copper" cx="-612.2" cy="-639.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="svcGgmlA" cx="-436.2" cy="-411.8" r="15.1" />
-		<circle class="PHoNAFzS" cx="-436.2" cy="-411.8" r="13.0" />
-		<circle class="PHoNAFzS" cx="-436.2" cy="-411.8" r="13.7" />
-		<circle class="PHoNAFzS" cx="-436.2" cy="-411.8" r="14.4" />
-		<circle class="PHoNAFzS" cx="-436.2" cy="-411.8" r="15.1" />
-		<circle class="copper" cx="-436.2" cy="-411.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="rsTNCXqS" cx="-643.7" cy="-607.5" r="15.1" />
-		<circle class="YRsljEuU" cx="-643.7" cy="-607.5" r="13.0" />
-		<circle class="YRsljEuU" cx="-643.7" cy="-607.5" r="13.7" />
-		<circle class="YRsljEuU" cx="-643.7" cy="-607.5" r="14.4" />
-		<circle class="YRsljEuU" cx="-643.7" cy="-607.5" r="15.1" />
-		<circle class="copper" cx="-643.7" cy="-607.5" r="13.0" />
-	</g>
-	<g>
-		<circle class="BzXjhPHo" cx="-456.4" cy="-389.2" r="15.1" />
-		<circle class="tmHxwFli" cx="-456.4" cy="-389.2" r="13.0" />
-		<circle class="tmHxwFli" cx="-456.4" cy="-389.2" r="13.7" />
-		<circle class="tmHxwFli" cx="-456.4" cy="-389.2" r="14.4" />
-		<circle class="tmHxwFli" cx="-456.4" cy="-389.2" r="15.1" />
-		<circle class="copper" cx="-456.4" cy="-389.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="cbogNuUi" cx="-673.5" cy="-574.3" r="15.1" />
-		<circle class="gLdhmCaz" cx="-673.5" cy="-574.3" r="13.0" />
-		<circle class="gLdhmCaz" cx="-673.5" cy="-574.3" r="13.7" />
-		<circle class="gLdhmCaz" cx="-673.5" cy="-574.3" r="14.4" />
-		<circle class="gLdhmCaz" cx="-673.5" cy="-574.3" r="15.1" />
-		<circle class="copper" cx="-673.5" cy="-574.3" r="13.0" />
-	</g>
-	<g>
-		<circle class="JQcRjhNm" cx="-475.5" cy="-365.7" r="15.1" />
-		<circle class="TYXGCjMv" cx="-475.5" cy="-365.7" r="13.0" />
-		<circle class="TYXGCjMv" cx="-475.5" cy="-365.7" r="13.7" />
-		<circle class="TYXGCjMv" cx="-475.5" cy="-365.7" r="14.4" />
-		<circle class="TYXGCjMv" cx="-475.5" cy="-365.7" r="15.1" />
-		<circle class="copper" cx="-475.5" cy="-365.7" r="13.0" />
-	</g>
-	<g>
-		<circle class="uRQBsHSi" cx="-701.6" cy="-539.6" r="15.1" />
-		<circle class="lKBcXhsd" cx="-701.6" cy="-539.6" r="13.0" />
-		<circle class="lKBcXhsd" cx="-701.6" cy="-539.6" r="13.7" />
-		<circle class="lKBcXhsd" cx="-701.6" cy="-539.6" r="14.4" />
-		<circle class="lKBcXhsd" cx="-701.6" cy="-539.6" r="15.1" />
-		<circle class="copper" cx="-701.6" cy="-539.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="WRZCdQYo" cx="-493.3" cy="-341.3" r="15.1" />
-		<circle class="XqrhAZNP" cx="-493.3" cy="-341.3" r="13.0" />
-		<circle class="XqrhAZNP" cx="-493.3" cy="-341.3" r="13.7" />
-		<circle class="XqrhAZNP" cx="-493.3" cy="-341.3" r="14.4" />
-		<circle class="XqrhAZNP" cx="-493.3" cy="-341.3" r="15.1" />
-		<circle class="copper" cx="-493.3" cy="-341.3" r="13.0" />
-	</g>
-	<g>
-		<circle class="uzXkwOLY" cx="-727.9" cy="-503.6" r="15.1" />
-		<circle class="VspZvyrk" cx="-727.9" cy="-503.6" r="13.0" />
-		<circle class="VspZvyrk" cx="-727.9" cy="-503.6" r="13.7" />
-		<circle class="VspZvyrk" cx="-727.9" cy="-503.6" r="14.4" />
-		<circle class="VspZvyrk" cx="-727.9" cy="-503.6" r="15.1" />
-		<circle class="copper" cx="-727.9" cy="-503.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="zefCklco" cx="-509.9" cy="-316.0" r="15.1" />
-		<circle class="dHlWZAgb" cx="-509.9" cy="-316.0" r="13.0" />
-		<circle class="dHlWZAgb" cx="-509.9" cy="-316.0" r="13.7" />
-		<circle class="dHlWZAgb" cx="-509.9" cy="-316.0" r="14.4" />
-		<circle class="dHlWZAgb" cx="-509.9" cy="-316.0" r="15.1" />
-		<circle class="copper" cx="-509.9" cy="-316.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="rYGaQWJj" cx="-752.4" cy="-466.2" r="15.1" />
-		<circle class="kALnTeRQ" cx="-752.4" cy="-466.2" r="13.0" />
-		<circle class="kALnTeRQ" cx="-752.4" cy="-466.2" r="13.7" />
-		<circle class="kALnTeRQ" cx="-752.4" cy="-466.2" r="14.4" />
-		<circle class="kALnTeRQ" cx="-752.4" cy="-466.2" r="15.1" />
-		<circle class="copper" cx="-752.4" cy="-466.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="zBSAYEjO" cx="-525.2" cy="-289.9" r="15.1" />
-		<circle class="OuAosxSr" cx="-525.2" cy="-289.9" r="13.0" />
-		<circle class="OuAosxSr" cx="-525.2" cy="-289.9" r="13.7" />
-		<circle class="OuAosxSr" cx="-525.2" cy="-289.9" r="14.4" />
-		<circle class="OuAosxSr" cx="-525.2" cy="-289.9" r="15.1" />
-		<circle class="copper" cx="-525.2" cy="-289.9" r="13.0" />
-	</g>
-	<g>
-		<circle class="qmGOzBlv" cx="-774.9" cy="-427.7" r="15.1" />
-		<circle class="wsTjroxd" cx="-774.9" cy="-427.7" r="13.0" />
-		<circle class="wsTjroxd" cx="-774.9" cy="-427.7" r="13.7" />
-		<circle class="wsTjroxd" cx="-774.9" cy="-427.7" r="14.4" />
-		<circle class="wsTjroxd" cx="-774.9" cy="-427.7" r="15.1" />
-		<circle class="copper" cx="-774.9" cy="-427.7" r="13.0" />
-	</g>
-	<g>
-		<circle class="FZsTupix" cx="-539.1" cy="-263.0" r="15.1" />
-		<circle class="rOuNHCUw" cx="-539.1" cy="-263.0" r="13.0" />
-		<circle class="rOuNHCUw" cx="-539.1" cy="-263.0" r="13.7" />
-		<circle class="rOuNHCUw" cx="-539.1" cy="-263.0" r="14.4" />
-		<circle class="rOuNHCUw" cx="-539.1" cy="-263.0" r="15.1" />
-		<circle class="copper" cx="-539.1" cy="-263.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="dAZFXSeW" cx="-795.5" cy="-388.1" r="15.1" />
-		<circle class="kVaCnUrj" cx="-795.5" cy="-388.1" r="13.0" />
-		<circle class="kVaCnUrj" cx="-795.5" cy="-388.1" r="13.7" />
-		<circle class="kVaCnUrj" cx="-795.5" cy="-388.1" r="14.4" />
-		<circle class="kVaCnUrj" cx="-795.5" cy="-388.1" r="15.1" />
-		<circle class="copper" cx="-795.5" cy="-388.1" r="13.0" />
-	</g>
-	<g>
-		<circle class="osrZBqCa" cx="-551.7" cy="-235.5" r="15.1" />
-		<circle class="TaGzMZou" cx="-551.7" cy="-235.5" r="13.0" />
-		<circle class="TaGzMZou" cx="-551.7" cy="-235.5" r="13.7" />
-		<circle class="TaGzMZou" cx="-551.7" cy="-235.5" r="14.4" />
-		<circle class="TaGzMZou" cx="-551.7" cy="-235.5" r="15.1" />
-		<circle class="copper" cx="-551.7" cy="-235.5" r="13.0" />
-	</g>
-	<g>
-		<circle class="cjvVOkNM" cx="-814.1" cy="-347.5" r="15.1" />
-		<circle class="xoFsPgHV" cx="-814.1" cy="-347.5" r="13.0" />
-		<circle class="xoFsPgHV" cx="-814.1" cy="-347.5" r="13.7" />
-		<circle class="xoFsPgHV" cx="-814.1" cy="-347.5" r="14.4" />
-		<circle class="xoFsPgHV" cx="-814.1" cy="-347.5" r="15.1" />
-		<circle class="copper" cx="-814.1" cy="-347.5" r="13.0" />
-	</g>
-	<g>
-		<circle class="AaZEBUvQ" cx="-562.9" cy="-207.4" r="15.1" />
-		<circle class="ajLsXPCd" cx="-562.9" cy="-207.4" r="13.0" />
-		<circle class="ajLsXPCd" cx="-562.9" cy="-207.4" r="13.7" />
-		<circle class="ajLsXPCd" cx="-562.9" cy="-207.4" r="14.4" />
-		<circle class="ajLsXPCd" cx="-562.9" cy="-207.4" r="15.1" />
-		<circle class="copper" cx="-562.9" cy="-207.4" r="13.0" />
-	</g>
-	<g>
-		<circle class="TXVRanJC" cx="-830.5" cy="-306.0" r="15.1" />
-		<circle class="UTOMlPga" cx="-830.5" cy="-306.0" r="13.0" />
-		<circle class="UTOMlPga" cx="-830.5" cy="-306.0" r="13.7" />
-		<circle class="UTOMlPga" cx="-830.5" cy="-306.0" r="14.4" />
-		<circle class="UTOMlPga" cx="-830.5" cy="-306.0" r="15.1" />
-		<circle class="copper" cx="-830.5" cy="-306.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="PytDafKs" cx="-572.6" cy="-178.8" r="15.1" />
-		<circle class="sUHzyPmD" cx="-572.6" cy="-178.8" r="13.0" />
-		<circle class="sUHzyPmD" cx="-572.6" cy="-178.8" r="13.7" />
-		<circle class="sUHzyPmD" cx="-572.6" cy="-178.8" r="14.4" />
-		<circle class="sUHzyPmD" cx="-572.6" cy="-178.8" r="15.1" />
-		<circle class="copper" cx="-572.6" cy="-178.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="TBCqaOVp" cx="-844.9" cy="-263.8" r="15.1" />
-		<circle class="QjrVHGlE" cx="-844.9" cy="-263.8" r="13.0" />
-		<circle class="QjrVHGlE" cx="-844.9" cy="-263.8" r="13.7" />
-		<circle class="QjrVHGlE" cx="-844.9" cy="-263.8" r="14.4" />
-		<circle class="QjrVHGlE" cx="-844.9" cy="-263.8" r="15.1" />
-		<circle class="copper" cx="-844.9" cy="-263.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="LSTjsVvl" cx="-580.9" cy="-149.7" r="15.1" />
-		<circle class="cotxnTqw" cx="-580.9" cy="-149.7" r="13.0" />
-		<circle class="cotxnTqw" cx="-580.9" cy="-149.7" r="13.7" />
-		<circle class="cotxnTqw" cx="-580.9" cy="-149.7" r="14.4" />
-		<circle class="cotxnTqw" cx="-580.9" cy="-149.7" r="15.1" />
-		<circle class="copper" cx="-580.9" cy="-149.7" r="13.0" />
-	</g>
-	<g>
-		<circle class="TaPenQkE" cx="-857.1" cy="-220.8" r="15.1" />
-		<circle class="eLBTFhXZ" cx="-857.1" cy="-220.8" r="13.0" />
-		<circle class="eLBTFhXZ" cx="-857.1" cy="-220.8" r="13.7" />
-		<circle class="eLBTFhXZ" cx="-857.1" cy="-220.8" r="14.4" />
-		<circle class="eLBTFhXZ" cx="-857.1" cy="-220.8" r="15.1" />
-		<circle class="copper" cx="-857.1" cy="-220.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="tzaDjyHZ" cx="-587.7" cy="-120.2" r="15.1" />
-		<circle class="NTCWgtyI" cx="-587.7" cy="-120.2" r="13.0" />
-		<circle class="NTCWgtyI" cx="-587.7" cy="-120.2" r="13.7" />
-		<circle class="NTCWgtyI" cx="-587.7" cy="-120.2" r="14.4" />
-		<circle class="NTCWgtyI" cx="-587.7" cy="-120.2" r="15.1" />
-		<circle class="copper" cx="-587.7" cy="-120.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="UJtWdPfx" cx="-867.2" cy="-177.4" r="15.1" />
-		<circle class="HmOKUsdB" cx="-867.2" cy="-177.4" r="13.0" />
-		<circle class="HmOKUsdB" cx="-867.2" cy="-177.4" r="13.7" />
-		<circle class="HmOKUsdB" cx="-867.2" cy="-177.4" r="14.4" />
-		<circle class="HmOKUsdB" cx="-867.2" cy="-177.4" r="15.1" />
-		<circle class="copper" cx="-867.2" cy="-177.4" r="13.0" />
-	</g>
-	<g>
-		<circle class="QTASofWc" cx="-593.0" cy="-90.4" r="15.1" />
-		<circle class="EIuscDjY" cx="-593.0" cy="-90.4" r="13.0" />
-		<circle class="EIuscDjY" cx="-593.0" cy="-90.4" r="13.7" />
-		<circle class="EIuscDjY" cx="-593.0" cy="-90.4" r="14.4" />
-		<circle class="EIuscDjY" cx="-593.0" cy="-90.4" r="15.1" />
-		<circle class="copper" cx="-593.0" cy="-90.4" r="13.0" />
-	</g>
-	<g>
-		<circle class="lRVPZtHY" cx="-875.0" cy="-133.4" r="15.1" />
-		<circle class="vFqMUCNh" cx="-875.0" cy="-133.4" r="13.0" />
-		<circle class="vFqMUCNh" cx="-875.0" cy="-133.4" r="13.7" />
-		<circle class="vFqMUCNh" cx="-875.0" cy="-133.4" r="14.4" />
-		<circle class="vFqMUCNh" cx="-875.0" cy="-133.4" r="15.1" />
-		<circle class="copper" cx="-875.0" cy="-133.4" r="13.0" />
-	</g>
-	<g>
-		<circle class="dqlNiKPg" cx="-596.8" cy="-60.4" r="15.1" />
-		<circle class="kJMmbdxX" cx="-596.8" cy="-60.4" r="13.0" />
-		<circle class="kJMmbdxX" cx="-596.8" cy="-60.4" r="13.7" />
-		<circle class="kJMmbdxX" cx="-596.8" cy="-60.4" r="14.4" />
-		<circle class="kJMmbdxX" cx="-596.8" cy="-60.4" r="15.1" />
-		<circle class="copper" cx="-596.8" cy="-60.4" r="13.0" />
-	</g>
-	<g>
-		<circle class="GcFMnhAR" cx="-880.6" cy="-89.1" r="15.1" />
-		<circle class="WLKcxYvj" cx="-880.6" cy="-89.1" r="13.0" />
-		<circle class="WLKcxYvj" cx="-880.6" cy="-89.1" r="13.7" />
-		<circle class="WLKcxYvj" cx="-880.6" cy="-89.1" r="14.4" />
-		<circle class="WLKcxYvj" cx="-880.6" cy="-89.1" r="15.1" />
-		<circle class="copper" cx="-880.6" cy="-89.1" r="13.0" />
-	</g>
-	<g>
-		<circle class="ZpqSiDjz" cx="-599.1" cy="-30.2" r="15.1" />
-		<circle class="nSCHzBJX" cx="-599.1" cy="-30.2" r="13.0" />
-		<circle class="nSCHzBJX" cx="-599.1" cy="-30.2" r="13.7" />
-		<circle class="nSCHzBJX" cx="-599.1" cy="-30.2" r="14.4" />
-		<circle class="nSCHzBJX" cx="-599.1" cy="-30.2" r="15.1" />
-		<circle class="copper" cx="-599.1" cy="-30.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="tIkrbwLP" cx="-884.0" cy="-44.6" r="15.1" />
-		<circle class="lXFIusVN" cx="-884.0" cy="-44.6" r="13.0" />
-		<circle class="lXFIusVN" cx="-884.0" cy="-44.6" r="13.7" />
-		<circle class="lXFIusVN" cx="-884.0" cy="-44.6" r="14.4" />
-		<circle class="lXFIusVN" cx="-884.0" cy="-44.6" r="15.1" />
-		<circle class="copper" cx="-884.0" cy="-44.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="iWmYPBxH" cx="-599.9" cy="0.0" r="15.1" />
-		<circle class="yQavZPeC" cx="-599.9" cy="0.0" r="13.0" />
-		<circle class="yQavZPeC" cx="-599.9" cy="0.0" r="13.7" />
-		<circle class="yQavZPeC" cx="-599.9" cy="0.0" r="14.4" />
-		<circle class="yQavZPeC" cx="-599.9" cy="0.0" r="15.1" />
-		<circle class="copper" cx="-599.9" cy="0.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="BgAjUcSx" cx="-885.1" cy="0.0" r="15.1" />
-		<circle class="FSciYCdq" cx="-885.1" cy="0.0" r="13.0" />
-		<circle class="FSciYCdq" cx="-885.1" cy="0.0" r="13.7" />
-		<circle class="FSciYCdq" cx="-885.1" cy="0.0" r="14.4" />
-		<circle class="FSciYCdq" cx="-885.1" cy="0.0" r="15.1" />
-		<circle class="copper" cx="-885.1" cy="0.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="OJufUWYz" cx="-599.1" cy="30.2" r="15.1" />
-		<circle class="BOjVRMSz" cx="-599.1" cy="30.2" r="13.0" />
-		<circle class="BOjVRMSz" cx="-599.1" cy="30.2" r="13.7" />
-		<circle class="BOjVRMSz" cx="-599.1" cy="30.2" r="14.4" />
-		<circle class="BOjVRMSz" cx="-599.1" cy="30.2" r="15.1" />
-		<circle class="copper" cx="-599.1" cy="30.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="hKjOxSfp" cx="-884.0" cy="44.6" r="15.1" />
-		<circle class="YaBlKgkU" cx="-884.0" cy="44.6" r="13.0" />
-		<circle class="YaBlKgkU" cx="-884.0" cy="44.6" r="13.7" />
-		<circle class="YaBlKgkU" cx="-884.0" cy="44.6" r="14.4" />
-		<circle class="YaBlKgkU" cx="-884.0" cy="44.6" r="15.1" />
-		<circle class="copper" cx="-884.0" cy="44.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="ImRkDzKC" cx="-596.8" cy="60.4" r="15.1" />
-		<circle class="mJxNZFiX" cx="-596.8" cy="60.4" r="13.0" />
-		<circle class="mJxNZFiX" cx="-596.8" cy="60.4" r="13.7" />
-		<circle class="mJxNZFiX" cx="-596.8" cy="60.4" r="14.4" />
-		<circle class="mJxNZFiX" cx="-596.8" cy="60.4" r="15.1" />
-		<circle class="copper" cx="-596.8" cy="60.4" r="13.0" />
-	</g>
-	<g>
-		<circle class="KQHnwGUs" cx="-880.6" cy="89.1" r="15.1" />
-		<circle class="ejzbwOUI" cx="-880.6" cy="89.1" r="13.0" />
-		<circle class="ejzbwOUI" cx="-880.6" cy="89.1" r="13.7" />
-		<circle class="ejzbwOUI" cx="-880.6" cy="89.1" r="14.4" />
-		<circle class="ejzbwOUI" cx="-880.6" cy="89.1" r="15.1" />
-		<circle class="copper" cx="-880.6" cy="89.1" r="13.0" />
-	</g>
-	<g>
-		<circle class="LfOgbwQo" cx="-593.0" cy="90.4" r="15.1" />
-		<circle class="tfWrUdsQ" cx="-593.0" cy="90.4" r="13.0" />
-		<circle class="tfWrUdsQ" cx="-593.0" cy="90.4" r="13.7" />
-		<circle class="tfWrUdsQ" cx="-593.0" cy="90.4" r="14.4" />
-		<circle class="tfWrUdsQ" cx="-593.0" cy="90.4" r="15.1" />
-		<circle class="copper" cx="-593.0" cy="90.4" r="13.0" />
-	</g>
-	<g>
-		<circle class="HnOXGxvF" cx="-875.0" cy="133.4" r="15.1" />
-		<circle class="XSRnKQNL" cx="-875.0" cy="133.4" r="13.0" />
-		<circle class="XSRnKQNL" cx="-875.0" cy="133.4" r="13.7" />
-		<circle class="XSRnKQNL" cx="-875.0" cy="133.4" r="14.4" />
-		<circle class="XSRnKQNL" cx="-875.0" cy="133.4" r="15.1" />
-		<circle class="copper" cx="-875.0" cy="133.4" r="13.0" />
-	</g>
-	<g>
-		<circle class="BYgKGmhv" cx="-587.7" cy="120.2" r="15.1" />
-		<circle class="pofNqySx" cx="-587.7" cy="120.2" r="13.0" />
-		<circle class="pofNqySx" cx="-587.7" cy="120.2" r="13.7" />
-		<circle class="pofNqySx" cx="-587.7" cy="120.2" r="14.4" />
-		<circle class="pofNqySx" cx="-587.7" cy="120.2" r="15.1" />
-		<circle class="copper" cx="-587.7" cy="120.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="vXUSzmpo" cx="-867.2" cy="177.4" r="15.1" />
-		<circle class="CTesRtQf" cx="-867.2" cy="177.4" r="13.0" />
-		<circle class="CTesRtQf" cx="-867.2" cy="177.4" r="13.7" />
-		<circle class="CTesRtQf" cx="-867.2" cy="177.4" r="14.4" />
-		<circle class="CTesRtQf" cx="-867.2" cy="177.4" r="15.1" />
-		<circle class="copper" cx="-867.2" cy="177.4" r="13.0" />
-	</g>
-	<g>
-		<circle class="FRTMSfKk" cx="-580.9" cy="149.7" r="15.1" />
-		<circle class="wfBKkmjV" cx="-580.9" cy="149.7" r="13.0" />
-		<circle class="wfBKkmjV" cx="-580.9" cy="149.7" r="13.7" />
-		<circle class="wfBKkmjV" cx="-580.9" cy="149.7" r="14.4" />
-		<circle class="wfBKkmjV" cx="-580.9" cy="149.7" r="15.1" />
-		<circle class="copper" cx="-580.9" cy="149.7" r="13.0" />
-	</g>
-	<g>
-		<circle class="pQaDWOfL" cx="-857.1" cy="220.8" r="15.1" />
-		<circle class="mFnlkrEg" cx="-857.1" cy="220.8" r="13.0" />
-		<circle class="mFnlkrEg" cx="-857.1" cy="220.8" r="13.7" />
-		<circle class="mFnlkrEg" cx="-857.1" cy="220.8" r="14.4" />
-		<circle class="mFnlkrEg" cx="-857.1" cy="220.8" r="15.1" />
-		<circle class="copper" cx="-857.1" cy="220.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="APpDLtog" cx="-572.6" cy="178.8" r="15.1" />
-		<circle class="fHowPlnW" cx="-572.6" cy="178.8" r="13.0" />
-		<circle class="fHowPlnW" cx="-572.6" cy="178.8" r="13.7" />
-		<circle class="fHowPlnW" cx="-572.6" cy="178.8" r="14.4" />
-		<circle class="fHowPlnW" cx="-572.6" cy="178.8" r="15.1" />
-		<circle class="copper" cx="-572.6" cy="178.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="rqkxjwio" cx="-844.9" cy="263.8" r="15.1" />
-		<circle class="hotHWXmO" cx="-844.9" cy="263.8" r="13.0" />
-		<circle class="hotHWXmO" cx="-844.9" cy="263.8" r="13.7" />
-		<circle class="hotHWXmO" cx="-844.9" cy="263.8" r="14.4" />
-		<circle class="hotHWXmO" cx="-844.9" cy="263.8" r="15.1" />
-		<circle class="copper" cx="-844.9" cy="263.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="mHFNgXRr" cx="-562.9" cy="207.4" r="15.1" />
-		<circle class="mbsDaTHo" cx="-562.9" cy="207.4" r="13.0" />
-		<circle class="mbsDaTHo" cx="-562.9" cy="207.4" r="13.7" />
-		<circle class="mbsDaTHo" cx="-562.9" cy="207.4" r="14.4" />
-		<circle class="mbsDaTHo" cx="-562.9" cy="207.4" r="15.1" />
-		<circle class="copper" cx="-562.9" cy="207.4" r="13.0" />
-	</g>
-	<g>
-		<circle class="inmTfjZo" cx="-830.5" cy="306.0" r="15.1" />
-		<circle class="vVWsBtOu" cx="-830.5" cy="306.0" r="13.0" />
-		<circle class="vVWsBtOu" cx="-830.5" cy="306.0" r="13.7" />
-		<circle class="vVWsBtOu" cx="-830.5" cy="306.0" r="14.4" />
-		<circle class="vVWsBtOu" cx="-830.5" cy="306.0" r="15.1" />
-		<circle class="copper" cx="-830.5" cy="306.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="TEigGXkm" cx="-551.7" cy="235.5" r="15.1" />
-		<circle class="chPeFsuT" cx="-551.7" cy="235.5" r="13.0" />
-		<circle class="chPeFsuT" cx="-551.7" cy="235.5" r="13.7" />
-		<circle class="chPeFsuT" cx="-551.7" cy="235.5" r="14.4" />
-		<circle class="chPeFsuT" cx="-551.7" cy="235.5" r="15.1" />
-		<circle class="copper" cx="-551.7" cy="235.5" r="13.0" />
-	</g>
-	<g>
-		<circle class="bOvRNTPH" cx="-814.1" cy="347.5" r="15.1" />
-		<circle class="zXnPSbRl" cx="-814.1" cy="347.5" r="13.0" />
-		<circle class="zXnPSbRl" cx="-814.1" cy="347.5" r="13.7" />
-		<circle class="zXnPSbRl" cx="-814.1" cy="347.5" r="14.4" />
-		<circle class="zXnPSbRl" cx="-814.1" cy="347.5" r="15.1" />
-		<circle class="copper" cx="-814.1" cy="347.5" r="13.0" />
-	</g>
-	<g>
-		<circle class="lYKRwZJg" cx="-539.1" cy="263.0" r="15.1" />
-		<circle class="hXDNBLdJ" cx="-539.1" cy="263.0" r="13.0" />
-		<circle class="hXDNBLdJ" cx="-539.1" cy="263.0" r="13.7" />
-		<circle class="hXDNBLdJ" cx="-539.1" cy="263.0" r="14.4" />
-		<circle class="hXDNBLdJ" cx="-539.1" cy="263.0" r="15.1" />
-		<circle class="copper" cx="-539.1" cy="263.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="iFamgwxn" cx="-795.5" cy="388.1" r="15.1" />
-		<circle class="JbXdLozr" cx="-795.5" cy="388.1" r="13.0" />
-		<circle class="JbXdLozr" cx="-795.5" cy="388.1" r="13.7" />
-		<circle class="JbXdLozr" cx="-795.5" cy="388.1" r="14.4" />
-		<circle class="JbXdLozr" cx="-795.5" cy="388.1" r="15.1" />
-		<circle class="copper" cx="-795.5" cy="388.1" r="13.0" />
-	</g>
-	<g>
-		<circle class="jXVyRMxH" cx="-525.2" cy="289.9" r="15.1" />
-		<circle class="WwFfGczR" cx="-525.2" cy="289.9" r="13.0" />
-		<circle class="WwFfGczR" cx="-525.2" cy="289.9" r="13.7" />
-		<circle class="WwFfGczR" cx="-525.2" cy="289.9" r="14.4" />
-		<circle class="WwFfGczR" cx="-525.2" cy="289.9" r="15.1" />
-		<circle class="copper" cx="-525.2" cy="289.9" r="13.0" />
-	</g>
-	<g>
-		<circle class="dGtNHnek" cx="-774.9" cy="427.7" r="15.1" />
-		<circle class="KeQhVoUI" cx="-774.9" cy="427.7" r="13.0" />
-		<circle class="KeQhVoUI" cx="-774.9" cy="427.7" r="13.7" />
-		<circle class="KeQhVoUI" cx="-774.9" cy="427.7" r="14.4" />
-		<circle class="KeQhVoUI" cx="-774.9" cy="427.7" r="15.1" />
-		<circle class="copper" cx="-774.9" cy="427.7" r="13.0" />
-	</g>
-	<g>
-		<circle class="ozRpNgOl" cx="-509.9" cy="316.0" r="15.1" />
-		<circle class="PmXpuTGh" cx="-509.9" cy="316.0" r="13.0" />
-		<circle class="PmXpuTGh" cx="-509.9" cy="316.0" r="13.7" />
-		<circle class="PmXpuTGh" cx="-509.9" cy="316.0" r="14.4" />
-		<circle class="PmXpuTGh" cx="-509.9" cy="316.0" r="15.1" />
-		<circle class="copper" cx="-509.9" cy="316.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="FBbjhRQp" cx="-752.4" cy="466.2" r="15.1" />
-		<circle class="zFEmUIaO" cx="-752.4" cy="466.2" r="13.0" />
-		<circle class="zFEmUIaO" cx="-752.4" cy="466.2" r="13.7" />
-		<circle class="zFEmUIaO" cx="-752.4" cy="466.2" r="14.4" />
-		<circle class="zFEmUIaO" cx="-752.4" cy="466.2" r="15.1" />
-		<circle class="copper" cx="-752.4" cy="466.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="KdAEqaGM" cx="-493.3" cy="341.3" r="15.1" />
-		<circle class="Cgmnvdrw" cx="-493.3" cy="341.3" r="13.0" />
-		<circle class="Cgmnvdrw" cx="-493.3" cy="341.3" r="13.7" />
-		<circle class="Cgmnvdrw" cx="-493.3" cy="341.3" r="14.4" />
-		<circle class="Cgmnvdrw" cx="-493.3" cy="341.3" r="15.1" />
-		<circle class="copper" cx="-493.3" cy="341.3" r="13.0" />
-	</g>
-	<g>
-		<circle class="ZWvukCoT" cx="-727.9" cy="503.6" r="15.1" />
-		<circle class="lUWPTSAe" cx="-727.9" cy="503.6" r="13.0" />
-		<circle class="lUWPTSAe" cx="-727.9" cy="503.6" r="13.7" />
-		<circle class="lUWPTSAe" cx="-727.9" cy="503.6" r="14.4" />
-		<circle class="lUWPTSAe" cx="-727.9" cy="503.6" r="15.1" />
-		<circle class="copper" cx="-727.9" cy="503.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="OkBvDcxX" cx="-475.5" cy="365.7" r="15.1" />
-		<circle class="UDIJFzya" cx="-475.5" cy="365.7" r="13.0" />
-		<circle class="UDIJFzya" cx="-475.5" cy="365.7" r="13.7" />
-		<circle class="UDIJFzya" cx="-475.5" cy="365.7" r="14.4" />
-		<circle class="UDIJFzya" cx="-475.5" cy="365.7" r="15.1" />
-		<circle class="copper" cx="-475.5" cy="365.7" r="13.0" />
-	</g>
-	<g>
-		<circle class="hbFHDBnk" cx="-701.6" cy="539.6" r="15.1" />
-		<circle class="MGHYBgUL" cx="-701.6" cy="539.6" r="13.0" />
-		<circle class="MGHYBgUL" cx="-701.6" cy="539.6" r="13.7" />
-		<circle class="MGHYBgUL" cx="-701.6" cy="539.6" r="14.4" />
-		<circle class="MGHYBgUL" cx="-701.6" cy="539.6" r="15.1" />
-		<circle class="copper" cx="-701.6" cy="539.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="nHVpvMKh" cx="-456.4" cy="389.2" r="15.1" />
-		<circle class="HAjzQrEa" cx="-456.4" cy="389.2" r="13.0" />
-		<circle class="HAjzQrEa" cx="-456.4" cy="389.2" r="13.7" />
-		<circle class="HAjzQrEa" cx="-456.4" cy="389.2" r="14.4" />
-		<circle class="HAjzQrEa" cx="-456.4" cy="389.2" r="15.1" />
-		<circle class="copper" cx="-456.4" cy="389.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="gvFjfVGd" cx="-673.5" cy="574.3" r="15.1" />
-		<circle class="hyGItLsK" cx="-673.5" cy="574.3" r="13.0" />
-		<circle class="hyGItLsK" cx="-673.5" cy="574.3" r="13.7" />
-		<circle class="hyGItLsK" cx="-673.5" cy="574.3" r="14.4" />
-		<circle class="hyGItLsK" cx="-673.5" cy="574.3" r="15.1" />
-		<circle class="copper" cx="-673.5" cy="574.3" r="13.0" />
-	</g>
-	<g>
-		<circle class="yTeGRqcz" cx="-436.2" cy="411.8" r="15.1" />
-		<circle class="cTiLqvBK" cx="-436.2" cy="411.8" r="13.0" />
-		<circle class="cTiLqvBK" cx="-436.2" cy="411.8" r="13.7" />
-		<circle class="cTiLqvBK" cx="-436.2" cy="411.8" r="14.4" />
-		<circle class="cTiLqvBK" cx="-436.2" cy="411.8" r="15.1" />
-		<circle class="copper" cx="-436.2" cy="411.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="kuKPYxOq" cx="-643.7" cy="607.5" r="15.1" />
-		<circle class="FhWsSgvD" cx="-643.7" cy="607.5" r="13.0" />
-		<circle class="FhWsSgvD" cx="-643.7" cy="607.5" r="13.7" />
-		<circle class="FhWsSgvD" cx="-643.7" cy="607.5" r="14.4" />
-		<circle class="FhWsSgvD" cx="-643.7" cy="607.5" r="15.1" />
-		<circle class="copper" cx="-643.7" cy="607.5" r="13.0" />
-	</g>
-	<g>
-		<circle class="qYEgMJKT" cx="-414.9" cy="433.2" r="15.1" />
-		<circle class="VLDUnecR" cx="-414.9" cy="433.2" r="13.0" />
-		<circle class="VLDUnecR" cx="-414.9" cy="433.2" r="13.7" />
-		<circle class="VLDUnecR" cx="-414.9" cy="433.2" r="14.4" />
-		<circle class="VLDUnecR" cx="-414.9" cy="433.2" r="15.1" />
-		<circle class="copper" cx="-414.9" cy="433.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="juTSXUxd" cx="-612.2" cy="639.2" r="15.1" />
-		<circle class="vlTsSmXD" cx="-612.2" cy="639.2" r="13.0" />
-		<circle class="vlTsSmXD" cx="-612.2" cy="639.2" r="13.7" />
-		<circle class="vlTsSmXD" cx="-612.2" cy="639.2" r="14.4" />
-		<circle class="vlTsSmXD" cx="-612.2" cy="639.2" r="15.1" />
-		<circle class="copper" cx="-612.2" cy="639.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="XaZBDPOm" cx="-392.6" cy="453.6" r="15.1" />
-		<circle class="bRgsOepa" cx="-392.6" cy="453.6" r="13.0" />
-		<circle class="bRgsOepa" cx="-392.6" cy="453.6" r="13.7" />
-		<circle class="bRgsOepa" cx="-392.6" cy="453.6" r="14.4" />
-		<circle class="bRgsOepa" cx="-392.6" cy="453.6" r="15.1" />
-		<circle class="copper" cx="-392.6" cy="453.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="nxudeKsE" cx="-579.2" cy="669.3" r="15.1" />
-		<circle class="sRXjBQfH" cx="-579.2" cy="669.3" r="13.0" />
-		<circle class="sRXjBQfH" cx="-579.2" cy="669.3" r="13.7" />
-		<circle class="sRXjBQfH" cx="-579.2" cy="669.3" r="14.4" />
-		<circle class="sRXjBQfH" cx="-579.2" cy="669.3" r="15.1" />
-		<circle class="copper" cx="-579.2" cy="669.3" r="13.0" />
-	</g>
-	<g>
-		<circle class="KbDSmeyf" cx="-369.2" cy="472.8" r="15.1" />
-		<circle class="QCrjHaiI" cx="-369.2" cy="472.8" r="13.0" />
-		<circle class="QCrjHaiI" cx="-369.2" cy="472.8" r="13.7" />
-		<circle class="QCrjHaiI" cx="-369.2" cy="472.8" r="14.4" />
-		<circle class="QCrjHaiI" cx="-369.2" cy="472.8" r="15.1" />
-		<circle class="copper" cx="-369.2" cy="472.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="UwicbsnI" cx="-544.8" cy="697.6" r="15.1" />
-		<circle class="fOYwrPLt" cx="-544.8" cy="697.6" r="13.0" />
-		<circle class="fOYwrPLt" cx="-544.8" cy="697.6" r="13.7" />
-		<circle class="fOYwrPLt" cx="-544.8" cy="697.6" r="14.4" />
-		<circle class="fOYwrPLt" cx="-544.8" cy="697.6" r="15.1" />
-		<circle class="copper" cx="-544.8" cy="697.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="OwvoJglj" cx="-344.9" cy="490.8" r="15.1" />
-		<circle class="xJORdzBc" cx="-344.9" cy="490.8" r="13.0" />
-		<circle class="xJORdzBc" cx="-344.9" cy="490.8" r="13.7" />
-		<circle class="xJORdzBc" cx="-344.9" cy="490.8" r="14.4" />
-		<circle class="xJORdzBc" cx="-344.9" cy="490.8" r="15.1" />
-		<circle class="copper" cx="-344.9" cy="490.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="EDmyBYUN" cx="-508.9" cy="724.2" r="15.1" />
-		<circle class="XbAFNiQe" cx="-508.9" cy="724.2" r="13.0" />
-		<circle class="XbAFNiQe" cx="-508.9" cy="724.2" r="13.7" />
-		<circle class="XbAFNiQe" cx="-508.9" cy="724.2" r="14.4" />
-		<circle class="XbAFNiQe" cx="-508.9" cy="724.2" r="15.1" />
-		<circle class="copper" cx="-508.9" cy="724.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="pxXEPLhW" cx="-319.7" cy="507.6" r="15.1" />
-		<circle class="YWjCzAch" cx="-319.7" cy="507.6" r="13.0" />
-		<circle class="YWjCzAch" cx="-319.7" cy="507.6" r="13.7" />
-		<circle class="YWjCzAch" cx="-319.7" cy="507.6" r="14.4" />
-		<circle class="YWjCzAch" cx="-319.7" cy="507.6" r="15.1" />
-		<circle class="copper" cx="-319.7" cy="507.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="ZVmueRKC" cx="-471.7" cy="748.9" r="15.1" />
-		<circle class="eQEXlMvS" cx="-471.7" cy="748.9" r="13.0" />
-		<circle class="eQEXlMvS" cx="-471.7" cy="748.9" r="13.7" />
-		<circle class="eQEXlMvS" cx="-471.7" cy="748.9" r="14.4" />
-		<circle class="eQEXlMvS" cx="-471.7" cy="748.9" r="15.1" />
-		<circle class="copper" cx="-471.7" cy="748.9" r="13.0" />
-	</g>
-	<g>
-		<circle class="rjgHpcGf" cx="-293.7" cy="523.0" r="15.1" />
-		<circle class="zMJwQFXA" cx="-293.7" cy="523.0" r="13.0" />
-		<circle class="zMJwQFXA" cx="-293.7" cy="523.0" r="13.7" />
-		<circle class="zMJwQFXA" cx="-293.7" cy="523.0" r="14.4" />
-		<circle class="zMJwQFXA" cx="-293.7" cy="523.0" r="15.1" />
-		<circle class="copper" cx="-293.7" cy="523.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="ohZzXYQe" cx="-433.4" cy="771.8" r="15.1" />
-		<circle class="ulZcaiGI" cx="-433.4" cy="771.8" r="13.0" />
-		<circle class="ulZcaiGI" cx="-433.4" cy="771.8" r="13.7" />
-		<circle class="ulZcaiGI" cx="-433.4" cy="771.8" r="14.4" />
-		<circle class="ulZcaiGI" cx="-433.4" cy="771.8" r="15.1" />
-		<circle class="copper" cx="-433.4" cy="771.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="jPQxtlgL" cx="-267.0" cy="537.2" r="15.1" />
-		<circle class="aFclmxPj" cx="-267.0" cy="537.2" r="13.0" />
-		<circle class="aFclmxPj" cx="-267.0" cy="537.2" r="13.7" />
-		<circle class="aFclmxPj" cx="-267.0" cy="537.2" r="14.4" />
-		<circle class="aFclmxPj" cx="-267.0" cy="537.2" r="15.1" />
-		<circle class="copper" cx="-267.0" cy="537.2" r="13.0" />
-	</g>
-	<g>
-		<circle class="VnJdDzjl" cx="-393.9" cy="792.6" r="15.1" />
-		<circle class="LKZsBehE" cx="-393.9" cy="792.6" r="13.0" />
-		<circle class="LKZsBehE" cx="-393.9" cy="792.6" r="13.7" />
-		<circle class="LKZsBehE" cx="-393.9" cy="792.6" r="14.4" />
-		<circle class="LKZsBehE" cx="-393.9" cy="792.6" r="15.1" />
-		<circle class="copper" cx="-393.9" cy="792.6" r="13.0" />
-	</g>
-	<g>
-		<circle class="YaJhvbyx" cx="-239.6" cy="550.0" r="15.1" />
-		<circle class="GjTewhQB" cx="-239.6" cy="550.0" r="13.0" />
-		<circle class="GjTewhQB" cx="-239.6" cy="550.0" r="13.7" />
-		<circle class="GjTewhQB" cx="-239.6" cy="550.0" r="14.4" />
-		<circle class="GjTewhQB" cx="-239.6" cy="550.0" r="15.1" />
-		<circle class="copper" cx="-239.6" cy="550.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="yzDElPGp" cx="-353.5" cy="811.5" r="15.1" />
-		<circle class="wcMpJXHb" cx="-353.5" cy="811.5" r="13.0" />
-		<circle class="wcMpJXHb" cx="-353.5" cy="811.5" r="13.7" />
-		<circle class="wcMpJXHb" cx="-353.5" cy="811.5" r="14.4" />
-		<circle class="wcMpJXHb" cx="-353.5" cy="811.5" r="15.1" />
-		<circle class="copper" cx="-353.5" cy="811.5" r="13.0" />
-	</g>
-	<g>
-		<circle class="pCqXsADo" cx="-211.5" cy="561.3" r="15.1" />
-		<circle class="IEHnZRuc" cx="-211.5" cy="561.3" r="13.0" />
-		<circle class="IEHnZRuc" cx="-211.5" cy="561.3" r="13.7" />
-		<circle class="IEHnZRuc" cx="-211.5" cy="561.3" r="14.4" />
-		<circle class="IEHnZRuc" cx="-211.5" cy="561.3" r="15.1" />
-		<circle class="copper" cx="-211.5" cy="561.3" r="13.0" />
-	</g>
-	<g>
-		<circle class="DXOoTSgc" cx="-312.1" cy="828.3" r="15.1" />
-		<circle class="ljdZgqIz" cx="-312.1" cy="828.3" r="13.0" />
-		<circle class="ljdZgqIz" cx="-312.1" cy="828.3" r="13.7" />
-		<circle class="ljdZgqIz" cx="-312.1" cy="828.3" r="14.4" />
-		<circle class="ljdZgqIz" cx="-312.1" cy="828.3" r="15.1" />
-		<circle class="copper" cx="-312.1" cy="828.3" r="13.0" />
-	</g>
-	<g>
-		<circle class="ExwgIabo" cx="-183.0" cy="571.3" r="15.1" />
-		<circle class="IJefdxAL" cx="-183.0" cy="571.3" r="13.0" />
-		<circle class="IJefdxAL" cx="-183.0" cy="571.3" r="13.7" />
-		<circle class="IJefdxAL" cx="-183.0" cy="571.3" r="14.4" />
-		<circle class="IJefdxAL" cx="-183.0" cy="571.3" r="15.1" />
-		<circle class="copper" cx="-183.0" cy="571.3" r="13.0" />
-	</g>
-	<g>
-		<circle class="ctpmPzbo" cx="-270.0" cy="843.0" r="15.1" />
-		<circle class="hwvWQPIX" cx="-270.0" cy="843.0" r="13.0" />
-		<circle class="hwvWQPIX" cx="-270.0" cy="843.0" r="13.7" />
-		<circle class="hwvWQPIX" cx="-270.0" cy="843.0" r="14.4" />
-		<circle class="hwvWQPIX" cx="-270.0" cy="843.0" r="15.1" />
-		<circle class="copper" cx="-270.0" cy="843.0" r="13.0" />
-	</g>
-	<g>
-		<circle class="zLhnTcty" cx="-153.9" cy="579.8" r="15.1" />
-		<circle class="aIzPYNcn" cx="-153.9" cy="579.8" r="13.0" />
-		<circle class="aIzPYNcn" cx="-153.9" cy="579.8" r="13.7" />
-		<circle class="aIzPYNcn" cx="-153.9" cy="579.8" r="14.4" />
-		<circle class="aIzPYNcn" cx="-153.9" cy="579.8" r="15.1" />
-		<circle class="copper" cx="-153.9" cy="579.8" r="13.0" />
-	</g>
-	<g>
-		<circle class="AevYJTNF" cx="-227.1" cy="855.5" r="15.1" />
-		<circle class="LpBWAuYf" cx="-227.1" cy="855.5" r="13.0" />
-		<circle class="LpBWAuYf" cx="-227.1" cy="855.5" r="13.7" />
-		<circle class="LpBWAuYf" cx="-227.1" cy="855.5" r="14.4" />
-		<circle class="LpBWAuYf" cx="-227.1" cy="855.5" r="15.1" />
-		<circle class="copper" cx="-227.1" cy="855.5" r="13.0" />
-	</g>
-	<g>
-		<circle class="iXflqrTt" cx="-543.1" cy="-0.0" r="40.2" />
-		<circle class="copper" cx="-543.1" cy="-0.0" r="38.8" />
-		<circle class="KfSMIYRq" cx="-543.1" cy="-0.0" r="38.8" />
-		<circle class="KfSMIYRq" cx="-543.1" cy="-0.0" r="39.5" />
-		<circle class="KfSMIYRq" cx="-543.1" cy="-0.0" r="40.2" />
-	</g>
-	<g>
-		<circle class="nKwoRqjh" cx="-940.4" cy="-0.0" r="40.2" />
-		<circle class="copper" cx="-940.4" cy="-0.0" r="38.8" />
-		<circle class="xMEYfTGF" cx="-940.4" cy="-0.0" r="38.8" />
-		<circle class="xMEYfTGF" cx="-940.4" cy="-0.0" r="39.5" />
-		<circle class="xMEYfTGF" cx="-940.4" cy="-0.0" r="40.2" />
-	</g>
-	<g>
-		
+		<polygon class="ferrite" points="0.0,-374.6 495.0,-374.6 495.0,-0.2 412.5,-0.2 412.5,-240.0 202.5,-240.0 202.5,-0.2 0.0,-0.2 " />
+		<polygon class="ferrite" points="0.0,374.6 495.0,374.6 495.0,0.2 412.5,0.2 412.5,240.0 202.5,240.0 202.5,0.2 0.0,0.2 " />
+	</g>
+	<g>
+		<polygon class="bobbin" points="202.5,-240.0 412.5,-240.0 412.5,-208.8 240.0,-208.8 240.0,208.8 412.5,208.8 412.5,240.0 202.5,240.0 " />
+	</g>
+	<g />
+	<g>
+		<circle class="RInVrwhP" cx="256.4" cy="-181.1" r="16.5">
+			<title>Primary parallel 0 turn 0</title>
+		</circle>
+		<circle class="EXLZOwxn" cx="256.4" cy="-181.1" r="15.2">
+			<title>Primary parallel 0 turn 0</title>
+		</circle>
+		<circle class="EXLZOwxn" cx="256.4" cy="-181.1" r="16.5">
+			<title>Primary parallel 0 turn 0</title>
+		</circle>
+		<circle class="copper" cx="256.4" cy="-181.1" r="15.2">
+			<title>Primary parallel 0 turn 0</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="qJMgjpir" cx="256.4" cy="-148.1" r="16.5">
+			<title>Primary parallel 0 turn 1</title>
+		</circle>
+		<circle class="IzdgHybm" cx="256.4" cy="-148.1" r="15.2">
+			<title>Primary parallel 0 turn 1</title>
+		</circle>
+		<circle class="IzdgHybm" cx="256.4" cy="-148.1" r="16.5">
+			<title>Primary parallel 0 turn 1</title>
+		</circle>
+		<circle class="copper" cx="256.4" cy="-148.1" r="15.2">
+			<title>Primary parallel 0 turn 1</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="hjJnpGIW" cx="256.4" cy="-115.2" r="16.5">
+			<title>Primary parallel 0 turn 2</title>
+		</circle>
+		<circle class="ksHpzxhP" cx="256.4" cy="-115.2" r="15.2">
+			<title>Primary parallel 0 turn 2</title>
+		</circle>
+		<circle class="ksHpzxhP" cx="256.4" cy="-115.2" r="16.5">
+			<title>Primary parallel 0 turn 2</title>
+		</circle>
+		<circle class="copper" cx="256.4" cy="-115.2" r="15.2">
+			<title>Primary parallel 0 turn 2</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="RcukhFKn" cx="256.4" cy="-82.3" r="16.5">
+			<title>Primary parallel 0 turn 3</title>
+		</circle>
+		<circle class="ckPGfLuT" cx="256.4" cy="-82.3" r="15.2">
+			<title>Primary parallel 0 turn 3</title>
+		</circle>
+		<circle class="ckPGfLuT" cx="256.4" cy="-82.3" r="16.5">
+			<title>Primary parallel 0 turn 3</title>
+		</circle>
+		<circle class="copper" cx="256.4" cy="-82.3" r="15.2">
+			<title>Primary parallel 0 turn 3</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="GisuvSUZ" cx="256.4" cy="-49.4" r="16.5">
+			<title>Primary parallel 0 turn 4</title>
+		</circle>
+		<circle class="mkZWtEFj" cx="256.4" cy="-49.4" r="15.2">
+			<title>Primary parallel 0 turn 4</title>
+		</circle>
+		<circle class="mkZWtEFj" cx="256.4" cy="-49.4" r="16.5">
+			<title>Primary parallel 0 turn 4</title>
+		</circle>
+		<circle class="copper" cx="256.4" cy="-49.4" r="15.2">
+			<title>Primary parallel 0 turn 4</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="uWyABerH" cx="256.4" cy="-16.5" r="16.5">
+			<title>Primary parallel 0 turn 5</title>
+		</circle>
+		<circle class="uINDOhAz" cx="256.4" cy="-16.5" r="15.2">
+			<title>Primary parallel 0 turn 5</title>
+		</circle>
+		<circle class="uINDOhAz" cx="256.4" cy="-16.5" r="16.5">
+			<title>Primary parallel 0 turn 5</title>
+		</circle>
+		<circle class="copper" cx="256.4" cy="-16.5" r="15.2">
+			<title>Primary parallel 0 turn 5</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="NiTcQKDR" cx="256.4" cy="16.5" r="16.5">
+			<title>Primary parallel 0 turn 6</title>
+		</circle>
+		<circle class="TStxfkKh" cx="256.4" cy="16.5" r="15.2">
+			<title>Primary parallel 0 turn 6</title>
+		</circle>
+		<circle class="TStxfkKh" cx="256.4" cy="16.5" r="16.5">
+			<title>Primary parallel 0 turn 6</title>
+		</circle>
+		<circle class="copper" cx="256.4" cy="16.5" r="15.2">
+			<title>Primary parallel 0 turn 6</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="qxQmwYkC" cx="256.4" cy="49.4" r="16.5">
+			<title>Primary parallel 0 turn 7</title>
+		</circle>
+		<circle class="wPZJyYGU" cx="256.4" cy="49.4" r="15.2">
+			<title>Primary parallel 0 turn 7</title>
+		</circle>
+		<circle class="wPZJyYGU" cx="256.4" cy="49.4" r="16.5">
+			<title>Primary parallel 0 turn 7</title>
+		</circle>
+		<circle class="copper" cx="256.4" cy="49.4" r="15.2">
+			<title>Primary parallel 0 turn 7</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="oaGhyYsz" cx="256.4" cy="82.3" r="16.5">
+			<title>Primary parallel 0 turn 8</title>
+		</circle>
+		<circle class="yoBwNciW" cx="256.4" cy="82.3" r="15.2">
+			<title>Primary parallel 0 turn 8</title>
+		</circle>
+		<circle class="yoBwNciW" cx="256.4" cy="82.3" r="16.5">
+			<title>Primary parallel 0 turn 8</title>
+		</circle>
+		<circle class="copper" cx="256.4" cy="82.3" r="15.2">
+			<title>Primary parallel 0 turn 8</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="GSIjrYku" cx="256.4" cy="115.2" r="16.5">
+			<title>Primary parallel 0 turn 9</title>
+		</circle>
+		<circle class="QpTFwiAf" cx="256.4" cy="115.2" r="15.2">
+			<title>Primary parallel 0 turn 9</title>
+		</circle>
+		<circle class="QpTFwiAf" cx="256.4" cy="115.2" r="16.5">
+			<title>Primary parallel 0 turn 9</title>
+		</circle>
+		<circle class="copper" cx="256.4" cy="115.2" r="15.2">
+			<title>Primary parallel 0 turn 9</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="TOcXnSCY" cx="256.4" cy="148.1" r="16.5">
+			<title>Primary parallel 0 turn 10</title>
+		</circle>
+		<circle class="PqgzZMkH" cx="256.4" cy="148.1" r="15.2">
+			<title>Primary parallel 0 turn 10</title>
+		</circle>
+		<circle class="PqgzZMkH" cx="256.4" cy="148.1" r="16.5">
+			<title>Primary parallel 0 turn 10</title>
+		</circle>
+		<circle class="copper" cx="256.4" cy="148.1" r="15.2">
+			<title>Primary parallel 0 turn 10</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="RjSdknZA" cx="256.4" cy="181.1" r="16.5">
+			<title>Primary parallel 0 turn 11</title>
+		</circle>
+		<circle class="ZtgvSKub" cx="256.4" cy="181.1" r="15.2">
+			<title>Primary parallel 0 turn 11</title>
+		</circle>
+		<circle class="ZtgvSKub" cx="256.4" cy="181.1" r="16.5">
+			<title>Primary parallel 0 turn 11</title>
+		</circle>
+		<circle class="copper" cx="256.4" cy="181.1" r="15.2">
+			<title>Primary parallel 0 turn 11</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="KYCdyUVM" cx="314.5" cy="-120.5" r="40.2">
+			<title>Secondary parallel 0 turn 0</title>
+		</circle>
+		<circle class="copper" cx="314.5" cy="-120.5" r="38.8">
+			<title>Secondary parallel 0 turn 0</title>
+		</circle>
+		<circle class="fwGknMFJ" cx="314.5" cy="-120.5" r="38.8">
+			<title>Secondary parallel 0 turn 0</title>
+		</circle>
+		<circle class="fwGknMFJ" cx="314.5" cy="-120.5" r="39.5">
+			<title>Secondary parallel 0 turn 0</title>
+		</circle>
+		<circle class="fwGknMFJ" cx="314.5" cy="-120.5" r="40.2">
+			<title>Secondary parallel 0 turn 0</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="jItYzsgn" cx="314.5" cy="-40.2" r="40.2">
+			<title>Secondary parallel 1 turn 0</title>
+		</circle>
+		<circle class="copper" cx="314.5" cy="-40.2" r="38.8">
+			<title>Secondary parallel 1 turn 0</title>
+		</circle>
+		<circle class="APpmjFVv" cx="314.5" cy="-40.2" r="38.8">
+			<title>Secondary parallel 1 turn 0</title>
+		</circle>
+		<circle class="APpmjFVv" cx="314.5" cy="-40.2" r="39.5">
+			<title>Secondary parallel 1 turn 0</title>
+		</circle>
+		<circle class="APpmjFVv" cx="314.5" cy="-40.2" r="40.2">
+			<title>Secondary parallel 1 turn 0</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="AMKuNriQ" cx="314.5" cy="40.2" r="40.2">
+			<title>Secondary parallel 2 turn 0</title>
+		</circle>
+		<circle class="copper" cx="314.5" cy="40.2" r="38.8">
+			<title>Secondary parallel 2 turn 0</title>
+		</circle>
+		<circle class="hXirpnvY" cx="314.5" cy="40.2" r="38.8">
+			<title>Secondary parallel 2 turn 0</title>
+		</circle>
+		<circle class="hXirpnvY" cx="314.5" cy="40.2" r="39.5">
+			<title>Secondary parallel 2 turn 0</title>
+		</circle>
+		<circle class="hXirpnvY" cx="314.5" cy="40.2" r="40.2">
+			<title>Secondary parallel 2 turn 0</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="AqVcPnHm" cx="314.5" cy="120.5" r="40.2">
+			<title>Secondary parallel 3 turn 0</title>
+		</circle>
+		<circle class="copper" cx="314.5" cy="120.5" r="38.8">
+			<title>Secondary parallel 3 turn 0</title>
+		</circle>
+		<circle class="SRByfoZb" cx="314.5" cy="120.5" r="38.8">
+			<title>Secondary parallel 3 turn 0</title>
+		</circle>
+		<circle class="SRByfoZb" cx="314.5" cy="120.5" r="39.5">
+			<title>Secondary parallel 3 turn 0</title>
+		</circle>
+		<circle class="SRByfoZb" cx="314.5" cy="120.5" r="40.2">
+			<title>Secondary parallel 3 turn 0</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="eikIcuyG" cx="372.7" cy="-164.6" r="16.5">
+			<title>Primary parallel 0 turn 12</title>
+		</circle>
+		<circle class="DThifFEI" cx="372.7" cy="-164.6" r="15.2">
+			<title>Primary parallel 0 turn 12</title>
+		</circle>
+		<circle class="DThifFEI" cx="372.7" cy="-164.6" r="16.5">
+			<title>Primary parallel 0 turn 12</title>
+		</circle>
+		<circle class="copper" cx="372.7" cy="-164.6" r="15.2">
+			<title>Primary parallel 0 turn 12</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="WYMxvDsb" cx="372.7" cy="-131.7" r="16.5">
+			<title>Primary parallel 0 turn 13</title>
+		</circle>
+		<circle class="GKEejiPL" cx="372.7" cy="-131.7" r="15.2">
+			<title>Primary parallel 0 turn 13</title>
+		</circle>
+		<circle class="GKEejiPL" cx="372.7" cy="-131.7" r="16.5">
+			<title>Primary parallel 0 turn 13</title>
+		</circle>
+		<circle class="copper" cx="372.7" cy="-131.7" r="15.2">
+			<title>Primary parallel 0 turn 13</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="dOfFYuVz" cx="372.7" cy="-98.8" r="16.5">
+			<title>Primary parallel 0 turn 14</title>
+		</circle>
+		<circle class="OugPQlRT" cx="372.7" cy="-98.8" r="15.2">
+			<title>Primary parallel 0 turn 14</title>
+		</circle>
+		<circle class="OugPQlRT" cx="372.7" cy="-98.8" r="16.5">
+			<title>Primary parallel 0 turn 14</title>
+		</circle>
+		<circle class="copper" cx="372.7" cy="-98.8" r="15.2">
+			<title>Primary parallel 0 turn 14</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="kVynDKpF" cx="372.7" cy="-65.8" r="16.5">
+			<title>Primary parallel 0 turn 15</title>
+		</circle>
+		<circle class="vGKjWAke" cx="372.7" cy="-65.8" r="15.2">
+			<title>Primary parallel 0 turn 15</title>
+		</circle>
+		<circle class="vGKjWAke" cx="372.7" cy="-65.8" r="16.5">
+			<title>Primary parallel 0 turn 15</title>
+		</circle>
+		<circle class="copper" cx="372.7" cy="-65.8" r="15.2">
+			<title>Primary parallel 0 turn 15</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="HpBEnUkz" cx="372.7" cy="-32.9" r="16.5">
+			<title>Primary parallel 0 turn 16</title>
+		</circle>
+		<circle class="VrszIKxC" cx="372.7" cy="-32.9" r="15.2">
+			<title>Primary parallel 0 turn 16</title>
+		</circle>
+		<circle class="VrszIKxC" cx="372.7" cy="-32.9" r="16.5">
+			<title>Primary parallel 0 turn 16</title>
+		</circle>
+		<circle class="copper" cx="372.7" cy="-32.9" r="15.2">
+			<title>Primary parallel 0 turn 16</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="RZfdnDAm" cx="372.7" cy="-0.0" r="16.5">
+			<title>Primary parallel 0 turn 17</title>
+		</circle>
+		<circle class="CudxEhST" cx="372.7" cy="-0.0" r="15.2">
+			<title>Primary parallel 0 turn 17</title>
+		</circle>
+		<circle class="CudxEhST" cx="372.7" cy="-0.0" r="16.5">
+			<title>Primary parallel 0 turn 17</title>
+		</circle>
+		<circle class="copper" cx="372.7" cy="-0.0" r="15.2">
+			<title>Primary parallel 0 turn 17</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="RMgCsAWq" cx="372.7" cy="32.9" r="16.5">
+			<title>Primary parallel 0 turn 18</title>
+		</circle>
+		<circle class="hqKzoIGc" cx="372.7" cy="32.9" r="15.2">
+			<title>Primary parallel 0 turn 18</title>
+		</circle>
+		<circle class="hqKzoIGc" cx="372.7" cy="32.9" r="16.5">
+			<title>Primary parallel 0 turn 18</title>
+		</circle>
+		<circle class="copper" cx="372.7" cy="32.9" r="15.2">
+			<title>Primary parallel 0 turn 18</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="rUpIChXS" cx="372.7" cy="65.8" r="16.5">
+			<title>Primary parallel 0 turn 19</title>
+		</circle>
+		<circle class="BNqFlasy" cx="372.7" cy="65.8" r="15.2">
+			<title>Primary parallel 0 turn 19</title>
+		</circle>
+		<circle class="BNqFlasy" cx="372.7" cy="65.8" r="16.5">
+			<title>Primary parallel 0 turn 19</title>
+		</circle>
+		<circle class="copper" cx="372.7" cy="65.8" r="15.2">
+			<title>Primary parallel 0 turn 19</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="vzVBLeCi" cx="372.7" cy="98.8" r="16.5">
+			<title>Primary parallel 0 turn 20</title>
+		</circle>
+		<circle class="niomGTXQ" cx="372.7" cy="98.8" r="15.2">
+			<title>Primary parallel 0 turn 20</title>
+		</circle>
+		<circle class="niomGTXQ" cx="372.7" cy="98.8" r="16.5">
+			<title>Primary parallel 0 turn 20</title>
+		</circle>
+		<circle class="copper" cx="372.7" cy="98.8" r="15.2">
+			<title>Primary parallel 0 turn 20</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="XCgDwtVR" cx="372.7" cy="131.7" r="16.5">
+			<title>Primary parallel 0 turn 21</title>
+		</circle>
+		<circle class="CRiFcheQ" cx="372.7" cy="131.7" r="15.2">
+			<title>Primary parallel 0 turn 21</title>
+		</circle>
+		<circle class="CRiFcheQ" cx="372.7" cy="131.7" r="16.5">
+			<title>Primary parallel 0 turn 21</title>
+		</circle>
+		<circle class="copper" cx="372.7" cy="131.7" r="15.2">
+			<title>Primary parallel 0 turn 21</title>
+		</circle>
+	</g>
+	<g>
+		<circle class="UeVBhysr" cx="372.7" cy="164.6" r="16.5">
+			<title>Primary parallel 0 turn 22</title>
+		</circle>
+		<circle class="DmUAIkKB" cx="372.7" cy="164.6" r="15.2">
+			<title>Primary parallel 0 turn 22</title>
+		</circle>
+		<circle class="DmUAIkKB" cx="372.7" cy="164.6" r="16.5">
+			<title>Primary parallel 0 turn 22</title>
+		</circle>
+		<circle class="copper" cx="372.7" cy="164.6" r="15.2">
+			<title>Primary parallel 0 turn 22</title>
+		</circle>
 	</g>
 </svg>

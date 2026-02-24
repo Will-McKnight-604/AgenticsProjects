@@ -39,55 +39,111 @@ function plot_current_density(geom, results)
         winding_names = geom.winding_names;
     end
 
-    % Plot each filament
-    for i = 1:length(Jmag)
-        cidx = max(1, min(256, round(255 * Jmag(i) / Jmax) + 1));
-        color = cmap(cidx,:);
+    % ========== TIMING: Filament rendering (vectorized batch patch) ==========
+    t_filament_start = tic;
 
-        x_center = fil(i,1);
-        y_center = fil(i,2);
-        dx = fil(i,3);
-        dy = fil(i,4);
+    Nf = size(fil, 1);
 
-        % Edge color by winding
-        edge_color = 'none';
-        if size(fil,2) >= 6 && ~isempty(winding_colors)
-            widx = round(fil(i,6));
-            if widx >= 1 && widx <= numel(winding_colors)
-                edge_color = winding_colors{widx};
+    % Map each filament's J value to its RGB color from the colormap.
+    % cidx proportional to Jmag: low J → index 1 (blue), high J → index 256 (red).
+    cidx_all = max(1, min(256, round(255 * Jmag ./ Jmax) + 1));
+
+    % Classify each filament as round or rect
+    is_round = false(Nf, 1);
+    if use_shapes && size(fil,2) >= 5
+        for i = 1:Nf
+            cidx_c = round(fil(i,5));
+            if cidx_c >= 1 && cidx_c <= numel(geom.wire_shapes)
+                is_round(i) = strcmp(geom.wire_shapes{cidx_c}, 'round');
             end
-        end
-
-        % Determine wire shape from conductor index
-        if use_shapes && size(fil,2) >= 5
-            conductor_idx = fil(i,5);
-
-            if conductor_idx <= length(geom.wire_shapes)
-                wire_shape = geom.wire_shapes{conductor_idx};
-
-                if strcmp(wire_shape, 'round')
-                    % Draw as circle
-                    radius = sqrt(dx * dy) / 2;
-                    theta = linspace(0, 2*pi, 20);
-                    x_circle = x_center + radius * cos(theta);
-                    y_circle = y_center + radius * sin(theta);
-                    fill(ax, x_circle, y_circle, color, 'EdgeColor', edge_color, 'LineWidth', 0.5);
-                else
-                    % Draw as rectangle
-                    rectangle('Parent', ax, 'Position', [x_center-dx/2, y_center-dy/2, dx, dy], ...
-                             'FaceColor', color, 'EdgeColor', edge_color, 'LineWidth', 0.5);
-                end
-            else
-                % Default to rectangle
-                rectangle('Parent', ax, 'Position', [x_center-dx/2, y_center-dy/2, dx, dy], ...
-                         'FaceColor', color, 'EdgeColor', edge_color, 'LineWidth', 0.5);
-            end
-        else
-            % No shape info, use rectangles
-            rectangle('Parent', ax, 'Position', [x_center-dx/2, y_center-dy/2, dx, dy], ...
-                     'FaceColor', color, 'EdgeColor', 'none');
         end
     end
+
+    Nv = 20;  % vertices per circle polygon
+    theta = linspace(0, 2*pi, Nv+1);
+    theta(end) = [];  % 1 × Nv
+
+    % ---- Batch render round filaments via Faces/Vertices patch (one call) ----
+    % Each face (row of Faces) gets its own RGB from FaceVertexCData with FaceColor flat.
+    idx_round = find(is_round);
+    if ~isempty(idx_round)
+        Nr    = numel(idx_round);
+        R_all = sqrt(fil(idx_round,3) .* fil(idx_round,4)) / 2;  % Nr×1
+        % vx/vy: Nr×Nv — row i = vertex coords of circle i
+        vx = bsxfun(@plus, fil(idx_round,1), bsxfun(@times, R_all, cos(theta)));
+        vy = bsxfun(@plus, fil(idx_round,2), bsxfun(@times, R_all, sin(theta)));
+        % Row-major flatten: vertex (i-1)*Nv+k belongs to face i
+        verts_r   = [reshape(vx', [], 1), reshape(vy', [], 1)];  % (Nr*Nv)×2
+        faces_r   = reshape(1:Nr*Nv, Nv, Nr)';                   % Nr×Nv
+        fcolors_r = cmap(cidx_all(idx_round), :);                 % Nr×3 RGB per face
+        patch(ax, 'Faces', faces_r, 'Vertices', verts_r, ...
+              'FaceVertexCData', fcolors_r, ...
+              'FaceColor', 'flat', 'EdgeColor', 'none');
+    end
+
+    % ---- Batch render rectangular filaments via Faces/Vertices patch (one call) ----
+    idx_rect = find(~is_round);
+    if ~isempty(idx_rect)
+        Nrect  = numel(idx_rect);
+        hx_all = fil(idx_rect,3) / 2;
+        hy_all = fil(idx_rect,4) / 2;
+        cx_all = fil(idx_rect,1);
+        cy_all = fil(idx_rect,2);
+        % 4 vertices per rect (BL BR TR TL): Nrect×4
+        vx_q = [cx_all-hx_all, cx_all+hx_all, cx_all+hx_all, cx_all-hx_all];
+        vy_q = [cy_all-hy_all, cy_all-hy_all, cy_all+hy_all, cy_all+hy_all];
+        verts_q   = [reshape(vx_q', [], 1), reshape(vy_q', [], 1)];  % (Nrect*4)×2
+        faces_q   = reshape(1:Nrect*4, 4, Nrect)';                   % Nrect×4
+        fcolors_q = cmap(cidx_all(idx_rect), :);                      % Nrect×3 RGB per face
+        patch(ax, 'Faces', faces_q, 'Vertices', verts_q, ...
+              'FaceVertexCData', fcolors_q, ...
+              'FaceColor', 'flat', 'EdgeColor', 'none');
+    end
+
+    % ---- Winding outline overlays (one patch per winding, not per filament) ----
+    if size(fil,2) >= 6 && ~isempty(winding_colors)
+        winding_idx_col = round(fil(:,6));
+        unique_windings = unique(winding_idx_col);
+        for w = unique_windings(:)'
+            if w < 1 || w > numel(winding_colors), continue; end
+            ec         = winding_colors{w};
+            mask_w     = (winding_idx_col == w);
+            fil_w      = fil(mask_w, :);
+            is_round_w = is_round(mask_w);
+            idx_r_w    = find(is_round_w);
+            idx_q_w    = find(~is_round_w);
+            % Round outlines
+            if ~isempty(idx_r_w)
+                Nr_w  = numel(idx_r_w);
+                R_w   = sqrt(fil_w(idx_r_w,3) .* fil_w(idx_r_w,4)) / 2;
+                vx_w  = bsxfun(@plus, fil_w(idx_r_w,1), bsxfun(@times, R_w, cos(theta)));
+                vy_w  = bsxfun(@plus, fil_w(idx_r_w,2), bsxfun(@times, R_w, sin(theta)));
+                vts_w = [reshape(vx_w', [], 1), reshape(vy_w', [], 1)];
+                fcs_w = reshape(1:Nr_w*Nv, Nv, Nr_w)';
+                patch(ax, 'Faces', fcs_w, 'Vertices', vts_w, ...
+                      'FaceColor', 'none', 'EdgeColor', ec, 'LineWidth', 0.5);
+            end
+            % Rect outlines
+            if ~isempty(idx_q_w)
+                Nq_w  = numel(idx_q_w);
+                hx_w  = fil_w(idx_q_w,3) / 2;
+                hy_w  = fil_w(idx_q_w,4) / 2;
+                cx_w  = fil_w(idx_q_w,1);
+                cy_w  = fil_w(idx_q_w,2);
+                vx_w  = [cx_w-hx_w, cx_w+hx_w, cx_w+hx_w, cx_w-hx_w];
+                vy_w  = [cy_w-hy_w, cy_w-hy_w, cy_w+hy_w, cy_w+hy_w];
+                vts_w = [reshape(vx_w', [], 1), reshape(vy_w', [], 1)];
+                fcs_w = reshape(1:Nq_w*4, 4, Nq_w)';
+                patch(ax, 'Faces', fcs_w, 'Vertices', vts_w, ...
+                      'FaceColor', 'none', 'EdgeColor', ec, 'LineWidth', 0.5);
+            end
+        end
+    end
+
+    t_filament_s = toc(t_filament_start);
+
+    % ========== TIMING: Boundary, legend, colorbar ==========
+    t_decor_start = tic;
 
     % Draw winding window boundary if available
     if isfield(geom, 'window_meta') && isstruct(geom.window_meta)
@@ -133,6 +189,13 @@ function plot_current_density(geom, results)
     catch
         caxis([0 Jmax]);
     end
+
+    t_decor_s = toc(t_decor_start);
+
+    % ========== TIMING: Print summary ==========
+    t_total_s = t_filament_s + t_decor_s;
+    fprintf('[VIZ_CURR] filament_loop=%.3fs, decorations=%.3fs, total=%.3fs\n', ...
+        t_filament_s, t_decor_s, t_total_s);
 
     hold(ax, 'off');
 end
