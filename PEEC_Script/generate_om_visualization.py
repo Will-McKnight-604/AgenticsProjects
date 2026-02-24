@@ -872,16 +872,17 @@ def build_magnetic_from_config(config):
                 else:
                     per_section_turns_alignment.append(turns_alignment)
 
+            # base_coil must only contain schema-valid root coil fields:
+            # bobbin and functionalDescription. Alignment/orientation fields
+            # are NOT valid at the coil root level per MAS schema — they belong
+            # inside sectionsDescription entries. Passing them at root causes
+            # C++ nlohmann::json type errors during deserialization.
             base_coil = {
                 'bobbin': bobbin,
                 'functionalDescription': coil_func,
-                'layersOrientation': layers_orientation,
-                'sectionAlignment': section_alignment,
-                'turnsAlignment': turns_alignment
             }
 
             # Use three-step winding: wind_by_sections → wind_by_layers → wind_by_turns
-            # This ensures sectionAlignment is applied (pm.wind() ignores it).
             insul_thick_val = insulation_thickness if insulation_thickness > 0 else 0.0
 
             def sections_once(insul):
@@ -902,32 +903,63 @@ def build_magnetic_from_config(config):
                 else:
                     raise
 
-            # Apply per-section turnsAlignment before wind_by_layers
-            # The coil now has sectionsDescription — set turnsAlignment as array
-            if per_section_turns_alignment:
-                coil_tmp['turnsAlignment'] = per_section_turns_alignment
-            coil_tmp['layersOrientation'] = layers_orientation
-            coil_tmp['sectionAlignment'] = section_alignment
+            # Inject alignment into each sectionsDescription entry before
+            # calling wind_by_layers. Per MAS schema:
+            #   section.layersOrientation: "contiguous" | "overlapping"
+            #   section.layersAlignment:   "inner or top" | "outer or bottom" | "spread" | "centered"
+            # wind_by_layers reads these from the section objects, not from
+            # coil-level fields.
+            sections_desc = coil_tmp.get('sectionsDescription', [])
+            if isinstance(sections_desc, list):
+                for i, sec in enumerate(sections_desc):
+                    if not isinstance(sec, dict):
+                        continue
+                    # Apply per-section turns alignment if available, else global
+                    sec_ta = (per_section_turns_alignment[i]
+                              if i < len(per_section_turns_alignment)
+                              else turns_alignment)
+                    sec['layersOrientation'] = layers_orientation
+                    sec['layersAlignment'] = sec_ta
+                coil_tmp['sectionsDescription'] = sections_desc
 
             try:
+                print(
+                    f'[VIZ] wind_by_layers: sections={len(sections_desc)}, '
+                    f'layersOrientation={layers_orientation!r}, '
+                    f'layersAlignment={turns_alignment!r}',
+                    file=sys.stderr,
+                )
                 coil_tmp = ensure_dict(pm.wind_by_layers(coil_tmp, {}, 0.0))
                 if isinstance(coil_tmp, str):
                     raise RuntimeError(coil_tmp)
             except Exception as e:
                 print(f'NOTE: wind_by_layers failed ({e}), '
                       f'falling back to pm.wind()', file=sys.stderr)
-                # Fallback to pm.wind() which does all steps internally
+                # pm.wind() is the all-in-one function; it accepts layersOrientation
+                # and turnsAlignment at the coil level (per its own docstring).
+                fallback_coil = {
+                    'bobbin': bobbin,
+                    'functionalDescription': coil_func,
+                    'layersOrientation': layers_orientation,
+                    'turnsAlignment': turns_alignment,
+                }
                 coil_tmp = ensure_dict(pm.wind(
-                    base_coil, 1, proportions, section_order, []
+                    fallback_coil, 1, proportions, section_order, []
                 ))
                 if isinstance(coil_tmp, str):
                     raise RuntimeError(coil_tmp)
 
             if not coil_tmp.get('turnsDescription'):
-                coil_tmp['turnsAlignment'] = per_section_turns_alignment or turns_alignment
-                coil_tmp['layersOrientation'] = layers_orientation
-                coil_tmp['sectionAlignment'] = section_alignment
                 coil_tmp = ensure_dict(pm.wind_by_turns(coil_tmp))
+
+            # delimit_and_compact generates additionalCoordinates for toroidal
+            # turns (outer-edge positions), which the painter needs to draw
+            # turns on both inner and outer edges of the toroid cross-section.
+            try:
+                coil_tmp = ensure_dict(pm.delimit_and_compact(coil_tmp))
+            except Exception as e_dc:
+                print(f'NOTE: delimit_and_compact skipped: {e_dc}', file=sys.stderr)
+
             mag_complete['coil'] = coil_tmp
             wind_meta['api_wind_success'] = True
             wind_meta['winding_mode'] = 'api_wind'
@@ -1003,7 +1035,7 @@ def generate_visualization(config):
                     r_m = 0.5 * max(0.0, min(w_m, h_m))
                 except Exception:
                     continue
-                turns_meta.append({
+                turn_entry = {
                     'winding': str(t.get('winding', '')),
                     'x_m': x_m,
                     'y_m': y_m,
@@ -1014,7 +1046,20 @@ def generate_visualization(config):
                     'section': str(t.get('section', '')),
                     'layer': str(t.get('layer', '')),
                     'name': str(t.get('name', ''))
-                })
+                }
+                # Include additional coordinates (outer-edge positions for toroids)
+                add_coords = t.get('additionalCoordinates')
+                if add_coords and isinstance(add_coords, list):
+                    add_list = []
+                    for ac in add_coords:
+                        if isinstance(ac, (list, tuple)) and len(ac) >= 2:
+                            add_list.append({
+                                'x_m': float(ac[0]),
+                                'y_m': float(ac[1])
+                            })
+                    if add_list:
+                        turn_entry['additional_positions'] = add_list
+                turns_meta.append(turn_entry)
         except Exception:
             turns_meta = []
         meta = {

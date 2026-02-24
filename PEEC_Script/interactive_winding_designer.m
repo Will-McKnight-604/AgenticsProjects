@@ -9,6 +9,8 @@ function interactive_winding_designer(design_spec)
         design_spec = [];
     end
 
+    ensure_phase3_paths();
+
     close all;
 
     % Initialize global data structure
@@ -153,22 +155,21 @@ function interactive_winding_designer(design_spec)
     data.excitation.sweep_mode = 'grid';               % 'nominal' | 'corners' | 'grid'
     data.excitation.duty_mode = 'derived';             % 'derived' | 'manual'
     data.excitation.manual_duty = 0.40;
-    data.excitation.line_scales = [0.90, 1.00, 1.10];
-    data.excitation.load_scales = [0.50, 0.75, 1.00];
+    data.excitation.line_scales = [0.90, 1.10];       % Vin_min and Vin_max
+    data.excitation.load_scales = [1.00];              % Imax only
+    data.excitation.conduction_mode = 'ccm+dcm';
     data.excitation.harmonic_energy_pct = 99.5;
     data.excitation.harmonic_max_order = 60;
     data.excitation.small_harmonic_pct = 1.0;
     data.excitation.small_harmonic_consecutive = 5;
     data.excitation.analysis_mode = 'hybrid';          % 'peec_only' | 'hybrid' | 'om_only'
     data.excitation.quality_preset = 'standard';       % 'fast' | 'standard' | 'high'
-    data.excitation.peec_refine_top_n = 6;             % worst ranked OM points to refine in PEEC
     data.excitation.peec_harmonic_cap = 24;            % 0 = no cap
-    data.excitation.prescreen_waveform_samples = 128;  % OM pre-screen waveform samples
-    data.excitation.prescreen_temperature_c = 25;
     data.excitation.use_cache = true;
     data.excitation.use_import = false;
-    data.excitation.profile_file = fullfile(pwd(), 'om_excitation_profile.json');
-    data.excitation.cache_file = fullfile(pwd(), 'om_excitation_cache.json');
+    data.excitation.profile_file = fullfile(get_local_script_dir(), 'om_excitation_profile.json');
+    data.excitation.cache_file = fullfile(get_local_script_dir(), 'om_excitation_cache.json');
+    data.solve_options = solver_option_profile('standard');
 
     % Apply design_spec if provided (from topology_wizard)
     if ~isempty(design_spec) && isstruct(design_spec)
@@ -443,6 +444,27 @@ function data = apply_design_spec(data, spec)
         fprintf('[DESIGN_SPEC] Applied recommendation fields: supplier=%d core=%d material=%d wireP=%d wireS=%d turns=%d/%d\n', ...
             supplier_applied, core_applied, material_applied, pri_wire_applied, sec_wire_applied, ...
             data.windings(1).n_turns, data.windings(min(2,data.n_windings)).n_turns);
+    end
+
+    % --- Core-loss method + Steinmetz pass-through from design_spec ---
+    if isfield(spec, 'core_loss') && isstruct(spec.core_loss)
+        cl = spec.core_loss;
+        if isfield(cl, 'method') && ~isempty(cl.method)
+            valid_methods = {'iGSE', 'i2GSE'};
+            if any(strcmp(valid_methods, cl.method))
+                data.core_loss_method = cl.method;
+                fprintf('[DESIGN_SPEC] Core-loss method set to: %s\n', cl.method);
+            end
+        end
+        if isfield(cl, 'k') && ~isempty(cl.k) && ...
+           isfield(cl, 'alpha') && ~isempty(cl.alpha) && ...
+           isfield(cl, 'beta') && ~isempty(cl.beta)
+            data.steinmetz.k     = double(cl.k);
+            data.steinmetz.alpha = double(cl.alpha);
+            data.steinmetz.beta  = double(cl.beta);
+            fprintf('[DESIGN_SPEC] Steinmetz from spec: k=%.4g alpha=%.4g beta=%.4g\n', ...
+                data.steinmetz.k, data.steinmetz.alpha, data.steinmetz.beta);
+        end
     end
 
     % --- MAS import: store full content for later reference ---
@@ -918,7 +940,8 @@ function build_gui(data)
     steinmetz_k_str = '';
     steinmetz_a_str = '';
     steinmetz_b_str = '';
-    if ~isempty(data.steinmetz.k)
+    steinmetz_available = ~isempty(data.steinmetz.k);
+    if steinmetz_available
         steinmetz_k_str = num2str(data.steinmetz.k, '%.4g');
         steinmetz_a_str = num2str(data.steinmetz.alpha, '%.4g');
         steinmetz_b_str = num2str(data.steinmetz.beta, '%.4g');
@@ -943,6 +966,14 @@ function build_gui(data)
               'Callback', @update_core_loss_method);
 
     % Steinmetz k, alpha, beta fields
+    if steinmetz_available
+        steinmetz_bg = [1 1 1];
+        steinmetz_tip = '';
+    else
+        steinmetz_bg = [1 1 0.85];
+        steinmetz_tip = 'No Steinmetz data for this material. Enter manually or select a ferrite.';
+    end
+
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'k:', ...
               'Position', [150 14 15 18], ...
@@ -953,6 +984,8 @@ function build_gui(data)
               'Position', [168 14 62 22], ...
               'Tag', 'steinmetz_k', ...
               'FontSize', 8, ...
+              'BackgroundColor', steinmetz_bg, ...
+              'TooltipString', steinmetz_tip, ...
               'Callback', @update_steinmetz_k);
 
     uicontrol('Parent', core_panel, 'Style', 'text', ...
@@ -965,6 +998,8 @@ function build_gui(data)
               'Position', [253 14 45 22], ...
               'Tag', 'steinmetz_alpha', ...
               'FontSize', 8, ...
+              'BackgroundColor', steinmetz_bg, ...
+              'TooltipString', steinmetz_tip, ...
               'Callback', @update_steinmetz_alpha);
 
     uicontrol('Parent', core_panel, 'Style', 'text', ...
@@ -977,6 +1012,8 @@ function build_gui(data)
               'Position', [321 14 45 22], ...
               'Tag', 'steinmetz_beta', ...
               'FontSize', 8, ...
+              'BackgroundColor', steinmetz_bg, ...
+              'TooltipString', steinmetz_tip, ...
               'Callback', @update_steinmetz_beta);
 
     % ========== CENTER PANEL: WINDING CONFIGURATION ==========
@@ -2330,6 +2367,7 @@ function select_material(src, ~)
     set(findobj(fig, 'Tag', 'material_info'), 'String', get_material_info_text(data));
 
     % Auto-fill Steinmetz coefficients for new material
+    steinmetz_fields = {'steinmetz_k', 'steinmetz_alpha', 'steinmetz_beta'};
     try
         [sk, sa, sb] = data.api.get_steinmetz_coefficients(data.selected_material, data.f);
         if ~isempty(sk)
@@ -2339,13 +2377,19 @@ function select_material(src, ~)
             set(findobj(fig, 'Tag', 'steinmetz_k'), 'String', num2str(sk, '%.4g'));
             set(findobj(fig, 'Tag', 'steinmetz_alpha'), 'String', num2str(sa, '%.4g'));
             set(findobj(fig, 'Tag', 'steinmetz_beta'), 'String', num2str(sb, '%.4g'));
+            for fi = 1:numel(steinmetz_fields)
+                h = findobj(fig, 'Tag', steinmetz_fields{fi});
+                set(h, 'BackgroundColor', [1 1 1], 'TooltipString', '');
+            end
         else
             data.steinmetz.k = [];
             data.steinmetz.alpha = [];
             data.steinmetz.beta = [];
-            set(findobj(fig, 'Tag', 'steinmetz_k'), 'String', '');
-            set(findobj(fig, 'Tag', 'steinmetz_alpha'), 'String', '');
-            set(findobj(fig, 'Tag', 'steinmetz_beta'), 'String', '');
+            no_data_tip = 'No Steinmetz data for this material. Enter manually or select a ferrite.';
+            for fi = 1:numel(steinmetz_fields)
+                h = findobj(fig, 'Tag', steinmetz_fields{fi});
+                set(h, 'String', '', 'BackgroundColor', [1 1 0.85], 'TooltipString', no_data_tip);
+            end
         end
     catch
     end
@@ -2684,6 +2728,7 @@ function update_steinmetz_k(src, ~)
     val = str2double(get(src, 'String'));
     if ~isnan(val) && val > 0
         data.steinmetz.k = val;
+        set(src, 'BackgroundColor', [1 1 1], 'TooltipString', '');
     end
     guidata(fig, data);
 end
@@ -2694,6 +2739,7 @@ function update_steinmetz_alpha(src, ~)
     val = str2double(get(src, 'String'));
     if ~isnan(val) && val > 0
         data.steinmetz.alpha = val;
+        set(src, 'BackgroundColor', [1 1 1], 'TooltipString', '');
     end
     guidata(fig, data);
 end
@@ -2704,6 +2750,7 @@ function update_steinmetz_beta(src, ~)
     val = str2double(get(src, 'String'));
     if ~isnan(val) && val > 0
         data.steinmetz.beta = val;
+        set(src, 'BackgroundColor', [1 1 1], 'TooltipString', '');
     end
     guidata(fig, data);
 end
@@ -3049,9 +3096,8 @@ function visualize_openmagnetics(data, ax)
         fprintf('[OM_VIZ] Config built: core=%s, material=%s, windings=%d\n', ...
             config.core_shape, config.material, length(config.windings));
 
-        % Write config to temp JSON file
-        % Use pwd for paths - avoids MSYS/Windows path mangling in Octave
-        script_dir = pwd();
+        % Write config to temp JSON file near this script file.
+        script_dir = get_local_script_dir();
         config_file = fullfile(script_dir, 'om_viz_config.json');
         svg_file = fullfile(script_dir, 'om_visualization.svg');
         meta_file = fullfile(script_dir, 'om_visualization_meta.json');
@@ -3070,7 +3116,7 @@ function visualize_openmagnetics(data, ax)
         fclose(fid);
         fprintf('[OM_VIZ] Config written to: %s\n', config_file);
 
-        % Call Python script - use relative paths to avoid MSYS/Windows path mangling
+        % Call Python script with absolute paths.
         py_script_name = 'generate_om_visualization.py';
         config_file_name = 'om_viz_config.json';
         
@@ -3082,7 +3128,7 @@ function visualize_openmagnetics(data, ax)
         python_cmd = 'python';
         venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
         if exist(venv_python, 'file')
-            python_cmd = ['"' strrep(venv_python, '\', '/') '"'];
+            python_cmd = ['"' normalize_shell_path(venv_python) '"'];
         end
 
         % Add stderr redirection (2>&1) to capture ModuleNotFoundError
@@ -3097,7 +3143,7 @@ function visualize_openmagnetics(data, ax)
             end
         end
 
-        [status, output] = system(cmd);
+        [status, output] = run_system_in_dir(script_dir, cmd);
         
         % Check for module errors (ImportError, ModuleNotFoundError, or "No module named")
         is_module_error = ~isempty(strfind(output, 'ModuleNotFoundError')) || ...
@@ -3108,7 +3154,7 @@ function visualize_openmagnetics(data, ax)
         if status ~= 0 && is_module_error && ispc
             fprintf('[OM_VIZ] Standard python failed. Trying Windows Python Launcher (py)...\n');
             cmd_fallback = sprintf('py "%s" "%s" 2>&1', py_script_name, config_file_name);
-            [status_fb, output_fb] = system(cmd_fallback);
+            [status_fb, output_fb] = run_system_in_dir(script_dir, cmd_fallback);
             if status_fb == 0 && ~isempty(strfind(output_fb, 'OK'))
                 status = status_fb;
                 output = output_fb;
@@ -3136,7 +3182,7 @@ function visualize_openmagnetics(data, ax)
                   
                  fprintf('[OM_VIZ] Trying alternative python: %s\n', p);
                  cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script_name, config_file_name);
-                 [status_alt, output_alt] = system(cmd_alt);
+                 [status_alt, output_alt] = run_system_in_dir(script_dir, cmd_alt);
                  if status_alt == 0 && ~isempty(strfind(output_alt, 'OK'))
                      status = status_alt;
                      output = output_alt;
@@ -3605,8 +3651,23 @@ end
 % RUN ANALYSIS (Issue #1 FIX: use layout positions)
 % ===============================================================
 
-function run_analysis(~, ~)
-    fig = gcbf;
+function run_analysis(src, ~)
+    fig = [];
+    if nargin >= 1 && ~isempty(src) && ishandle(src)
+        fig = ancestor(src, 'figure');
+    end
+    if isempty(fig) || ~ishandle(fig)
+        fig = gcbf;
+    end
+    if isempty(fig) || ~ishandle(fig)
+        figs = findall(0, 'Type', 'figure', 'Name', 'Interactive Transformer Design Tool');
+        if ~isempty(figs)
+            fig = figs(1);
+        end
+    end
+    if isempty(fig) || ~ishandle(fig)
+        error('run_analysis: could not resolve parent figure');
+    end
     data = guidata(fig);
 
     fprintf('\n=== RUNNING ANALYSIS ===\n');
@@ -3620,6 +3681,7 @@ function run_analysis(~, ~)
 
     ex_cfg = resolve_excitation_config(data);
     [ex_cfg, quality_meta] = apply_excitation_quality_preset(ex_cfg);
+    solve_options = resolve_solve_options(data, ex_cfg.quality_preset);
 
     analysis_meta = struct();
     if strcmp(ex_cfg.source, 'converter')
@@ -3645,14 +3707,13 @@ function run_analysis(~, ~)
     analysis_meta.analysis_mode = ex_cfg.analysis_mode;
     analysis_meta.quality_preset = ex_cfg.quality_preset;
     analysis_meta.quality_summary = quality_meta.summary;
-    analysis_meta.prescreen_used = false;
-    analysis_meta.prescreen_fallback_used = false;
-    analysis_meta.prescreen_fallback_reason = '';
-    analysis_meta.prescreen_summary = '';
-    analysis_meta.prescreen_scored_points = 0;
-    analysis_meta.prescreen_selected_points = 0;
-    analysis_meta.peec_refine_top_n = ex_cfg.peec_refine_top_n;
     analysis_meta.peec_harmonic_cap = ex_cfg.peec_harmonic_cap;
+    analysis_meta.solve_mode = solve_options.mode;
+    analysis_meta.target_rel_error_loss = solve_options.target_rel_error_loss;
+    analysis_meta.target_rel_error_llk = solve_options.target_rel_error_llk;
+    analysis_meta.runtime_cap_s = solve_options.runtime_cap_s;
+    analysis_meta.cap_behavior = solve_options.cap_behavior;
+    analysis_meta.solve_options = solve_options;
 
     if strcmp(analysis_meta.requested_source, 'om')
         try
@@ -3699,8 +3760,44 @@ function run_analysis(~, ~)
     fprintf('\nBuilding PEEC geometry with wire shapes...\n');
     fprintf('  Total conductors: %d\n', size(all_conductors, 1));
 
-    geom = peec_build_geometry(all_conductors, data.sigma, data.mu0, ...
-        data.Nx, data.Ny, all_winding_map, all_wire_shapes);
+    mesh_meta = struct('converged', true, 'stop_reason', 'single_build', ...
+        'runtime_s', 0, 'iterations', 1, 'rel_error_loss', NaN, ...
+        'rel_error_llk', NaN, 'Nx_final', data.Nx, 'Ny_final', data.Ny, ...
+        'uncertainty_pct', NaN);
+    try
+        [geom, mesh_meta] = adaptive_refine(data, all_conductors, ...
+            all_winding_map, all_wire_shapes, solve_options);
+    catch ME
+        fprintf('[ANALYSIS] Adaptive meshing failed, using fixed mesh (%dx%d): %s\n', ...
+            data.Nx, data.Ny, ME.message);
+        geom = peec_build_geometry(all_conductors, data.sigma, data.mu0, ...
+            data.Nx, data.Ny, all_winding_map, all_wire_shapes, solve_options);
+        mesh_meta.stop_reason = 'adaptive_fallback_fixed_mesh';
+        mesh_meta.converged = false;
+    end
+
+    % Attach window/geometry context to geom for use in density plots
+    if isstruct(geom_meta)
+        geom.window_meta = geom_meta;
+    end
+    % Also attach winding colors and names from data
+    if isfield(data, 'winding_colors') && ~isempty(data.winding_colors)
+        geom.winding_colors = data.winding_colors;
+    end
+    if isfield(data, 'windings') && ~isempty(data.windings)
+        geom.winding_names = {data.windings.name};
+    end
+
+    analysis_meta.mesh_meta = mesh_meta;
+    analysis_meta.mesh_converged = mesh_meta.converged;
+    analysis_meta.mesh_stop_reason = mesh_meta.stop_reason;
+    analysis_meta.mesh_runtime_s = mesh_meta.runtime_s;
+    analysis_meta.mesh_rel_error_loss = mesh_meta.rel_error_loss;
+    analysis_meta.mesh_rel_error_llk = mesh_meta.rel_error_llk;
+    analysis_meta.mesh_Nx = geom.Nx;
+    analysis_meta.mesh_Ny = geom.Ny;
+    analysis_meta.mesh_cells = geom.Nf;
+    analysis_meta.uncertainty_pct = mesh_meta.uncertainty_pct;
 
     fprintf('  Wire shapes: %d conductors\n', length(geom.wire_shapes));
     for i = 1:min(3, length(geom.wire_shapes))
@@ -3736,33 +3833,25 @@ function run_analysis(~, ~)
     run_opts.selected_indices = [];
     run_opts.analysis_mode = ex_cfg.analysis_mode;
     run_opts.quality_preset = ex_cfg.quality_preset;
-
-    use_prescreen = strcmp(ex_cfg.source, 'converter') && strcmp(analysis_meta.used_source, 'om') ...
-        && ~strcmp(ex_cfg.analysis_mode, 'peec_only');
-    if use_prescreen
-        try
-            [ranked_indices, pres_meta] = run_om_prescreen_for_profile(data, ex_cfg, excitation_profile);
-            top_n = min(max(1, ex_cfg.peec_refine_top_n), numel(ranked_indices));
-            run_opts.selected_indices = ranked_indices(1:top_n);
-            analysis_meta.prescreen_used = true;
-            analysis_meta.prescreen_summary = pres_meta.summary;
-            analysis_meta.prescreen_scored_points = pres_meta.scored_points;
-            analysis_meta.prescreen_selected_points = numel(run_opts.selected_indices);
-            fprintf('[ANALYSIS] OM pre-screen selected %d/%d operating points for PEEC refine\n', ...
-                numel(run_opts.selected_indices), pres_meta.scored_points);
-
-            if strcmp(ex_cfg.analysis_mode, 'om_only')
-                % OM-only mode is represented as a top-1 PEEC refine so result plots
-                % remain available while runtime is minimized.
-                run_opts.selected_indices = run_opts.selected_indices(1);
-                analysis_meta.analysis_mode = 'om_only(top1_peec)';
-            end
-        catch ME
-            analysis_meta.prescreen_fallback_used = true;
-            analysis_meta.prescreen_fallback_reason = ME.message;
-            fprintf('[ANALYSIS] OM pre-screen failed, running PEEC on full set: %s\n', ME.message);
-        end
+    run_opts.solve_options = solve_options;
+    run_opts.harmonic_energy_pct = ex_cfg.harmonic_energy_pct;
+    run_opts.small_harmonic_pct = ex_cfg.small_harmonic_pct;
+    run_opts.small_harmonic_consecutive = ex_cfg.small_harmonic_consecutive;
+    run_opts.enable_adaptive_harmonic_truncation = logical(get_struct_numeric(solve_options, 'enable_adaptive_harmonic_truncation', 1));
+    run_opts.harmonic_min_keep = max(1, round(get_struct_numeric(solve_options, 'harmonic_min_keep', 1)));
+    run_opts.enable_op_early_stop = logical(get_struct_numeric(solve_options, 'enable_op_early_stop', 1));
+    run_opts.op_early_stop_window = max(1, round(get_struct_numeric(solve_options, 'op_early_stop_window', 3)));
+    run_opts.op_early_stop_tol_pct = max(0, get_struct_numeric(solve_options, 'op_early_stop_tol_pct', 0.25));
+    run_opts.op_early_stop_min_points = max(1, round(get_struct_numeric(solve_options, 'op_early_stop_min_points', 4)));
+    remaining_cap_s = solve_options.runtime_cap_s;
+    if isfinite(mesh_meta.runtime_s)
+        remaining_cap_s = max(0.25, solve_options.runtime_cap_s - mesh_meta.runtime_s);
     end
+    run_opts.runtime_cap_s = remaining_cap_s;
+    run_opts.cap_behavior = solve_options.cap_behavior;
+    run_opts.mesh_Nx = geom.Nx;
+    run_opts.mesh_Ny = geom.Ny;
+    analysis_meta.runtime_cap_remaining_s = remaining_cap_s;
 
     analysis_run = run_peec_with_excitation_profile( ...
         data, geom, all_conductors, all_winding_map, excitation_profile, run_opts);
@@ -3795,6 +3884,42 @@ function run_analysis(~, ~)
     if isfield(analysis_run, 'best_total_loss')
         analysis_meta.best_total_loss_w = analysis_run.best_total_loss;
     end
+    if isfield(analysis_run, 'solve_meta') && isstruct(analysis_run.solve_meta)
+        sm = analysis_run.solve_meta;
+        analysis_meta.runtime_peec_s = get_struct_numeric(sm, 'runtime_s', NaN);
+        if isfinite(analysis_meta.runtime_peec_s)
+            analysis_meta.runtime_s = analysis_meta.runtime_peec_s;
+        else
+            analysis_meta.runtime_s = 0;
+        end
+        if isfinite(analysis_meta.mesh_runtime_s)
+            analysis_meta.runtime_s = analysis_meta.runtime_s + analysis_meta.mesh_runtime_s;
+        end
+        analysis_meta.stop_reason = get_struct_string(sm, 'stop_reason', 'completed');
+        analysis_meta.converged = ~logical(get_struct_numeric(sm, 'cap_hit', 0));
+        analysis_meta.cap_hit = logical(get_struct_numeric(sm, 'cap_hit', 0));
+        analysis_meta.cap_warning = get_struct_string(sm, 'warning', '');
+        analysis_meta.rel_error_loss = get_struct_numeric(sm, 'rel_error_loss', analysis_meta.mesh_rel_error_loss);
+        analysis_meta.rel_error_llk = get_struct_numeric(sm, 'rel_error_llk', analysis_meta.mesh_rel_error_llk);
+        unc_prev = analysis_meta.uncertainty_pct;
+        unc_new = get_struct_numeric(sm, 'uncertainty_pct', unc_prev);
+        if ~isfinite(unc_prev)
+            analysis_meta.uncertainty_pct = unc_new;
+        elseif ~isfinite(unc_new)
+            analysis_meta.uncertainty_pct = unc_prev;
+        else
+            analysis_meta.uncertainty_pct = max(unc_prev, unc_new);
+        end
+    else
+        analysis_meta.converged = analysis_meta.mesh_converged;
+        analysis_meta.stop_reason = analysis_meta.mesh_stop_reason;
+        analysis_meta.runtime_s = analysis_meta.mesh_runtime_s;
+        analysis_meta.runtime_peec_s = NaN;
+        analysis_meta.cap_hit = false;
+        analysis_meta.cap_warning = '';
+        analysis_meta.rel_error_loss = analysis_meta.mesh_rel_error_loss;
+        analysis_meta.rel_error_llk = analysis_meta.mesh_rel_error_llk;
+    end
 
     % Re-write dump with final operating-point selection and case metadata.
     try
@@ -3806,7 +3931,7 @@ function run_analysis(~, ~)
     % --- Compute magnetic parameters (Lm, Llk, Bpk, core loss) ---
     try
         fprintf('\n[ANALYSIS] Computing magnetic parameters (Lm, Llk, Bpk, core loss)...\n');
-        mag_results = compute_magnetic_params(data, geom);
+        mag_results = compute_magnetic_params(data, geom, solve_options);
         analysis_run.mag_results = mag_results;
         if mag_results.valid
             fprintf('  Lm = %.2f uH (%s), Llk_pri = %.3f uH (PEEC), k = %.4f\n', ...
@@ -3839,8 +3964,23 @@ function run_analysis(~, ~)
             if isfield(rec, 'Llk_uH'), mkf.Llk_uH = rec.Llk_uH; else mkf.Llk_uH = 0; end
             if isfield(rec, 'B_peak_mT'), mkf.B_peak_mT = rec.B_peak_mT; else mkf.B_peak_mT = 0; end
             if isfield(rec, 'B_pp_mT'), mkf.B_pp_mT = rec.B_pp_mT; else mkf.B_pp_mT = 0; end
-            if isfield(rec, 'core_loss_W'), mkf.core_loss_W = rec.core_loss_W; else mkf.core_loss_W = 0; end
-            if isfield(rec, 'winding_loss_W'), mkf.winding_loss_W = rec.winding_loss_W; else mkf.winding_loss_W = 0; end
+            % Support both field name conventions from recommendation generator:
+            %   core_loss_W   (from operating_point_outputs promotion)
+            %   core_losses_w (from compute_losses_for_recommendation top-level)
+            if isfield(rec, 'core_loss_W')
+                mkf.core_loss_W = rec.core_loss_W;
+            elseif isfield(rec, 'core_losses_w')
+                mkf.core_loss_W = rec.core_losses_w;
+            else
+                mkf.core_loss_W = 0;
+            end
+            if isfield(rec, 'winding_loss_W')
+                mkf.winding_loss_W = rec.winding_loss_W;
+            elseif isfield(rec, 'winding_losses_w')
+                mkf.winding_loss_W = rec.winding_losses_w;
+            else
+                mkf.winding_loss_W = 0;
+            end
             analysis_run.mkf_ref = mkf;
         end
     end
@@ -3864,6 +4004,23 @@ function source = resolve_analysis_source(data)
     end
 end
 
+function ensure_phase3_paths()
+    persistent phase3_paths_added;
+    if ~isempty(phase3_paths_added) && phase3_paths_added
+        return;
+    end
+
+    here = fileparts(mfilename('fullpath'));
+    subdirs = {'validation', 'mesh', 'corrections', 'physics', 'kernels', 'litz'};
+    for i = 1:numel(subdirs)
+        p = fullfile(here, subdirs{i});
+        if exist(p, 'dir')
+            addpath(p);
+        end
+    end
+    phase3_paths_added = true;
+end
+
 function ex_cfg = resolve_excitation_config(data)
     ex_cfg = struct();
     ex_cfg.source = 'manual';
@@ -3872,22 +4029,19 @@ function ex_cfg = resolve_excitation_config(data)
     ex_cfg.sweep_mode = 'grid';
     ex_cfg.duty_mode = 'derived';
     ex_cfg.manual_duty = 0.40;
-    ex_cfg.line_scales = [0.90, 1.00, 1.10];
-    ex_cfg.load_scales = [0.50, 0.75, 1.00];
+    ex_cfg.line_scales = [0.90, 1.10];
+    ex_cfg.load_scales = [1.00];
     ex_cfg.harmonic_energy_pct = 99.5;
     ex_cfg.harmonic_max_order = 60;
     ex_cfg.small_harmonic_pct = 1.0;
     ex_cfg.small_harmonic_consecutive = 5;
     ex_cfg.analysis_mode = 'hybrid';
     ex_cfg.quality_preset = 'standard';
-    ex_cfg.peec_refine_top_n = 6;
     ex_cfg.peec_harmonic_cap = 24;
-    ex_cfg.prescreen_waveform_samples = 128;
-    ex_cfg.prescreen_temperature_c = 25;
     ex_cfg.use_cache = true;
     ex_cfg.use_import = false;
-    ex_cfg.profile_file = fullfile(pwd(), 'om_excitation_profile.json');
-    ex_cfg.cache_file = fullfile(pwd(), 'om_excitation_cache.json');
+    ex_cfg.profile_file = fullfile(get_local_script_dir(), 'om_excitation_profile.json');
+    ex_cfg.cache_file = fullfile(get_local_script_dir(), 'om_excitation_cache.json');
 
     if isfield(data, 'excitation') && isstruct(data.excitation)
         ex_user = data.excitation;
@@ -3904,10 +4058,10 @@ function ex_cfg = resolve_excitation_config(data)
         ex_cfg.source = 'manual';
     end
     if ~ischar(ex_cfg.profile_file) && ~isstring(ex_cfg.profile_file)
-        ex_cfg.profile_file = fullfile(pwd(), 'om_excitation_profile.json');
+        ex_cfg.profile_file = fullfile(get_local_script_dir(), 'om_excitation_profile.json');
     end
     if ~ischar(ex_cfg.cache_file) && ~isstring(ex_cfg.cache_file)
-        ex_cfg.cache_file = fullfile(pwd(), 'om_excitation_cache.json');
+        ex_cfg.cache_file = fullfile(get_local_script_dir(), 'om_excitation_cache.json');
     end
 
     if ~ischar(ex_cfg.analysis_mode) && ~isstring(ex_cfg.analysis_mode)
@@ -3926,13 +4080,7 @@ function ex_cfg = resolve_excitation_config(data)
         ex_cfg.quality_preset = 'standard';
     end
 
-    ex_cfg.peec_refine_top_n = max(1, round(double(ex_cfg.peec_refine_top_n)));
     ex_cfg.peec_harmonic_cap = max(0, round(double(ex_cfg.peec_harmonic_cap)));
-    ex_cfg.prescreen_waveform_samples = max(64, round(double(ex_cfg.prescreen_waveform_samples)));
-    ex_cfg.prescreen_temperature_c = double(ex_cfg.prescreen_temperature_c);
-    if isnan(ex_cfg.prescreen_temperature_c)
-        ex_cfg.prescreen_temperature_c = 25;
-    end
 end
 
 function [ex_cfg, preset_meta] = apply_excitation_quality_preset(ex_cfg)
@@ -3947,26 +4095,22 @@ function [ex_cfg, preset_meta] = apply_excitation_quality_preset(ex_cfg)
             ex_cfg.harmonic_max_order = 24;
             ex_cfg.small_harmonic_pct = 2.0;
             ex_cfg.small_harmonic_consecutive = 3;
-            ex_cfg.peec_refine_top_n = min(ex_cfg.peec_refine_top_n, 3);
             if ex_cfg.peec_harmonic_cap <= 0 || ex_cfg.peec_harmonic_cap > 12
                 ex_cfg.peec_harmonic_cap = 12;
             end
-            ex_cfg.prescreen_waveform_samples = min(max(ex_cfg.prescreen_waveform_samples, 64), 96);
-            preset_meta.summary = 'Fast preset: top-3 PEEC refine, harmonic cap 12';
+            preset_meta.summary = 'Fast preset: harmonic cap 12';
 
         case 'high'
             ex_cfg.harmonic_energy_pct = 99.8;
             ex_cfg.harmonic_max_order = 100;
             ex_cfg.small_harmonic_pct = 0.5;
             ex_cfg.small_harmonic_consecutive = 8;
-            ex_cfg.peec_refine_top_n = max(ex_cfg.peec_refine_top_n, 10);
             if ex_cfg.peec_harmonic_cap <= 0
                 ex_cfg.peec_harmonic_cap = 0;
             else
                 ex_cfg.peec_harmonic_cap = max(ex_cfg.peec_harmonic_cap, 40);
             end
-            ex_cfg.prescreen_waveform_samples = max(ex_cfg.prescreen_waveform_samples, 192);
-            preset_meta.summary = 'High preset: top-10 PEEC refine, dense harmonics';
+            preset_meta.summary = 'High preset: dense harmonics';
 
         otherwise
             ex_cfg.quality_preset = 'standard';
@@ -3974,12 +4118,76 @@ function [ex_cfg, preset_meta] = apply_excitation_quality_preset(ex_cfg)
             ex_cfg.harmonic_max_order = 60;
             ex_cfg.small_harmonic_pct = 1.0;
             ex_cfg.small_harmonic_consecutive = 5;
-            ex_cfg.peec_refine_top_n = min(max(ex_cfg.peec_refine_top_n, 4), 8);
             if ex_cfg.peec_harmonic_cap <= 0 || ex_cfg.peec_harmonic_cap > 24
                 ex_cfg.peec_harmonic_cap = 24;
             end
-            ex_cfg.prescreen_waveform_samples = min(max(ex_cfg.prescreen_waveform_samples, 96), 160);
-            preset_meta.summary = 'Standard preset: top-6 PEEC refine, harmonic cap 24';
+            preset_meta.summary = 'Standard preset: harmonic cap 24';
+    end
+end
+
+function solve_options = resolve_solve_options(data, quality_preset)
+    if nargin < 2 || isempty(quality_preset)
+        quality_preset = 'standard';
+    end
+    solve_options = solver_option_profile(char(quality_preset));
+
+    if isfield(data, 'solve_options') && isstruct(data.solve_options)
+        user_opts = data.solve_options;
+        fields = fieldnames(user_opts);
+        for i = 1:numel(fields)
+            solve_options.(fields{i}) = user_opts.(fields{i});
+        end
+    end
+
+    solve_options.mode = lower(strtrim(char(get_struct_string(solve_options, 'mode', char(quality_preset)))));
+    if ~any(strcmp(solve_options.mode, {'fast', 'standard', 'high', 'compatibility', 'legacy'}))
+        solve_options.mode = 'standard';
+    end
+    if strcmp(solve_options.mode, 'legacy')
+        solve_options.mode = 'compatibility';
+    end
+    solve_options.target_rel_error_loss = max(1e-4, get_struct_numeric(solve_options, 'target_rel_error_loss', 0.03));
+    solve_options.target_rel_error_llk = max(1e-4, get_struct_numeric(solve_options, 'target_rel_error_llk', 0.03));
+    solve_options.runtime_cap_s = max(0.5, get_struct_numeric(solve_options, 'runtime_cap_s', 8.0));
+    solve_options.max_refine_iters = max(1, round(get_struct_numeric(solve_options, 'max_refine_iters', 5)));
+    solve_options.cap_behavior = get_struct_string(solve_options, 'cap_behavior', 'best_so_far_warn');
+    solve_options.enable_surface_impedance_auto = logical(get_struct_numeric(solve_options, 'enable_surface_impedance_auto', 1));
+    solve_options.enable_exact_rect_kernel = logical(get_struct_numeric(solve_options, 'enable_exact_rect_kernel', 1));
+    solve_options.enable_end_turn_correction = logical(get_struct_numeric(solve_options, 'enable_end_turn_correction', 1));
+    solve_options.enable_geometry_cache = logical(get_struct_numeric(solve_options, 'enable_geometry_cache', 1));
+    solve_options.geometry_cache_entries = max(1, round(get_struct_numeric(solve_options, 'geometry_cache_entries', 3)));
+    solve_options.enable_solver_cache = logical(get_struct_numeric(solve_options, 'enable_solver_cache', 1));
+    solve_options.solver_cache_entries = max(1, round(get_struct_numeric(solve_options, 'solver_cache_entries', 8)));
+    solve_options.linear_solver = lower(strtrim(char(get_struct_string(solve_options, 'linear_solver', 'auto'))));
+    if ~any(strcmp(solve_options.linear_solver, {'auto', 'direct', 'gmres'}))
+        solve_options.linear_solver = 'auto';
+    end
+    solve_options.iter_min_size_for_use = max(16, round(get_struct_numeric(solve_options, 'iter_min_size_for_use', 220)));
+    solve_options.iter_tol = max(1e-10, get_struct_numeric(solve_options, 'iter_tol', 5e-7));
+    solve_options.iter_maxit = max(1, round(get_struct_numeric(solve_options, 'iter_maxit', 80)));
+    solve_options.iter_restart = max(0, round(get_struct_numeric(solve_options, 'iter_restart', 30)));
+    solve_options.preconditioner = lower(strtrim(char(get_struct_string(solve_options, 'preconditioner', 'jacobi'))));
+    if ~any(strcmp(solve_options.preconditioner, {'none', 'jacobi', 'ilu_sparse_drop'}))
+        solve_options.preconditioner = 'jacobi';
+    end
+    solve_options.precond_drop_tol = max(1e-8, get_struct_numeric(solve_options, 'precond_drop_tol', 5e-3));
+    solve_options.enable_iter_precond_cache = logical(get_struct_numeric(solve_options, 'enable_iter_precond_cache', 1));
+    solve_options.iter_precond_cache_entries = max(1, round(get_struct_numeric(solve_options, 'iter_precond_cache_entries', 6)));
+    solve_options.enable_adaptive_harmonic_truncation = logical(get_struct_numeric(solve_options, 'enable_adaptive_harmonic_truncation', 1));
+    solve_options.harmonic_min_keep = max(1, round(get_struct_numeric(solve_options, 'harmonic_min_keep', 1)));
+    solve_options.enable_op_early_stop = logical(get_struct_numeric(solve_options, 'enable_op_early_stop', 1));
+    solve_options.op_early_stop_window = max(1, round(get_struct_numeric(solve_options, 'op_early_stop_window', 3)));
+    solve_options.op_early_stop_tol_pct = max(0, get_struct_numeric(solve_options, 'op_early_stop_tol_pct', 0.25));
+    solve_options.op_early_stop_min_points = max(1, round(get_struct_numeric(solve_options, 'op_early_stop_min_points', 4)));
+    solve_options.adaptive_step_auto = logical(get_struct_numeric(solve_options, 'adaptive_step_auto', 1));
+    solve_options.adaptive_step_max = max(1, round(get_struct_numeric(solve_options, 'adaptive_step_max', 3)));
+    solve_options.adaptive_step_gain = get_struct_numeric(solve_options, 'adaptive_step_gain', 0.85);
+    solve_options.adaptive_step_relax = get_struct_numeric(solve_options, 'adaptive_step_relax', 0.45);
+
+    lock_std_targets = logical(get_struct_numeric(solve_options, 'lock_standard_targets', 1));
+    if strcmp(solve_options.mode, 'standard') && lock_std_targets
+        solve_options.target_rel_error_loss = 0.025;
+        solve_options.target_rel_error_llk = 0.025;
     end
 end
 
@@ -4043,7 +4251,7 @@ function [profile, meta] = generate_converter_excitation_profile(data, ex_cfg)
     profile = struct();
     meta = struct();
 
-    script_dir = pwd();
+    script_dir = get_local_script_dir();
     profile_path = char(ex_cfg.profile_file);
     if isempty(profile_path)
         profile_path = fullfile(script_dir, 'om_excitation_profile.json');
@@ -4123,6 +4331,7 @@ function [profile, meta] = generate_converter_excitation_profile(data, ex_cfg)
     fclose(fid);
 
     py_script_name = 'generate_om_excitation.py';
+    cfg_file_name = 'om_excitation_config.json';
     if ~exist(fullfile(script_dir, py_script_name), 'file')
         error('Python script "%s" not found in %s', py_script_name, script_dir);
     end
@@ -4130,18 +4339,18 @@ function [profile, meta] = generate_converter_excitation_profile(data, ex_cfg)
     python_cmd = 'python';
     venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
     if exist(venv_python, 'file')
-        python_cmd = ['"' venv_python '"'];
+        python_cmd = ['"' normalize_shell_path(venv_python) '"'];
     end
 
-    cmd = sprintf('%s "%s" "%s" 2>&1', python_cmd, py_script_name, 'om_excitation_config.json');
-    [status, output] = system(cmd);
+    cmd = sprintf('%s "%s" "%s" 2>&1', python_cmd, py_script_name, cfg_file_name);
+    [status, output] = run_system_in_dir(script_dir, cmd);
     is_module_error = ~isempty(strfind(output, 'ModuleNotFoundError')) || ...
                       ~isempty(strfind(output, 'ImportError')) || ...
                       ~isempty(strfind(output, 'No module named'));
 
     if status ~= 0 && is_module_error && ispc
-        cmd_fb = sprintf('py "%s" "%s" 2>&1', py_script_name, 'om_excitation_config.json');
-        [status_fb, output_fb] = system(cmd_fb);
+        cmd_fb = sprintf('py "%s" "%s" 2>&1', py_script_name, cfg_file_name);
+        [status_fb, output_fb] = run_system_in_dir(script_dir, cmd_fb);
         if status_fb == 0 && ~isempty(strfind(output_fb, 'OK'))
             status = status_fb;
             output = output_fb;
@@ -4157,8 +4366,9 @@ function [profile, meta] = generate_converter_excitation_profile(data, ex_cfg)
             if ~isempty(strfind(lower(p), 'octave')) || ~isempty(strfind(lower(p), 'usr\bin'))
                 continue;
             end
-            cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script_name, 'om_excitation_config.json');
-            [status_alt, output_alt] = system(cmd_alt);
+            p = strrep(p, '\', '/');
+            cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script_name, cfg_file_name);
+            [status_alt, output_alt] = run_system_in_dir(script_dir, cmd_alt);
             if status_alt == 0 && ~isempty(strfind(output_alt, 'OK'))
                 status = status_alt;
                 output = output_alt;
@@ -4198,179 +4408,6 @@ function [profile, meta] = generate_converter_excitation_profile(data, ex_cfg)
     meta.profile_path = profile_path;
 end
 
-function [ranked_indices, pres_meta] = run_om_prescreen_for_profile(data, ex_cfg, profile)
-    ranked_indices = [];
-    pres_meta = struct();
-    pres_meta.scored_points = 0;
-    pres_meta.summary = '';
-
-    ops = profile.operating_points;
-    if iscell(ops)
-        try
-            ops = [ops{:}];
-        catch
-            ops = struct([]);
-        end
-    end
-    if isempty(ops)
-        error('Excitation profile has no operating points to pre-screen');
-    end
-
-    script_dir = pwd();
-    om_cfg_file = fullfile(script_dir, 'om_viz_config_prescreen.json');
-    ex_profile_file = fullfile(script_dir, 'om_excitation_profile_for_prescreen.json');
-    pres_cfg_file = fullfile(script_dir, 'om_prescreen_config.json');
-    pres_out_file = fullfile(script_dir, 'om_prescreen_losses.json');
-
-    om_cfg = build_om_viz_config(data);
-    if isfield(om_cfg, 'output_svg')
-        om_cfg = rmfield(om_cfg, 'output_svg');
-    end
-    if isfield(om_cfg, 'output_meta')
-        om_cfg = rmfield(om_cfg, 'output_meta');
-    end
-
-    fid = fopen(om_cfg_file, 'w');
-    if fid == -1
-        error('Cannot write OM pre-screen config: %s', om_cfg_file);
-    end
-    fwrite(fid, jsonencode(om_cfg));
-    fclose(fid);
-
-    fid = fopen(ex_profile_file, 'w');
-    if fid == -1
-        error('Cannot write excitation profile for pre-screen: %s', ex_profile_file);
-    end
-    fwrite(fid, jsonencode(profile));
-    fclose(fid);
-
-    pres_cfg = struct();
-    pres_cfg.om_config_file = strrep(om_cfg_file, '\', '/');
-    pres_cfg.excitation_profile_file = strrep(ex_profile_file, '\', '/');
-    pres_cfg.output_file = strrep(pres_out_file, '\', '/');
-    pres_cfg.waveform_samples = ex_cfg.prescreen_waveform_samples;
-    pres_cfg.temperature_c = ex_cfg.prescreen_temperature_c;
-    pres_cfg.max_harmonics_for_waveform = ex_cfg.peec_harmonic_cap;
-    pres_cfg.default_frequency_hz = data.f;
-    pres_cfg.topology = '2-switch forward';
-
-    fid = fopen(pres_cfg_file, 'w');
-    if fid == -1
-        error('Cannot write pre-screen request file: %s', pres_cfg_file);
-    end
-    fwrite(fid, jsonencode(pres_cfg));
-    fclose(fid);
-
-    py_script_name = 'generate_om_prescreen_losses.py';
-    if ~exist(fullfile(script_dir, py_script_name), 'file')
-        error('Pre-screen python script "%s" not found in %s', py_script_name, script_dir);
-    end
-
-    python_cmd = 'python';
-    venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
-    if exist(venv_python, 'file')
-        python_cmd = ['"' venv_python '"'];
-    end
-
-    cfg_arg = strrep(pres_cfg_file, '\', '/');
-    cmd = sprintf('%s "%s" "%s" 2>&1', python_cmd, py_script_name, cfg_arg);
-    [status, output] = system(cmd);
-    is_module_error = ~isempty(strfind(output, 'ModuleNotFoundError')) || ...
-                      ~isempty(strfind(output, 'ImportError')) || ...
-                      ~isempty(strfind(output, 'No module named'));
-
-    if status ~= 0 && is_module_error && ispc
-        cmd_fb = sprintf('py "%s" "%s" 2>&1', py_script_name, cfg_arg);
-        [status_fb, output_fb] = system(cmd_fb);
-        if status_fb == 0 && ~isempty(strfind(output_fb, 'OK'))
-            status = status_fb;
-            output = output_fb;
-        end
-    end
-
-    if status ~= 0 && is_module_error && ispc
-        [~, py_paths_str] = system('where python');
-        py_paths = strsplit(strtrim(py_paths_str), char(10));
-        for i = 1:length(py_paths)
-            p = strtrim(py_paths{i});
-            if isempty(p); continue; end
-            if ~isempty(strfind(lower(p), 'octave')) || ~isempty(strfind(lower(p), 'usr\bin'))
-                continue;
-            end
-            cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script_name, cfg_arg);
-            [status_alt, output_alt] = system(cmd_alt);
-            if status_alt == 0 && ~isempty(strfind(output_alt, 'OK'))
-                status = status_alt;
-                output = output_alt;
-                break;
-            end
-        end
-    end
-
-    if status ~= 0 || isempty(strfind(strtrim(output), 'OK'))
-        error('OM pre-screen python failed (exit=%d): %s', status, strtrim(output));
-    end
-
-    if ~exist(pres_out_file, 'file')
-        error('OM pre-screen output file not found: %s', pres_out_file);
-    end
-    fid = fopen(pres_out_file, 'r');
-    if fid == -1
-        error('Cannot read OM pre-screen output file: %s', pres_out_file);
-    end
-    raw = fread(fid, '*char')';
-    fclose(fid);
-    pres_out = jsondecode(raw);
-
-    if ~isfield(pres_out, 'status') || ~strcmpi(char(pres_out.status), 'OK')
-        err_msg = 'unknown OM pre-screen error';
-        if isfield(pres_out, 'error')
-            err_msg = char(pres_out.error);
-        end
-        error('OM pre-screen status not OK: %s', err_msg);
-    end
-    if ~isfield(pres_out, 'ranked_indices') || isempty(pres_out.ranked_indices)
-        error('OM pre-screen returned no ranked operating points');
-    end
-
-    ranked = pres_out.ranked_indices;
-    if iscell(ranked)
-        tmp = zeros(1, numel(ranked));
-        for i = 1:numel(ranked)
-            if isnumeric(ranked{i})
-                tmp(i) = double(ranked{i});
-            else
-                tmp(i) = str2double(char(ranked{i}));
-            end
-            if isnan(tmp(i))
-                tmp(i) = 0;
-            end
-        end
-        ranked = tmp;
-    end
-    ranked = double(ranked(:)');
-    ranked = ranked(ranked >= 1 & ranked <= numel(ops));
-    ranked = unique(round(ranked), 'stable');
-    if isempty(ranked)
-        error('OM pre-screen ranking was empty after validation');
-    end
-
-    ranked_indices = ranked;
-    pres_meta.scored_points = numel(ops);
-    if isfield(pres_out, 'scored_operating_points')
-        pres_meta.scored_points = double(pres_out.scored_operating_points);
-        if isnan(pres_meta.scored_points) || pres_meta.scored_points <= 0
-            pres_meta.scored_points = numel(ops);
-        end
-    end
-    fallback_count = 0;
-    if isfield(pres_out, 'fallback_count')
-        fallback_count = double(pres_out.fallback_count);
-    end
-    pres_meta.summary = sprintf('OM pre-screen ranked %d points (fallback=%d)', ...
-        pres_meta.scored_points, fallback_count);
-end
-
 function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_template, winding_map, profile, run_opts)
     n_w = data.n_windings;
     winding_rdc = compute_winding_rdc_from_geometry(data, conductors_template, winding_map);
@@ -4390,6 +4427,18 @@ function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_
     if nargin < 6 || ~isstruct(run_opts)
         run_opts = struct();
     end
+
+    solve_options = struct();
+    if isfield(run_opts, 'solve_options') && isstruct(run_opts.solve_options)
+        solve_options = run_opts.solve_options;
+    end
+
+    runtime_cap_s = get_struct_numeric(run_opts, 'runtime_cap_s', get_struct_numeric(solve_options, 'runtime_cap_s', inf));
+    if ~isfinite(runtime_cap_s) || runtime_cap_s <= 0
+        runtime_cap_s = inf;
+    end
+    cap_behavior = get_struct_string(run_opts, 'cap_behavior', get_struct_string(solve_options, 'cap_behavior', 'best_so_far_warn'));
+
     selected_indices = 1:numel(ops);
     if isfield(run_opts, 'selected_indices') && ~isempty(run_opts.selected_indices)
         sel = double(run_opts.selected_indices(:)');
@@ -4402,9 +4451,37 @@ function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_
     if isfield(run_opts, 'max_harmonics')
         max_harmonics = max(0, round(double(run_opts.max_harmonics)));
     end
+    harmonic_energy_pct = get_struct_numeric(run_opts, 'harmonic_energy_pct', 99.5);
+    small_harmonic_pct = get_struct_numeric(run_opts, 'small_harmonic_pct', 1.0);
+    small_harmonic_consecutive = max(1, round(get_struct_numeric(run_opts, 'small_harmonic_consecutive', 5)));
+    enable_harmonic_trunc = logical(get_struct_numeric(run_opts, 'enable_adaptive_harmonic_truncation', 1));
+    harmonic_min_keep = max(1, round(get_struct_numeric(run_opts, 'harmonic_min_keep', 1)));
+    enable_op_early_stop = logical(get_struct_numeric(run_opts, 'enable_op_early_stop', 1));
+    op_early_stop_window = max(1, round(get_struct_numeric(run_opts, 'op_early_stop_window', 3)));
+    op_early_stop_tol_pct = max(0, get_struct_numeric(run_opts, 'op_early_stop_tol_pct', 0.25));
+    op_early_stop_min_points = max(1, round(get_struct_numeric(run_opts, 'op_early_stop_min_points', 4)));
 
-    op_runs = repmat(struct(), 1, numel(selected_indices));
+    t_run = tic;
+    cap_hit = false;
+    early_stop_hit = false;
+    stop_reason = 'completed';
+    cap_warning = '';
+    solve_rel_loss = [];
+    solve_rel_llk = [];
+    solve_unc_pct = [];
+
+    op_runs = struct([]);
+    solved_source_indices = [];
+    worst_loss_prev = NaN;
+    worst_stable_count = 0;
     for oi = 1:numel(selected_indices)
+        if toc(t_run) > runtime_cap_s
+            cap_hit = true;
+            stop_reason = 'runtime_cap';
+            cap_warning = 'Runtime cap reached before all operating points were evaluated. Returning best-so-far.';
+            break;
+        end
+
         op_idx = selected_indices(oi);
         op = ops(op_idx);
         op_name = sprintf('op_%d', op_idx);
@@ -4423,10 +4500,13 @@ function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_
             end
         end
         if isempty(h_list)
-            error('Operating point "%s" has no harmonics', op_name);
+            continue;
         end
-        if max_harmonics > 0 && numel(h_list) > max_harmonics
-            h_list = h_list(1:max_harmonics);
+        [h_list, h_meta] = truncate_harmonics_for_runtime( ...
+            h_list, max_harmonics, harmonic_energy_pct, small_harmonic_pct, ...
+            small_harmonic_consecutive, harmonic_min_keep, enable_harmonic_trunc);
+        if isempty(h_list)
+            continue;
         end
 
         op_ac_loss = zeros(n_w, 1);
@@ -4436,6 +4516,13 @@ function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_
         plot_conductors = conductors_template;
 
         for hi = 1:numel(h_list)
+            if toc(t_run) > runtime_cap_s && solved_harmonics > 0
+                cap_hit = true;
+                stop_reason = 'runtime_cap';
+                cap_warning = sprintf('Runtime cap reached while evaluating "%s". Returning best-so-far.', op_name);
+                break;
+            end
+
             harmonic = h_list(hi);
             f_h = data.f;
             if isfield(harmonic, 'frequency_hz')
@@ -4450,10 +4537,16 @@ function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_
                 continue;
             end
 
-            results_h = peec_solve_frequency(geom, cond_h, f_h, data.sigma, data.mu0);
+            results_h = peec_solve_frequency(geom, cond_h, f_h, data.sigma, data.mu0, solve_options);
             op_total_loss = op_total_loss + results_h.P_total;
-            op_ac_loss = op_ac_loss + accumulate_winding_losses(results_h.P_fil, winding_map, data.Nx, data.Ny, n_w);
+            op_ac_loss = op_ac_loss + accumulate_winding_losses(results_h.P_fil, winding_map, geom.Nx, geom.Ny, n_w);
             solved_harmonics = solved_harmonics + 1;
+
+            if isfield(results_h, 'meta') && isstruct(results_h.meta)
+                solve_rel_loss(end+1, 1) = get_struct_numeric(results_h.meta, 'rel_error_loss', NaN); %#ok<AGROW>
+                solve_rel_llk(end+1, 1) = get_struct_numeric(results_h.meta, 'rel_error_llk', NaN); %#ok<AGROW>
+                solve_unc_pct(end+1, 1) = get_struct_numeric(results_h.meta, 'uncertainty_pct', NaN); %#ok<AGROW>
+            end
 
             ord = hi;
             if isfield(harmonic, 'order')
@@ -4466,30 +4559,77 @@ function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_
         end
 
         if solved_harmonics == 0
-            error('Operating point "%s" produced no solvable harmonics', op_name);
+            if cap_hit && strcmpi(cap_behavior, 'best_so_far_warn')
+                break;
+            end
+            continue;
         end
 
         rms_currents = extract_op_rms_currents(op, h_list, data);
         op_dc_loss = 0.5 * (rms_currents .^ 2) .* winding_rdc;
         rac_rdc = op_ac_loss ./ max(op_dc_loss, 1e-12);
 
-        op_runs(oi).name = op_name;
-        op_runs(oi).total_loss = op_total_loss;
-        op_runs(oi).ac_loss = op_ac_loss;
-        op_runs(oi).dc_loss = op_dc_loss;
-        op_runs(oi).rac_rdc = rac_rdc;
-        op_runs(oi).harmonic_count = solved_harmonics;
-        op_runs(oi).source_index = op_idx;
-        op_runs(oi).plot_results = plot_results;
-        op_runs(oi).plot_conductors = plot_conductors;
-        % Keep operating-point context for result reporting (best/worst case details).
-        op_runs(oi).line_scale = get_struct_numeric(op, 'line_scale', NaN);
-        op_runs(oi).load_scale = get_struct_numeric(op, 'load_scale', NaN);
-        op_runs(oi).duty = get_struct_numeric(op, 'duty', NaN);
-        op_runs(oi).frequency_hz = get_struct_numeric(op, 'frequency_hz', data.f);
-        op_runs(oi).conduction_mode = get_struct_string(op, 'conduction_mode', 'n/a');
-        op_runs(oi).rms_currents_a = to_numeric_vector(get_struct_field(op, 'rms_currents_a', []), n_w, zeros(n_w, 1));
-        op_runs(oi).rms_voltages_v = to_numeric_vector(get_struct_field(op, 'rms_voltages_v', []), n_w, zeros(n_w, 1));
+        op_run = struct();
+        op_run.name = op_name;
+        op_run.total_loss = op_total_loss;
+        op_run.ac_loss = op_ac_loss;
+        op_run.dc_loss = op_dc_loss;
+        op_run.rac_rdc = rac_rdc;
+        op_run.harmonic_count = solved_harmonics;
+        op_run.harmonics_before_trunc = h_meta.total_count;
+        op_run.harmonics_after_trunc = h_meta.keep_count;
+        op_run.harmonic_energy_kept_pct = h_meta.energy_kept_pct;
+        op_run.source_index = op_idx;
+        op_run.plot_results = plot_results;
+        op_run.plot_conductors = plot_conductors;
+        op_run.line_scale = get_struct_numeric(op, 'line_scale', NaN);
+        op_run.load_scale = get_struct_numeric(op, 'load_scale', NaN);
+        op_run.duty = get_struct_numeric(op, 'duty', NaN);
+        op_run.frequency_hz = get_struct_numeric(op, 'frequency_hz', data.f);
+        op_run.conduction_mode = get_struct_string(op, 'conduction_mode', 'n/a');
+        op_run.rms_currents_a = to_numeric_vector(get_struct_field(op, 'rms_currents_a', []), n_w, zeros(n_w, 1));
+        op_run.rms_voltages_v = to_numeric_vector(get_struct_field(op, 'rms_voltages_v', []), n_w, zeros(n_w, 1));
+        op_run.runtime_s = toc(t_run);
+
+        if isempty(op_runs)
+            op_runs = op_run;
+        else
+            op_runs(end+1) = op_run; %#ok<AGROW>
+        end
+        solved_source_indices(end+1) = op_idx; %#ok<AGROW>
+
+        if enable_op_early_stop && numel(op_runs) >= op_early_stop_min_points
+            curr_losses = zeros(1, numel(op_runs));
+            for ci = 1:numel(op_runs)
+                curr_losses(ci) = op_runs(ci).total_loss;
+            end
+            worst_now = max(curr_losses);
+            if isfinite(worst_loss_prev)
+                worst_delta_pct = 100 * abs(worst_now - worst_loss_prev) / max(abs(worst_now), 1e-12);
+                if worst_delta_pct <= op_early_stop_tol_pct
+                    worst_stable_count = worst_stable_count + 1;
+                else
+                    worst_stable_count = 0;
+                end
+            end
+            worst_loss_prev = worst_now;
+
+            if worst_stable_count >= op_early_stop_window
+                early_stop_hit = true;
+                stop_reason = 'worst_stable_early_stop';
+                cap_warning = sprintf('Early stop: worst-case loss stabilized within %.3g%% over %d checks.', ...
+                    op_early_stop_tol_pct, op_early_stop_window);
+                break;
+            end
+        end
+
+        if cap_hit && strcmpi(cap_behavior, 'best_so_far_warn')
+            break;
+        end
+    end
+
+    if isempty(op_runs)
+        error('No operating point produced solvable harmonics within runtime constraints');
     end
 
     losses = zeros(1, numel(op_runs));
@@ -4500,6 +4640,30 @@ function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_
     worst = op_runs(worst_idx);
     [~, best_idx] = min(losses);
     best = op_runs(best_idx);
+
+    rel_loss = median_or_nan(solve_rel_loss);
+    rel_llk = median_or_nan(solve_rel_llk);
+    unc_from_solve = median_or_nan(solve_unc_pct);
+    target_loss = get_struct_numeric(solve_options, 'target_rel_error_loss', 0.03);
+    target_llk = get_struct_numeric(solve_options, 'target_rel_error_llk', 0.03);
+    uncertainty_pct = max([unc_from_solve, 100 * target_loss, 100 * target_llk]);
+    if ~isfinite(uncertainty_pct)
+        uncertainty_pct = 20;
+    end
+
+    solve_meta = struct();
+    solve_meta.converged = ~cap_hit;
+    solve_meta.stop_reason = stop_reason;
+    solve_meta.runtime_s = toc(t_run);
+    solve_meta.runtime_cap_s = runtime_cap_s;
+    solve_meta.cap_hit = cap_hit;
+    solve_meta.early_stop_hit = early_stop_hit;
+    solve_meta.cap_behavior = cap_behavior;
+    solve_meta.warning = cap_warning;
+    solve_meta.mesh_cells = geom.Nf;
+    solve_meta.rel_error_loss = rel_loss;
+    solve_meta.rel_error_llk = rel_llk;
+    solve_meta.uncertainty_pct = uncertainty_pct;
 
     analysis_run = struct();
     analysis_run.mode = 'harmonic_sweep';
@@ -4526,9 +4690,21 @@ function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_
     analysis_run.plot_results = worst.plot_results;
     analysis_run.plot_conductors = worst.plot_conductors;
     analysis_run.selected_operating_indices = selected_indices;
+    analysis_run.solved_operating_indices = solved_source_indices;
     analysis_run.total_operating_points = numel(ops);
-    analysis_run.evaluated_operating_points = numel(selected_indices);
+    analysis_run.evaluated_operating_points = numel(op_runs);
     analysis_run.max_harmonics = max_harmonics;
+    analysis_run.cap_hit = cap_hit;
+    analysis_run.early_stop_hit = early_stop_hit;
+    analysis_run.stop_reason = stop_reason;
+    analysis_run.warning = cap_warning;
+    analysis_run.uncertainty_pct = uncertainty_pct;
+    analysis_run.harmonic_truncation_enabled = enable_harmonic_trunc;
+    analysis_run.harmonic_energy_pct = harmonic_energy_pct;
+    analysis_run.small_harmonic_pct = small_harmonic_pct;
+    analysis_run.small_harmonic_consecutive = small_harmonic_consecutive;
+    analysis_run.solve_meta = solve_meta;
+
     src_name = 'UNKNOWN';
     if isfield(profile, 'source') && ~isempty(profile.source)
         src_name = upper(char(profile.source));
@@ -4539,7 +4715,116 @@ function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_
     if max_harmonics > 0
         summary = sprintf('%s | Harmonic cap: %d', summary, max_harmonics);
     end
+    if cap_hit
+        summary = sprintf('%s | Runtime cap hit', summary);
+    end
+    if early_stop_hit
+        summary = sprintf('%s | Early-stop on stable worst case', summary);
+    end
     analysis_run.excitation_summary = summary;
+end
+
+function m = median_or_nan(values)
+    m = NaN;
+    if isempty(values)
+        return;
+    end
+    v = values(isfinite(values));
+    if isempty(v)
+        return;
+    end
+    m = median(v);
+end
+
+function [h_out, meta] = truncate_harmonics_for_runtime(h_in, max_harmonics, energy_pct, small_pct, small_consecutive, min_keep, enable_trunc)
+    meta = struct();
+    meta.total_count = numel(h_in);
+    meta.keep_count = numel(h_in);
+    meta.energy_kept_pct = 100;
+    if isempty(h_in)
+        h_out = h_in;
+        meta.energy_kept_pct = 0;
+        return;
+    end
+
+    n = numel(h_in);
+    energies = zeros(n, 1);
+    for i = 1:n
+        h = h_in(i);
+        i_re = get_struct_field(h, 'currents_real_a', []);
+        i_im = get_struct_field(h, 'currents_imag_a', []);
+        i_re = to_numeric_vector(i_re, numel(i_re), []);
+        i_im = to_numeric_vector(i_im, numel(i_im), []);
+        if isempty(i_re) && isempty(i_im)
+            energies(i) = 0;
+            continue;
+        end
+        nn = min(numel(i_re), numel(i_im));
+        if nn <= 0
+            if isempty(i_re)
+                nn = numel(i_im);
+                i_re = zeros(nn, 1);
+            elseif isempty(i_im)
+                nn = numel(i_re);
+                i_im = zeros(nn, 1);
+            end
+        end
+        if numel(i_re) < nn
+            i_re(nn, 1) = 0;
+        end
+        if numel(i_im) < nn
+            i_im(nn, 1) = 0;
+        end
+        energies(i) = sum(i_re(1:nn).^2 + i_im(1:nn).^2);
+    end
+
+    if all(~isfinite(energies)) || sum(max(energies, 0)) <= 0
+        energies = ones(n, 1);
+    else
+        energies(~isfinite(energies)) = 0;
+    end
+
+    keep_n = n;
+    if enable_trunc
+        total_energy = sum(energies);
+        keep_energy = n;
+        if total_energy > 0
+            cum_energy = cumsum(energies);
+            pct = 100 * cum_energy / total_energy;
+            idx = find(pct >= max(0, min(100, energy_pct)), 1, 'first');
+            if ~isempty(idx)
+                keep_energy = idx;
+            end
+        end
+
+        keep_small = n;
+        if small_pct > 0 && small_consecutive > 0
+            e_thresh = (small_pct / 100) * max(energies);
+            consec = 0;
+            for i = 1:n
+                if energies(i) <= e_thresh
+                    consec = consec + 1;
+                    if consec >= small_consecutive
+                        keep_small = max(1, i - small_consecutive + 1);
+                        break;
+                    end
+                else
+                    consec = 0;
+                end
+            end
+        end
+        keep_n = min(keep_energy, keep_small);
+    end
+
+    keep_n = max(min_keep, keep_n);
+    if max_harmonics > 0
+        keep_n = min(keep_n, max_harmonics);
+    end
+    keep_n = min(max(1, keep_n), n);
+
+    h_out = h_in(1:keep_n);
+    meta.keep_count = keep_n;
+    meta.energy_kept_pct = 100 * sum(energies(1:keep_n)) / max(sum(energies), 1e-12);
 end
 
 function winding_rdc = compute_winding_rdc_from_geometry(data, conductors, winding_map)
@@ -4643,7 +4928,7 @@ function v = get_struct_numeric(s, field_name, default_val)
         return;
     end
     raw = s.(field_name);
-    if isnumeric(raw)
+    if isnumeric(raw) || islogical(raw)
         if isempty(raw)
             return;
         end
@@ -4804,7 +5089,7 @@ function [om_meta, err_msg] = generate_om_meta_for_analysis(data)
     err_msg = '';
     try
         config = build_om_viz_config(data);
-        script_dir = pwd();
+        script_dir = get_local_script_dir();
         config_file = fullfile(script_dir, 'om_viz_config.json');
         svg_file = fullfile(script_dir, 'om_visualization.svg');
         meta_file = fullfile(script_dir, 'om_visualization_meta.json');
@@ -4827,18 +5112,18 @@ function [om_meta, err_msg] = generate_om_meta_for_analysis(data)
         python_cmd = 'python';
         venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
         if exist(venv_python, 'file')
-            python_cmd = ['"' venv_python '"'];
+            python_cmd = ['"' normalize_shell_path(venv_python) '"'];
         end
 
         cmd = sprintf('%s "%s" "%s" 2>&1', python_cmd, py_script_name, config_file_name);
-        [status, output] = system(cmd);
+        [status, output] = run_system_in_dir(script_dir, cmd);
 
         is_module_error = ~isempty(strfind(output, 'ModuleNotFoundError')) || ...
                           ~isempty(strfind(output, 'ImportError')) || ...
                           ~isempty(strfind(output, 'No module named'));
         if status ~= 0 && is_module_error && ispc
             cmd_fallback = sprintf('py "%s" "%s" 2>&1', py_script_name, config_file_name);
-            [status_fb, output_fb] = system(cmd_fallback);
+            [status_fb, output_fb] = run_system_in_dir(script_dir, cmd_fallback);
             if status_fb == 0 && ~isempty(strfind(output_fb, 'OK'))
                 status = status_fb;
                 output = output_fb;
@@ -4853,8 +5138,9 @@ function [om_meta, err_msg] = generate_om_meta_for_analysis(data)
                 if ~isempty(strfind(lower(p), 'octave')) || ~isempty(strfind(lower(p), 'usr\bin'))
                     continue;
                 end
-                cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script_name, config_file_name);
-                [status_alt, output_alt] = system(cmd_alt);
+                p = strrep(p, '\', '/');
+                 cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script_name, config_file_name);
+                 [status_alt, output_alt] = run_system_in_dir(script_dir, cmd_alt);
                 if status_alt == 0 && ~isempty(strfind(output_alt, 'OK'))
                     status = status_alt;
                     output = output_alt;
@@ -4918,7 +5204,7 @@ function [all_conductors, all_winding_map, all_wire_shapes, meta] = build_om_geo
     end
 
     % Pass 1: collect valid turns and bounding box.
-    valid_turns = struct('x', {}, 'y', {}, 'w', {}, 'h', {}, 'shape', {}, 'winding_idx', {});
+    valid_turns = struct('x', {}, 'y', {}, 'w', {}, 'h', {}, 'shape', {}, 'winding_idx', {}, 'additional_positions', {});
     xmin = inf; xmax = -inf; ymin = inf; ymax = -inf;
     for i = 1:numel(turns)
         t = turns(i);
@@ -4959,6 +5245,21 @@ function [all_conductors, all_winding_map, all_wire_shapes, meta] = build_om_geo
             continue;
         end
 
+        % Collect additional positions (outer-edge cross-sections for toroids)
+        add_pos = {};
+        if isfield(t, 'additional_positions') && ~isempty(t.additional_positions)
+            raw_ap = t.additional_positions;
+            if isstruct(raw_ap)
+                raw_ap = num2cell(raw_ap);
+            end
+            for ap_k = 1:numel(raw_ap)
+                ap = raw_ap{ap_k};
+                if isstruct(ap) && isfield(ap, 'x_m') && isfield(ap, 'y_m')
+                    add_pos{end+1} = ap; %#ok<AGROW>
+                end
+            end
+        end
+
         vt = struct();
         vt.x = x;
         vt.y = y;
@@ -4966,12 +5267,24 @@ function [all_conductors, all_winding_map, all_wire_shapes, meta] = build_om_geo
         vt.h = h;
         vt.shape = shape;
         vt.winding_idx = winding_idx;
+        vt.additional_positions = {add_pos};
         valid_turns(end+1) = vt; %#ok<AGROW>
 
         xmin = min(xmin, x - w/2);
         xmax = max(xmax, x + w/2);
         ymin = min(ymin, y - h/2);
         ymax = max(ymax, y + h/2);
+
+        % Include additional positions in bounding box
+        for ap_k = 1:numel(add_pos)
+            ap = add_pos{ap_k};
+            ax_val = double(ap.x_m);
+            ay_val = double(ap.y_m);
+            xmin = min(xmin, ax_val - w/2);
+            xmax = max(xmax, ax_val + w/2);
+            ymin = min(ymin, ay_val - h/2);
+            ymax = max(ymax, ay_val + h/2);
+        end
     end
 
     if isempty(valid_turns)
@@ -4984,6 +5297,8 @@ function [all_conductors, all_winding_map, all_wire_shapes, meta] = build_om_geo
     target_cy = bobbin_h / 2;
 
     % Pass 2: convert to local bobbin coordinates and assign currents/phases.
+    % Also include additional positions (outer-edge cross-sections from
+    % delimit_and_compact for toroids) so PEEC sees both inner and outer turns.
     for i = 1:numel(valid_turns)
         t = valid_turns(i);
         x_local = t.x - cx + target_cx;
@@ -4998,6 +5313,22 @@ function [all_conductors, all_winding_map, all_wire_shapes, meta] = build_om_geo
         all_conductors = [all_conductors; x_local, y_local, w, h, I_per_strand, phase];
         all_winding_map = [all_winding_map; widx];
         all_wire_shapes{end+1} = t.shape;
+
+        % Add conductors for additional positions (toroid outer-edge cross-sections)
+        add_pos = t.additional_positions;
+        if iscell(add_pos) && numel(add_pos) == 1 && iscell(add_pos{1})
+            add_pos = add_pos{1};
+        end
+        for ap_k = 1:numel(add_pos)
+            ap = add_pos{ap_k};
+            if isstruct(ap) && isfield(ap, 'x_m') && isfield(ap, 'y_m')
+                ax_local = double(ap.x_m) - cx + target_cx;
+                ay_local = double(ap.y_m) - cy + target_cy;
+                all_conductors = [all_conductors; ax_local, ay_local, w, h, I_per_strand, phase]; %#ok<AGROW>
+                all_winding_map = [all_winding_map; widx]; %#ok<AGROW>
+                all_wire_shapes{end+1} = t.shape; %#ok<AGROW>
+            end
+        end
     end
 
     meta = struct();
@@ -5141,7 +5472,11 @@ function run_meta = build_analysis_run_dump_meta(analysis_run)
         'best_source_index', ...
         'best_harmonic_count', ...
         'best_total_loss', ...
-        'excitation_summary' ...
+        'excitation_summary', ...
+        'cap_hit', ...
+        'stop_reason', ...
+        'warning', ...
+        'uncertainty_pct' ...
     };
     for i = 1:numel(keep_fields)
         field_name = keep_fields{i};
@@ -5174,6 +5509,10 @@ function run_meta = build_analysis_run_dump_meta(analysis_run)
             op_meta(i).conduction_mode = get_struct_string(ops(i), 'conduction_mode', 'n/a');
         end
         run_meta.operating_points = op_meta;
+    end
+
+    if isfield(analysis_run, 'solve_meta') && isstruct(analysis_run.solve_meta)
+        run_meta.solve_meta = analysis_run.solve_meta;
     end
 end
 
@@ -5306,7 +5645,7 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
             best_total_loss_display = analysis_run.best_total_loss;
         end
     else
-        fils_per_cond = data.Nx * data.Ny;
+        fils_per_cond = geom.Nx * geom.Ny;
         winding_losses = zeros(data.n_windings, 1);
         winding_Rdc = zeros(data.n_windings, 1);
         winding_Pdc = zeros(data.n_windings, 1);
@@ -5440,7 +5779,9 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
     title(sprintf('Winding Loss Comparison (%s Case)', current_case_label));
     grid on;
 
-    ax4 = axes('Position', [0.06 0.08 0.27 0.30]);
+    % --- Bottom row: 4 panels ---
+    % Panel 1: Rac/Rdc bar chart
+    ax4 = axes('Position', [0.04 0.08 0.18 0.30]);
     axes(ax4); %#ok<LAXES>
     bar(rac_rdc);
     set(gca, 'XTickLabel', {data.windings.name});
@@ -5448,71 +5789,101 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
     title(sprintf('AC Resistance Factor (%s Case)', current_case_label));
     grid on;
 
-    ax5 = axes('Position', [0.37 0.08 0.27 0.30]);
+    % Panel 2: Loss Summary text
+    ax5 = axes('Position', [0.26 0.08 0.22 0.30]);
     axes(ax5); %#ok<LAXES>
     axis off;
-    text(0.05, 0.95, sprintf('Loss Summary (%s Case)', current_case_label), 'FontSize', 12, 'FontWeight', 'bold');
+    text(0.02, 0.95, sprintf('Loss Summary (%s Case)', current_case_label), 'FontSize', 11, 'FontWeight', 'bold');
     y_pos = 0.85;
 
     for w = 1:data.n_windings
-        text(0.05, y_pos, sprintf('%s:', data.windings(w).name), ...
-            'FontSize', 10, 'FontWeight', 'bold', 'Color', data.winding_colors{w});
+        text(0.02, y_pos, sprintf('%s:', data.windings(w).name), ...
+            'FontSize', 9, 'FontWeight', 'bold', 'Color', data.winding_colors{w});
         y_pos = y_pos - 0.08;
 
-        text(0.05, y_pos, sprintf('  Wire: %s', data.windings(w).wire_type), 'FontSize', 9);
-        y_pos = y_pos - 0.07;
+        text(0.02, y_pos, sprintf('  Wire: %s', data.windings(w).wire_type), 'FontSize', 8);
+        y_pos = y_pos - 0.065;
 
-        text(0.05, y_pos, sprintf('  Config: %d turns, %s', ...
-            data.windings(w).n_turns, get_filar_name(data.windings(w).n_filar)), 'FontSize', 9);
-        y_pos = y_pos - 0.07;
+        text(0.02, y_pos, sprintf('  Config: %d turns, %s', ...
+            data.windings(w).n_turns, get_filar_name(data.windings(w).n_filar)), 'FontSize', 8);
+        y_pos = y_pos - 0.065;
 
-        text(0.05, y_pos, sprintf('  DC Loss: %.4f W', winding_Pdc(w)), 'FontSize', 9);
-        y_pos = y_pos - 0.07;
+        text(0.02, y_pos, sprintf('  DC Loss: %.4f W', winding_Pdc(w)), 'FontSize', 8);
+        y_pos = y_pos - 0.065;
 
-        text(0.05, y_pos, sprintf('  AC Loss: %.4f W', winding_losses(w)), 'FontSize', 9);
-        y_pos = y_pos - 0.07;
+        text(0.02, y_pos, sprintf('  AC Loss: %.4f W', winding_losses(w)), 'FontSize', 8);
+        y_pos = y_pos - 0.065;
 
-        text(0.05, y_pos, sprintf('  Rac/Rdc: %.2f', rac_rdc(w)), 'FontSize', 9);
-        y_pos = y_pos - 0.12;
+        text(0.02, y_pos, sprintf('  Rac/Rdc: %.2f', rac_rdc(w)), 'FontSize', 8);
+        y_pos = y_pos - 0.10;
     end
 
-    text(0.05, y_pos, sprintf('PEEC Total Loss: %.4f W', total_loss_display), ...
-        'FontSize', 11, 'FontWeight', 'bold');
+    text(0.02, y_pos, sprintf('PEEC Total Loss: %.4f W', total_loss_display), ...
+        'FontSize', 10, 'FontWeight', 'bold');
 
-    ax6 = axes('Position', [0.68 0.08 0.27 0.30]);
+    % Panel 3: Core & Configuration + Operating Point
+    ax6 = axes('Position', [0.51 0.08 0.22 0.30]);
     axes(ax6); %#ok<LAXES>
     axis off;
-    text(0.05, 0.95, 'Core & Configuration', 'FontSize', 12, 'FontWeight', 'bold');
+    text(0.02, 0.95, 'Core & Configuration', 'FontSize', 11, 'FontWeight', 'bold');
     y_cfg = 0.87;
 
-    text(0.05, y_cfg, sprintf('Core: %s', data.selected_core), 'FontSize', 9); y_cfg = y_cfg - 0.08;
-    text(0.05, y_cfg, sprintf('Frequency: %.0f kHz', data.f/1e3), 'FontSize', 9); y_cfg = y_cfg - 0.08;
+    text(0.02, y_cfg, sprintf('Core: %s', data.selected_core), 'FontSize', 8); y_cfg = y_cfg - 0.07;
+    text(0.02, y_cfg, sprintf('Frequency: %.0f kHz', data.f/1e3), 'FontSize', 8); y_cfg = y_cfg - 0.07;
     if isfield(analysis_meta, 'requested_source')
-        text(0.05, y_cfg, sprintf('Requested source: %s', upper(char(analysis_meta.requested_source))), 'FontSize', 9);
-        y_cfg = y_cfg - 0.06;
+        text(0.02, y_cfg, sprintf('Requested source: %s', upper(char(analysis_meta.requested_source))), 'FontSize', 8);
+        y_cfg = y_cfg - 0.055;
     end
     if isfield(analysis_meta, 'used_source')
-        text(0.05, y_cfg, sprintf('Used source: %s', upper(char(analysis_meta.used_source))), 'FontSize', 9);
-        y_cfg = y_cfg - 0.08;
+        text(0.02, y_cfg, sprintf('Used source: %s', upper(char(analysis_meta.used_source))), 'FontSize', 8);
+        y_cfg = y_cfg - 0.07;
+    end
+    if isfield(analysis_meta, 'solve_mode')
+        text(0.02, y_cfg, sprintf('Solve mode: %s', upper(char(analysis_meta.solve_mode))), 'FontSize', 8);
+        y_cfg = y_cfg - 0.055;
+    end
+    if isfield(analysis_meta, 'runtime_s') && isfinite(analysis_meta.runtime_s)
+        text(0.02, y_cfg, sprintf('Runtime: %.2f s (cap %.2f s)', ...
+            analysis_meta.runtime_s, get_struct_numeric(analysis_meta, 'runtime_cap_s', NaN)), 'FontSize', 7);
+        y_cfg = y_cfg - 0.05;
+    end
+    if isfield(analysis_meta, 'mesh_cells')
+        text(0.02, y_cfg, sprintf('Mesh: %d cells (%dx%d)', ...
+            analysis_meta.mesh_cells, get_struct_numeric(analysis_meta, 'mesh_Nx', NaN), ...
+            get_struct_numeric(analysis_meta, 'mesh_Ny', NaN)), 'FontSize', 7);
+        y_cfg = y_cfg - 0.05;
+    end
+    if isfield(analysis_meta, 'uncertainty_pct')
+        text(0.02, y_cfg, sprintf('Uncertainty: %.1f%%', analysis_meta.uncertainty_pct), 'FontSize', 7);
+        y_cfg = y_cfg - 0.05;
+    end
+    if isfield(analysis_meta, 'cap_hit') && logical(analysis_meta.cap_hit)
+        cap_msg = get_struct_string(analysis_meta, 'cap_warning', 'Runtime cap hit.');
+        % Truncate long cap messages to avoid overflow
+        if numel(cap_msg) > 60
+            cap_msg = [cap_msg(1:57) '...'];
+        end
+        text(0.02, y_cfg, cap_msg, 'FontSize', 7, 'Color', [0.70 0.10 0.10], 'FontWeight', 'bold');
+        y_cfg = y_cfg - 0.055;
     end
 
     if op_total_count > 0
-        text(0.05, y_cfg, sprintf('Operating points: %d/%d evaluated', op_eval_count, op_total_count), ...
-            'FontSize', 9, 'FontWeight', 'bold');
-        y_cfg = y_cfg - 0.07;
+        text(0.02, y_cfg, sprintf('Operating points: %d/%d evaluated', op_eval_count, op_total_count), ...
+            'FontSize', 8, 'FontWeight', 'bold');
+        y_cfg = y_cfg - 0.06;
     end
-    text(0.05, y_cfg, sprintf('%s-case plot: %s [idx %d]', current_case_label, current_op_name, current_op_idx), ...
-        'FontSize', 9, 'Color', [0.10 0.35 0.10]);
-    y_cfg = y_cfg - 0.07;
+    text(0.02, y_cfg, sprintf('%s-case plot:', current_case_label), ...
+        'FontSize', 8, 'Color', [0.10 0.35 0.10]);
+    y_cfg = y_cfg - 0.05;
+    text(0.04, y_cfg, sprintf('%s [idx %d]', current_op_name, current_op_idx), ...
+        'FontSize', 7, 'Color', [0.10 0.35 0.10]);
+    y_cfg = y_cfg - 0.06;
 
     if ~isnan(worst_total_loss_display) && ~isnan(best_total_loss_display)
-        text(0.05, y_cfg, sprintf('Worst: %.4f W | Best: %.4f W', ...
-            worst_total_loss_display, best_total_loss_display), ...
-            'FontSize', 9);
-        y_cfg = y_cfg - 0.07;
-        text(0.05, y_cfg, sprintf('Worst OP: %s [idx %d] | Best OP: %s [idx %d]', ...
-            worst_op_name, worst_op_idx, best_op_name, best_op_idx), 'FontSize', 8);
-        y_cfg = y_cfg - 0.06;
+        text(0.02, y_cfg, sprintf('Worst: %.4f W', worst_total_loss_display), 'FontSize', 8);
+        y_cfg = y_cfg - 0.05;
+        text(0.02, y_cfg, sprintf('Best: %.4f W', best_total_loss_display), 'FontSize', 8);
+        y_cfg = y_cfg - 0.055;
     end
 
     if ~isempty(fieldnames(selected_op_run))
@@ -5523,45 +5894,47 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
         op_load = get_struct_numeric(selected_op_run, 'load_scale', NaN);
         op_mode = get_struct_string(selected_op_run, 'conduction_mode', 'n/a');
 
-        text(0.05, y_cfg, 'Selected Operating Point:', 'FontSize', 9, 'FontWeight', 'bold');
-        y_cfg = y_cfg - 0.06;
-        text(0.05, y_cfg, sprintf('  Duty: %s | Mode: %s', format_numeric_or_na(op_duty, '%.3f'), op_mode), 'FontSize', 8);
+        text(0.02, y_cfg, 'Selected Operating Point:', 'FontSize', 8, 'FontWeight', 'bold');
         y_cfg = y_cfg - 0.05;
-        text(0.05, y_cfg, sprintf('  Line scale: %s | Load scale: %s', ...
-            format_numeric_or_na(op_line, '%.2f'), format_numeric_or_na(op_load, '%.2f')), 'FontSize', 8);
-        y_cfg = y_cfg - 0.05;
+        text(0.02, y_cfg, sprintf('  Duty: %s  Mode: %s', format_numeric_or_na(op_duty, '%.3f'), op_mode), 'FontSize', 7);
+        y_cfg = y_cfg - 0.045;
+        text(0.02, y_cfg, sprintf('  Line: %s  Load: %s', ...
+            format_numeric_or_na(op_line, '%.2f'), format_numeric_or_na(op_load, '%.2f')), 'FontSize', 7);
+        y_cfg = y_cfg - 0.045;
         if data.n_windings >= 1
-            text(0.05, y_cfg, sprintf('  Input V/I (RMS): %.2f V, %.3f A', op_v(1), op_i(1)), 'FontSize', 8);
-            y_cfg = y_cfg - 0.05;
+            text(0.02, y_cfg, sprintf('  In: %.1f V, %.3f A', op_v(1), op_i(1)), 'FontSize', 7);
+            y_cfg = y_cfg - 0.045;
         end
         if data.n_windings >= 2
-            text(0.05, y_cfg, sprintf('  Output V/I (RMS): %.2f V, %.3f A', op_v(2), op_i(2)), 'FontSize', 8);
-            y_cfg = y_cfg - 0.05;
+            text(0.02, y_cfg, sprintf('  Out: %.1f V, %.3f A', op_v(2), op_i(2)), 'FontSize', 7);
+            y_cfg = y_cfg - 0.045;
         end
     end
 
     if isfield(analysis_meta, 'fallback_used') && analysis_meta.fallback_used
-        text(0.05, y_cfg, 'Fallback: OM -> CWF', 'FontSize', 8, ...
+        text(0.02, y_cfg, 'Fallback: OM -> CWF', 'FontSize', 7, ...
             'Color', [0.70 0.10 0.10], 'FontWeight', 'bold');
-        y_cfg = y_cfg - 0.05;
     end
 
-    % --- Magnetic Parameters: PEEC vs MKF Comparison ---
+    % Panel 4: Magnetic Parameters (PEEC vs MKF)
     has_mag = isstruct(analysis_run) && isfield(analysis_run, 'mag_results') ...
               && isstruct(analysis_run.mag_results) && analysis_run.mag_results.valid;
     has_mkf = isstruct(analysis_run) && isfield(analysis_run, 'mkf_ref') ...
               && isstruct(analysis_run.mkf_ref) && analysis_run.mkf_ref.valid;
 
+    ax7 = axes('Position', [0.76 0.08 0.22 0.30]);
+    axes(ax7); %#ok<LAXES>
+    axis off;
+
     if has_mag || has_mkf
-        y_cfg = y_cfg - 0.02;
-        text(0.05, y_cfg, 'Magnetic Parameters:', 'FontSize', 9, 'FontWeight', 'bold', ...
+        text(0.02, 0.95, 'Magnetic Parameters', 'FontSize', 11, 'FontWeight', 'bold', ...
              'Color', [0.0 0.2 0.6]);
-        y_cfg = y_cfg - 0.06;
+        y_mag = 0.86;
 
         % Header
-        text(0.05, y_cfg, '                    PEEC       MKF', 'FontSize', 8, ...
+        text(0.02, y_mag, '                PEEC     MKF', 'FontSize', 8, ...
              'FontName', 'FixedWidth', 'Color', [0.3 0.3 0.3]);
-        y_cfg = y_cfg - 0.05;
+        y_mag = y_mag - 0.06;
 
         if has_mag
             mr = analysis_run.mag_results;
@@ -5575,36 +5948,36 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
         mkf_str = '  ---';
         if has_mag, peec_str = sprintf('%7.1f', mr.Lm_H*1e6); end
         if has_mkf && mk.Lm_uH > 0, mkf_str = sprintf('%7.1f', mk.Lm_uH); end
-        text(0.05, y_cfg, sprintf('Lm (uH)       %s    %s', peec_str, mkf_str), ...
+        text(0.02, y_mag, sprintf('Lm (uH)    %s  %s', peec_str, mkf_str), ...
              'FontSize', 8, 'FontName', 'FixedWidth');
-        y_cfg = y_cfg - 0.045;
+        y_mag = y_mag - 0.055;
 
         % Llk
         peec_str = '  ---';
         mkf_str = '  ---';
         if has_mag, peec_str = sprintf('%7.2f', mr.Llk_pri_H*1e6); end
         if has_mkf && mk.Llk_uH > 0, mkf_str = sprintf('%7.2f', mk.Llk_uH); end
-        text(0.05, y_cfg, sprintf('Llk,pri (uH)  %s    %s', peec_str, mkf_str), ...
+        text(0.02, y_mag, sprintf('Llk,pri(uH)%s  %s', peec_str, mkf_str), ...
              'FontSize', 8, 'FontName', 'FixedWidth');
-        y_cfg = y_cfg - 0.045;
+        y_mag = y_mag - 0.055;
 
         % Bpk
         peec_str = '  ---';
         mkf_str = '  ---';
         if has_mag, peec_str = sprintf('%7.1f', mr.Bpk_T*1e3); end
         if has_mkf && mk.B_peak_mT > 0, mkf_str = sprintf('%7.1f', mk.B_peak_mT); end
-        text(0.05, y_cfg, sprintf('Bpk (mT)      %s    %s', peec_str, mkf_str), ...
+        text(0.02, y_mag, sprintf('Bpk (mT)   %s  %s', peec_str, mkf_str), ...
              'FontSize', 8, 'FontName', 'FixedWidth');
-        y_cfg = y_cfg - 0.045;
+        y_mag = y_mag - 0.055;
 
         % deltaB
         peec_str = '  ---';
         mkf_str = '  ---';
         if has_mag, peec_str = sprintf('%7.1f', mr.deltaB_T*1e3); end
         if has_mkf && mk.B_pp_mT > 0, mkf_str = sprintf('%7.1f', mk.B_pp_mT); end
-        text(0.05, y_cfg, sprintf('dB (mT)       %s    %s', peec_str, mkf_str), ...
+        text(0.02, y_mag, sprintf('dB (mT)    %s  %s', peec_str, mkf_str), ...
              'FontSize', 8, 'FontName', 'FixedWidth');
-        y_cfg = y_cfg - 0.045;
+        y_mag = y_mag - 0.055;
 
         % Core loss
         peec_str = '  ---';
@@ -5616,10 +5989,14 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
             mkf_str = sprintf('%7.3f', mk.core_loss_W);
         end
         method_label = '';
-        if has_mag, method_label = sprintf(' (%s)', mr.method); end
-        text(0.05, y_cfg, sprintf('Pcore (W)%s %s    %s', method_label, peec_str, mkf_str), ...
+        if has_mag, method_label = sprintf('(%s)', mr.method); end
+        text(0.02, y_mag, sprintf('Pcore (W)  %s  %s', peec_str, mkf_str), ...
              'FontSize', 8, 'FontName', 'FixedWidth');
-        y_cfg = y_cfg - 0.045;
+        y_mag = y_mag - 0.045;
+        if ~isempty(method_label)
+            text(0.04, y_mag, method_label, 'FontSize', 7, 'FontName', 'FixedWidth', 'Color', [0.4 0.4 0.4]);
+            y_mag = y_mag - 0.05;
+        end
 
         % Total loss (PEEC winding + PEEC core)
         peec_str = '  ---';
@@ -5631,25 +6008,25 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
         if has_mkf && mk.core_loss_W > 0 && mk.winding_loss_W > 0
             mkf_str = sprintf('%7.3f', mk.core_loss_W + mk.winding_loss_W);
         end
-        text(0.05, y_cfg, sprintf('Total (W)     %s    %s', peec_str, mkf_str), ...
+        text(0.02, y_mag, sprintf('Total (W)  %s  %s', peec_str, mkf_str), ...
              'FontSize', 8, 'FontName', 'FixedWidth', 'FontWeight', 'bold');
-        y_cfg = y_cfg - 0.045;
+        y_mag = y_mag - 0.065;
 
         % Coupling coefficient, Lm source, and reluctance breakdown
-        info_parts = {};
         if has_mag
-            info_parts{end+1} = sprintf('k: %.4f', mr.coupling_k);
+            text(0.02, y_mag, sprintf('k: %.4f', mr.coupling_k), ...
+                 'FontSize', 7, 'FontName', 'FixedWidth', 'Color', [0.4 0.4 0.4]);
+            y_mag = y_mag - 0.045;
             if isfield(mr, 'Lm_source') && ~isempty(mr.Lm_source)
-                info_parts{end+1} = sprintf('Lm: %s', mr.Lm_source);
+                text(0.02, y_mag, sprintf('Lm: %s', mr.Lm_source), ...
+                     'FontSize', 7, 'FontName', 'FixedWidth', 'Color', [0.4 0.4 0.4]);
+                y_mag = y_mag - 0.045;
             end
             if isfield(mr, 'R_core') && mr.R_core > 0 && isfield(mr, 'R_total') && mr.R_total > 0
                 gap_pct = mr.R_gap_total / mr.R_total * 100;
-                info_parts{end+1} = sprintf('R_gap: %.1f%%', gap_pct);
+                text(0.02, y_mag, sprintf('R_gap: %.1f%%', gap_pct), ...
+                     'FontSize', 7, 'FontName', 'FixedWidth', 'Color', [0.4 0.4 0.4]);
             end
-        end
-        if ~isempty(info_parts)
-            text(0.05, y_cfg, strjoin(info_parts, '  |  '), ...
-                 'FontSize', 7, 'FontName', 'FixedWidth', 'Color', [0.4 0.4 0.4]);
         end
     end
 
@@ -6899,7 +7276,7 @@ function Pcore = compute_core_loss_i2gse(B_waveform, t, k, alpha, beta, Ve)
 end
 
 
-function mag_results = compute_magnetic_params(data, geom)
+function mag_results = compute_magnetic_params(data, geom, solve_options)
 % Compute magnetic parameters (Lm, Llk, Bpk, core loss) from PEEC + core data.
 %
 % Lm: Computed from reluctance network: Lm = N^2 / (R_core + sum(R_gap))
@@ -6916,6 +7293,10 @@ function mag_results = compute_magnetic_params(data, geom)
 %   .Pcore_W - core loss [W]
 %   .method - core loss method used
 %   .valid - true if computation succeeded
+
+    if nargin < 3 || ~isstruct(solve_options)
+        solve_options = struct();
+    end
 
     mag_results = struct('valid', false, 'Lm_H', 0, 'Llk_pri_H', 0, 'Llk_sec_H', 0, ...
                          'Bpk_T', 0, 'deltaB_T', 0, 'Pcore_W', 0, 'method', '', ...
@@ -6962,7 +7343,7 @@ function mag_results = compute_magnetic_params(data, geom)
 
     % --- Extract leakage inductance from PEEC + Lm from reluctance network ---
     try
-        mp = compute_winding_inductance_matrix(geom, MLT, core_params, mu_r, gapping);
+        mp = compute_winding_inductance_matrix(geom, MLT, core_params, mu_r, gapping, solve_options);
         mag_results.Lm_H = mp.Lm;
         mag_results.Lm_source = mp.Lm_source;
         mag_results.Llk_pri_H = mp.Llk_pri;
@@ -6970,6 +7351,9 @@ function mag_results = compute_magnetic_params(data, geom)
         mag_results.coupling_k = mp.coupling_k;
         mag_results.n_eff = mp.n_eff;
         mag_results.L_winding = mp.L_winding;
+        if isfield(mp, 'end_turn_correction')
+            mag_results.end_turn_correction = mp.end_turn_correction;
+        end
         mag_results.R_core = mp.R_core;
         mag_results.R_gap_total = mp.R_gap_total;
         mag_results.R_total = mp.R_total;
@@ -7048,4 +7432,51 @@ function mag_results = compute_magnetic_params(data, geom)
     end
 
     mag_results.valid = true;
+end
+
+function script_dir = get_local_script_dir()
+    script_dir = fileparts(mfilename('fullpath'));
+    if isempty(script_dir) || ~exist(script_dir, 'dir')
+        main_file = which('interactive_winding_designer');
+        if ~isempty(main_file)
+            script_dir = fileparts(main_file);
+        end
+    end
+    if isempty(script_dir) || ~exist(script_dir, 'dir')
+        script_dir = pwd();
+    end
+end
+
+function [status, output] = run_system_in_dir(work_dir, cmd)
+    status = 1;
+    output = '';
+    old_dir = pwd();
+    old_path = path();
+    cleanup_obj = onCleanup(@() restore_env_local(old_dir, old_path)); %#ok<NASGU>
+    try
+        cd(work_dir);
+    catch ME
+        output = ME.message;
+        return;
+    end
+    [status, output] = system(cmd);
+end
+
+function safe_cd_local(target_dir)
+    try
+        cd(target_dir);
+    catch
+    end
+end
+
+function restore_env_local(target_dir, old_path)
+    safe_cd_local(target_dir);
+    try
+        path(old_path);
+    catch
+    end
+end
+
+function p_out = normalize_shell_path(p_in)
+    p_out = strrep(char(p_in), '\', '/');
 end

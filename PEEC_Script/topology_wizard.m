@@ -1413,6 +1413,21 @@ function spec = build_design_spec_wizard(data)
         spec.recommendation = data.rec.results{data.rec.selected_idx};
     end
 
+    % Core-loss method preferences — pass through to interactive designer
+    % Default to iGSE; carry Steinmetz coefficients from recommendation if present.
+    spec.core_loss = struct('method', 'iGSE');
+    if data.rec.selected_idx > 0 && data.rec.selected_idx <= numel(data.rec.results)
+        r = data.rec.results{data.rec.selected_idx};
+        if isfield(r, 'steinmetz_k') && ~isempty(r.steinmetz_k)
+            spec.core_loss.k     = r.steinmetz_k;
+            spec.core_loss.alpha = r.steinmetz_alpha;
+            spec.core_loss.beta  = r.steinmetz_beta;
+        end
+        if isfield(r, 'core_loss_method') && ~isempty(r.core_loss_method)
+            spec.core_loss.method = r.core_loss_method;
+        end
+    end
+
     % Insulation
     spec.insulation = data.insulation;
 

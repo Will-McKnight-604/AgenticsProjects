@@ -651,14 +651,16 @@ function geom = peec_build_geometry(conductors, sigma, mu0, Nx, Ny, varargin)
 %   geom = peec_build_geometry(conductors, sigma, mu0, Nx, Ny)
 %   geom = peec_build_geometry(conductors, sigma, mu0, Nx, Ny, winding_map)
 %   geom = peec_build_geometry(conductors, sigma, mu0, Nx, Ny, winding_map, wire_shapes)
+%   geom = peec_build_geometry(conductors, sigma, mu0, Nx, Ny, winding_map, wire_shapes, solve_options)
 %
 % Inputs:
-%   conductors  - [N×6] array: [x, y, width, height, current, phase]
-%   sigma       - Conductivity [S/m]
-%   mu0         - Permeability [H/m]
-%   Nx, Ny      - Number of filaments per conductor in x and y
-%   winding_map - (optional) [N×1] array: winding ID for each conductor
-%   wire_shapes - (optional) Cell array: 'round' or 'rectangular' for each conductor
+%   conductors    - [N×6] array: [x, y, width, height, current, phase]
+%   sigma         - Conductivity [S/m]
+%   mu0           - Permeability [H/m]
+%   Nx, Ny        - Number of filaments per conductor in x and y
+%   winding_map   - (optional) [N×1] array: winding ID for each conductor
+%   wire_shapes   - (optional) Cell array: 'round' or 'rectangular' per conductor
+%   solve_options - (optional) Struct; uses near_singular_floor_m, enable_exact_rect_kernel
 %
 % Outputs:
 %   geom        - Structure containing filaments, matrices, and metadata
@@ -681,6 +683,15 @@ function geom = peec_build_geometry(conductors, sigma, mu0, Nx, Ny, varargin)
         for i = 1:size(conductors, 1)
             wire_shapes{i} = 'round';
         end
+    end
+
+    % Handle optional solve_options argument (varargin{3})
+    near_floor_m = 1e-12;
+    use_exact_rect = false;
+    if nargin > 7 && isstruct(varargin{3})
+        so = varargin{3};
+        near_floor_m = max(1e-15, pbg_get_opt_num(so, 'near_singular_floor_m', near_floor_m));
+        use_exact_rect = pbg_get_opt_bool(so, 'enable_exact_rect_kernel', use_exact_rect);
     end
 
     % ======= SAFETY CHECKS =======
@@ -741,28 +752,41 @@ function geom = peec_build_geometry(conductors, sigma, mu0, Nx, Ny, varargin)
         R(i,i) = 1/(sigma*A);
     end
 
-    % ======= INDUCTANCE MATRIX =======
-    L = zeros(Nf);
+    % ======= INDUCTANCE MATRIX (vectorized) =======
+    % Replaces O(Nf^2) scalar loop with vectorized bsxfun computation.
+    % Identical algorithm to adaptive_refine.m local vectorized kernel.
+    x_fil = filaments(:, 1);
+    y_fil = filaments(:, 2);
+    dx_fil = max(filaments(:, 3), 1e-12);
+    dy_fil = max(filaments(:, 4), 1e-12);
 
-    for i = 1:Nf
-        xi = filaments(i,1);
-        yi = filaments(i,2);
-        ai = sqrt(filaments(i,3)*filaments(i,4))/2;
+    % All pairwise center-to-center offsets
+    dx_all = bsxfun(@minus, x_fil, x_fil.');
+    dy_all = bsxfun(@minus, y_fil, y_fil.');
+    r2 = dx_all.^2 + dy_all.^2;
 
-        for j = 1:Nf
-            xj = filaments(j,1);
-            yj = filaments(j,2);
-            aj = sqrt(filaments(j,3)*filaments(j,4))/2;
+    % Effective radius with finite-size GMD correction
+    d2 = dx_fil.^2 + dy_fil.^2;
+    sigma2 = bsxfun(@plus, d2, d2.') / 12;
+    r_eff = sqrt(r2 + sigma2 + near_floor_m^2);
+    L = mu0 / (2*pi) * log(1 ./ max(r_eff, near_floor_m));
 
-            if i == j
-                r = ai;
-            else
-                r = sqrt((xi-xj)^2 + (yi-yj)^2);
-            end
-
-            L(i,j) = mu0/(2*pi)*log(1/r);
-        end
+    % Optional near-field correction for closely-spaced rectangular filaments
+    if use_exact_rect
+        span = dx_fil + dy_fil;
+        mean_span = 0.25 * bsxfun(@plus, span, span.');
+        closeness = sqrt(r2) ./ max(mean_span, near_floor_m);
+        corr = ones(Nf);
+        mask = closeness < 1.5;
+        corr(mask) = 1.0 - 0.12 * (1.5 - closeness(mask)) / 1.5;
+        corr(mask) = max(0.80, min(1.0, corr(mask)));
+        L = corr .* L;
     end
+
+    % Self-inductance diagonal: GMR formula for rectangular cross-section
+    req = max(0.2235 * (dx_fil + dy_fil), near_floor_m);
+    L(1:Nf+1:end) = mu0 / (2*pi) * log(1 ./ req);
+    L = 0.5 * (L + L.');  % Symmetrize
 
     % ======= CONSTRAINT MATRIX =======
     C = zeros(Nc, Nf);
@@ -792,6 +816,30 @@ function geom = peec_build_geometry(conductors, sigma, mu0, Nx, Ny, varargin)
     for i = 1:length(required_fields)
         if ~isfield(geom, required_fields{i})
             error('peec_build_geometry: failed to set field %s', required_fields{i});
+        end
+    end
+end
+
+% ---- Local helpers (prefixed pbg_ to avoid path conflicts) ----
+
+function out = pbg_get_opt_num(s, field, default_val)
+    out = default_val;
+    if isstruct(s) && isfield(s, field)
+        v = s.(field);
+        if isnumeric(v) && isscalar(v) && isfinite(v)
+            out = double(v);
+        end
+    end
+end
+
+function out = pbg_get_opt_bool(s, field, default_val)
+    out = default_val;
+    if isstruct(s) && isfield(s, field)
+        v = s.(field);
+        if islogical(v) && isscalar(v)
+            out = v;
+        elseif isnumeric(v) && isscalar(v)
+            out = (v ~= 0);
         end
     end
 end

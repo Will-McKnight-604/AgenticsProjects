@@ -71,32 +71,42 @@ def _load_local_json_map(path):
 
 
 def _build_name_to_key_map(db_map):
-    """Build case-insensitive name->key map from local exported DB JSON."""
+    """Build case-insensitive name->key map from local exported DB JSON.
+
+    Values are sanitized keys (matching MATLAB make_valid_name behavior)
+    so the returned keys can be used directly as MATLAB struct field names.
+    """
     out = {}
     if not isinstance(db_map, dict):
         return out
     for key, val in db_map.items():
         if isinstance(key, str):
-            out[key.strip().lower()] = key
+            safe_key = sanitize_local_key(key)
+            out[key.strip().lower()] = safe_key
         if isinstance(val, dict):
             name = val.get("name")
             if isinstance(name, str) and name.strip():
-                out[name.strip().lower()] = key
+                safe_key = sanitize_local_key(key) if isinstance(key, str) else sanitize_local_key(name)
+                out[name.strip().lower()] = safe_key
     return out
 
 
 def load_local_catalog_index(base_dir):
-    """Load local core/material/wire catalogs used by interactive GUI."""
+    """Load local core/material/wire catalogs used by interactive GUI.
+
+    Keys are sanitized to match MATLAB struct field names (make_valid_name),
+    since the GUI stores them with W_ prefix for numeric-leading keys.
+    """
     core_db = _load_local_json_map(os.path.join(base_dir, "openmagnetics_core_database.json"))
     material_db = _load_local_json_map(os.path.join(base_dir, "openmagnetics_material_database.json"))
     wire_db = _load_local_json_map(os.path.join(base_dir, "openmagnetics_wire_database.json"))
 
     return {
-        "core_keys": set(core_db.keys()),
+        "core_keys": set(sanitize_local_key(k) for k in core_db.keys()),
         "core_name_to_key": _build_name_to_key_map(core_db),
-        "material_keys": set(material_db.keys()),
+        "material_keys": set(sanitize_local_key(k) for k in material_db.keys()),
         "material_name_to_key": _build_name_to_key_map(material_db),
-        "wire_keys": set(wire_db.keys()),
+        "wire_keys": set(sanitize_local_key(k) for k in wire_db.keys()),
         "wire_name_to_key": _build_name_to_key_map(wire_db),
     }
 
@@ -820,13 +830,26 @@ def compute_losses_for_recommendation(mas_data):
     winding_losses = 0.0
 
     # Core losses via calculate_core_losses(core, coil, inputs, models)
-    try:
-        models = {"coreLosses": "iGSE", "reluctance": "Zhang"}
-        core_result = pm.calculate_core_losses(core, coil, inputs_data, models)
-        if isinstance(core_result, dict) and "data" not in core_result:
-            core_losses = as_float(core_result.get("coreLosses", 0.0), 0.0)
-    except Exception as exc:
-        print(f"  [LOSS] Core loss calc failed: {exc}", file=sys.stderr)
+    # Attempt 1: use default model selection (empty dict) — safest, schema-compatible.
+    # Attempt 2: explicit iGSE model object shape (fallback only if default fails).
+    core_loss_attempts = [
+        ({}, "default"),
+        ({"coreLosses": {"type": "iGSE"}, "reluctance": {"type": "Zhang"}}, "explicit_igse"),
+    ]
+    for attempt_models, attempt_label in core_loss_attempts:
+        try:
+            core_result = pm.calculate_core_losses(core, coil, inputs_data, attempt_models)
+            if isinstance(core_result, dict) and "data" not in core_result:
+                core_losses = as_float(core_result.get("coreLosses", 0.0), 0.0)
+                print(f"  [LOSS] Core loss calc OK ({attempt_label}): {core_losses:.4f} W",
+                      file=sys.stderr)
+                break
+            else:
+                err_detail = core_result.get("data", "") if isinstance(core_result, dict) else str(core_result)
+                print(f"  [LOSS] Core loss attempt '{attempt_label}' returned error response: {err_detail}",
+                      file=sys.stderr)
+        except Exception as exc:
+            print(f"  [LOSS] Core loss attempt '{attempt_label}' failed: {exc}", file=sys.stderr)
 
     # Winding losses via calculate_winding_losses(magnetic, operating_point, temperature)
     try:

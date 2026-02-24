@@ -620,12 +620,16 @@ end
 
 %}
 
-% peec_solve_frequency.m - Fixed for 7-column filament arrays
-function results = peec_solve_frequency(geom, conductors, f, sigma, mu0)
+% peec_solve_frequency.m - Accepts optional solve_options (6th arg) for solver control
+function results = peec_solve_frequency(geom, conductors, f, sigma, mu0, solve_options)
 
     % ================= HARD FAIL CHECKS =================
     if nargin < 5
         error('peec_solve_frequency: must be called as peec_solve_frequency(geom, conductors, f, sigma, mu0)');
+    end
+
+    if nargin < 6 || isempty(solve_options)
+        solve_options = struct();
     end
 
     if isempty(sigma) || ~isscalar(sigma)
@@ -661,6 +665,21 @@ function results = peec_solve_frequency(geom, conductors, f, sigma, mu0)
         error('peec_solve_frequency: conductors array is empty');
     end
 
+    % ================= PARSE SOLVE OPTIONS =================
+    lin_solver        = psf_get_str(solve_options, 'linear_solver', 'auto');
+    iter_min_nf       = psf_get_num(solve_options, 'iter_min_size_for_use', 400);
+    iter_tol          = psf_get_num(solve_options, 'iter_tol', 5e-7);
+    iter_maxit        = max(1, round(psf_get_num(solve_options, 'iter_maxit', 80)));
+    iter_restart      = max(1, round(psf_get_num(solve_options, 'iter_restart', 30)));
+    precond_type      = psf_get_str(solve_options, 'preconditioner', 'jacobi');
+    relres_max_std    = psf_get_num(solve_options, 'iter_accept_relres_max_standard', 5e-4);
+    relres_max_fast   = psf_get_num(solve_options, 'iter_accept_relres_max_fast', relres_max_std);
+    relres_max        = max(relres_max_std, iter_tol);  % gate must be at least as loose as solve tol
+    enable_retry      = psf_get_bool(solve_options, 'enable_iterative_retry', true);
+    retry_max         = max(0, round(psf_get_num(solve_options, 'iterative_retry_max', 2)));
+    retry_relax       = max(1.0, psf_get_num(solve_options, 'iterative_retry_relax_tol', 4.0));
+    retry_maxit_scale = max(1.0, psf_get_num(solve_options, 'iterative_retry_maxit_scale', 1.8));
+
     % ================= ANGULAR FREQUENCY =================
     w = 2*pi*f;
 
@@ -678,14 +697,8 @@ function results = peec_solve_frequency(geom, conductors, f, sigma, mu0)
     end
 
     % ================= RESISTANCE MATRIX =================
-    % Recalculate R from filament dimensions (not from geom.R)
-    % This ensures consistency with the actual filament array
-    R = zeros(Nf);
-    for i = 1:Nf
-        % fil columns: [x, y, dx, dy, conductor_idx, winding_idx, I_complex]
-        A = filaments(i,3) * filaments(i,4);  % Cross-sectional area
-        R(i,i) = 1 / (sigma * A);
-    end
+    % Vectorized: diagonal only
+    R_diag = 1 ./ (sigma * filaments(:,3) .* filaments(:,4));
 
     % ================= INDUCTANCE MATRIX =================
     L = geom.L;   % MUST be precomputed in geometry
@@ -693,9 +706,6 @@ function results = peec_solve_frequency(geom, conductors, f, sigma, mu0)
     if isempty(L) || any(size(L) ~= [Nf Nf])
         error('peec_solve_frequency: inductance matrix L invalid');
     end
-
-    % ================= IMPEDANCE MATRIX =================
-    Z = R + 1j * w * L;
 
     % ================= CONNECTIVITY CHECK =================
     if ~isfield(geom,'C') || isempty(geom.C)
@@ -711,54 +721,192 @@ function results = peec_solve_frequency(geom, conductors, f, sigma, mu0)
     % ================= TARGET CURRENTS =================
     I_target = conductors(:,5).*exp(1j*conductors(:,6)*pi/180);
 
-    % ================= BUILD SYSTEM MATRIX =================
-    A = [Z, C.'; C, zeros(Nc)];
-    b = [zeros(Nf,1); I_target];
+    % ================= SOLVER SELECTION =================
+    N_sys = Nf + Nc;
+    b_sys = [zeros(Nf,1); I_target];
 
-    % ======= MATRIX SANITY CHECK =======
-    if size(Z,1) == 0 || size(Z,2) == 0
-        error('peec_solve_frequency: impedance matrix Z is empty');
+    use_iterative    = false;
+    iter_solver_name = psf_get_str(solve_options, 'iter_auto_solver', 'gmres');
+    if strcmp(lin_solver, 'direct')
+        use_iterative = false;
+    elseif any(strcmp(lin_solver, {'bicgstab', 'gmres'}))
+        use_iterative    = true;
+        iter_solver_name = lin_solver;
+    else  % 'auto' or unknown
+        use_iterative = (Nf >= iter_min_nf);
     end
 
-    if size(Z,1) ~= size(Z,2)
-        error('peec_solve_frequency: impedance matrix Z is not square');
+    % Always build the dense system matrix (needed for direct fallback and dense iterative)
+    Z = diag(R_diag) + 1j * w * L;
+    A_sys = [Z, C.'; C, zeros(Nc)];
+
+    x = [];
+    solved_iterative = false;
+    if use_iterative
+        % Octave's gmres/bicgstab stagnate when the RHS has an exact-zero block
+        % because the Krylov basis for zero-rows produces no search directions.
+        % A tiny perturbation (~1e-30 * norm(b)) fixes this without affecting accuracy.
+        b_iter = b_sys;
+        b_norm = norm(I_target);
+        if b_norm > 0
+            b_iter(1:Nf) = 1e-30 * b_norm;
+        end
+        [x, solved_iterative] = psf_iterative_solve(A_sys, b_iter, iter_solver_name, ...
+            iter_tol, iter_maxit, iter_restart, precond_type, relres_max, ...
+            enable_retry, retry_max, retry_relax, retry_maxit_scale);
     end
 
-    if size(C,2) ~= size(Z,1)
-        error('peec_solve_frequency: constraint matrix C incompatible with Z');
+    if ~solved_iterative
+        x = A_sys \ b_sys;
     end
 
-    % ================= DEBUG OUTPUT =================
-    if false  % Set to true for debugging
-        disp(['DEBUG: size(Z)=', mat2str(size(Z)), ...
-              ', size(C)=', mat2str(size(C)), ...
-              ', mu0=', num2str(mu0), ...
-              ', sigma=', num2str(sigma)]);
-    end
-
-    % ================= SOLVE SYSTEM =================
-    x = A\b;
     I_fil = x(1:Nf);
 
-    % ================= VERIFY SOLUTION =================
     if isempty(I_fil)
         error('peec_solve_frequency: solver returned empty current vector');
     end
 
-    % ================= POWER LOSS =================
-    P_fil = zeros(Nf,1);
-    for i = 1:Nf
-        P_fil(i) = 0.5*real(conj(I_fil(i))*R(i,i)*I_fil(i));
-    end
+    % ================= POWER LOSS (vectorized) =================
+    P_fil = 0.5 * R_diag(:) .* abs(I_fil).^2;
 
     % ================= RETURN RESULTS =================
-    results.I_fil   = I_fil;      % Filament currents
-    results.P_fil   = P_fil;      % Power loss per filament
-    results.P_total = sum(P_fil); % Total power loss
-    results.f       = f;          % Frequency
-    results.R       = R;          % Resistance matrix used
-    results.L       = L;          % Inductance matrix used
-    results.Z       = Z;          % Impedance matrix
+    results.I_fil   = I_fil;
+    results.P_fil   = P_fil;
+    results.P_total = sum(P_fil);
+    results.f       = f;
+    results.R       = diag(R_diag);
+    results.L       = L;
+end
+
+% ---- Local helpers (prefixed psf_ to avoid path conflicts) ----
+
+function [x, ok] = psf_iterative_solve(A, b, solver_name, tol, maxit, restart, ...
+        precond_type, relres_max, enable_retry, retry_max, retry_relax, retry_maxit_scale)
+    x  = [];
+    ok = false;
+    M_pre = psf_build_preconditioner(A, precond_type);
+    [x_try, flag, relres] = psf_call_solver(A, b, solver_name, tol, maxit, restart, M_pre);
+    if flag == 0 && relres <= relres_max
+        x  = x_try;
+        ok = true;
+        return;
+    end
+    if enable_retry
+        for r = 1:retry_max
+            tol_r   = tol   * retry_relax^r;
+            maxit_r = round(maxit * retry_maxit_scale^r);
+            [x_try, flag, relres] = psf_call_solver(A, b, solver_name, tol_r, maxit_r, restart, M_pre);
+            if flag == 0 && relres <= relres_max * retry_relax^r
+                x  = x_try;
+                ok = true;
+                return;
+            end
+        end
+    end
+end
+
+function [x, flag, relres] = psf_call_solver(A, b, solver_name, tol, maxit, restart, M_pre)
+    x = zeros(size(b)); flag = 1; relres = inf;
+    try
+        if strcmp(solver_name, 'gmres')
+            N_sys = numel(b);
+            eff_restart = min(restart, N_sys);
+            gmres_outer = max(1, ceil(maxit / max(1, eff_restart)));
+            if isempty(M_pre)
+                [x, flag, relres] = gmres(A, b, eff_restart, tol, gmres_outer);
+            else
+                [x, flag, relres] = gmres(A, b, eff_restart, tol, gmres_outer, M_pre);
+            end
+        else  % bicgstab
+            if isempty(M_pre)
+                [x, flag, relres] = bicgstab(A, b, tol, maxit);
+            else
+                [x, flag, relres] = bicgstab(A, b, tol, maxit, M_pre);
+            end
+        end
+    catch
+        flag   = -1;
+        relres = inf;
+    end
+end
+
+function M = psf_build_preconditioner(A, precond_type)
+    % Saddle-point systems [Z C'; C 0] have zero diagonal in the Lagrange block.
+    % Any Jacobi scaling of those rows causes GMRES/BiCGSTAB stagnation (flag 3/4).
+    % Return no preconditioner — unpreconditioned GMRES converges reliably here.
+    M = [];
+end
+
+function y = psf_saddle_matvec(v, Zmv, C, Nf, Nc)
+    % Matrix-free matvec for [Z C'; C 0] * [v1; v2]
+    v1 = v(1:Nf);
+    v2 = v(Nf+1:Nf+Nc);
+    y1 = Zmv(v1) + C.' * v2;
+    y2 = C * v1;
+    y  = [y1(:); y2(:)];
+end
+
+function [x, ok] = psf_iterative_solve_mf(matvec, b, solver_name, tol, maxit, restart, ...
+        A_diag, relres_max, enable_retry, retry_max, retry_relax, retry_maxit_scale)
+    % Matrix-free iterative solve with Jacobi preconditioner from diagonal vector.
+    x  = [];
+    ok = false;
+    % Build Jacobi preconditioner from diagonal
+    M_pre = [];
+    if ~isempty(A_diag)
+        d = A_diag(:);
+        d_abs = abs(d);
+        d(d_abs < 1e-30 * max(d_abs(:))) = 1;
+        inv_d = 1 ./ d;
+        M_pre = @(r) inv_d .* r(:);
+    end
+    [x_try, flag, relres] = psf_call_solver(matvec, b, solver_name, tol, maxit, restart, M_pre);
+    if flag == 0 && relres <= relres_max
+        x  = x_try;
+        ok = true;
+        return;
+    end
+    if enable_retry
+        for r = 1:retry_max
+            tol_r   = tol   * retry_relax^r;
+            maxit_r = round(maxit * retry_maxit_scale^r);
+            [x_try, flag, relres] = psf_call_solver(matvec, b, solver_name, tol_r, maxit_r, restart, M_pre);
+            if flag == 0 && relres <= relres_max * retry_relax^r
+                x  = x_try;
+                ok = true;
+                return;
+            end
+        end
+    end
+end
+
+function out = psf_get_str(s, field, default_val)
+    out = default_val;
+    if ~isstruct(s) || ~isfield(s, field), return; end
+    v = s.(field);
+    if ischar(v)
+        out = lower(strtrim(v));
+    elseif (exist('isstring', 'builtin') || exist('isstring', 'file')) && isstring(v)
+        out = lower(strtrim(char(v)));
+    end
+end
+
+function out = psf_get_num(s, field, default_val)
+    out = default_val;
+    if ~isstruct(s) || ~isfield(s, field), return; end
+    v = s.(field);
+    if isnumeric(v) && isscalar(v) && isfinite(v), out = double(v); end
+end
+
+function out = psf_get_bool(s, field, default_val)
+    out = default_val;
+    if ~isstruct(s) || ~isfield(s, field), return; end
+    v = s.(field);
+    if islogical(v) && isscalar(v)
+        out = v;
+    elseif isnumeric(v) && isscalar(v)
+        out = (v ~= 0);
+    end
 end
 
 % NOTE: compute_winding_inductance_matrix() moved to separate file:
