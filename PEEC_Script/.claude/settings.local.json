@@ -15,7 +15,16 @@
       "Bash(where:*)",
       "Bash(matlab -batch:*)",
       "Bash(git ls-tree:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(\"C:/Program Files/GNU Octave/Octave-7.1.0/usr/bin/python.exe\" --version)",
+      "Bash(\"C:/Program Files/GNU Octave/Octave-7.1.0/usr/bin/python.exe\" -c \"import PyOpenMagnetics; print\\(PyOpenMagnetics.__version__\\)\")",
+      "Bash(\"C:/Program Files/GNU Octave/Octave-7.1.0/usr/bin/python.exe\" -m pip install --upgrade pip setuptools wheel)",
+      "Bash(\"C:/Program Files/GNU Octave/Octave-7.1.0/usr/bin/python.exe\" -m ensurepip)",
+      "Bash(\"C:/Users/Will/Desktop/octave-10.3.0-w64-64/bin/python.exe\" --version)",
+      "Bash(\"C:/Users/Will/Desktop/octave-10.3.0-w64-64/usr/bin/python.exe\" --version)",
+      "Bash(\"C:/Users/Will/Desktop/octave-10.3.0-w64-64/usr/bin/python.exe\":*)",
+      "Bash(\"C:/Users/Will/Desktop/octave-10.3.0-w64-64/usr/bin/python.exe\" -m pip install PyOpenMagnetics --upgrade)",
+      "Bash(\"C:/Users/Will/Desktop/octave-10.3.0-w64-64/usr/bin/python.exe\" -m ensurepip --user)"
     ]
   }
 }

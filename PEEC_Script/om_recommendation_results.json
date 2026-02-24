@@ -3,33 +3,33 @@
   "n_results": 3,
   "recommendations": [
     {
-      "raw_score": 2.494286259614266,
-      "score": 2.494286259614266,
+      "raw_score": 2.7981733867095233,
+      "score": 2.7981733867095233,
       "scoring_per_filter": {
         "COST": 1.0,
         "DIMENSIONS": 1.0,
-        "EFFECTIVE_CURRENT_DENSITY": 1.0,
-        "EFFECTIVE_RESISTANCE": 0.8882277959286813,
-        "LOSSES": 0.4942862596142661,
+        "EFFECTIVE_CURRENT_DENSITY": 0.5012980018822665,
+        "EFFECTIVE_RESISTANCE": 0.9211853063444286,
+        "LOSSES": 0.7981733867095233,
         "MAGNETOMOTIVE_FORCE": 1.0
       },
-      "core_shape": "T 30/18.0/16.9",
-      "core_shape_raw": "T 30/18.0/16.9",
+      "core_shape": "T 36/23/12.7",
+      "core_shape_raw": "T 36/23/12.7",
       "material": "75",
       "material_raw": "75",
       "gapping": [],
       "n_windings": 2,
-      "primary_turns": 23,
+      "primary_turns": 8,
       "primary_parallels": 1,
-      "primary_wire": "Litz SXXL20/34FX-3(MWXX)",
-      "primary_wire_raw": "Litz SXXL20/34FX-3(MWXX)",
+      "primary_wire": "Litz SXXL100/38FX-3(MWXX)",
+      "primary_wire_raw": "Litz SXXL100/38FX-3(MWXX)",
       "primary_wire_info": {
-        "original_name": "Litz SXXL20/34FX-3(MWXX)",
+        "original_name": "Litz SXXL100/38FX-3(MWXX)",
         "wire_type": "litz",
         "conducting_diameter": 0.0,
         "conducting_width": 0.0,
         "conducting_height": 0.0,
-        "number_conductors": 20,
+        "number_conductors": 100,
         "matched_name": null
       },
       "secondary_turns": 1,
@@ -46,79 +46,79 @@
         "matched_name": "Round 10.0 - Heavy Build"
       },
       "secondary_wire_matched": "Round 10.0 - Heavy Build",
-      "core_losses_w": 5.113299945874342e-06,
-      "winding_losses_w": 0.03558123803708044,
-      "total_losses_w": 0.03558635133702631,
+      "core_losses_w": 9.924849152472564e-06,
+      "winding_losses_w": 0.0258106037178555,
+      "total_losses_w": 0.02582052856700797,
       "loss_source": "OpenMagnetics",
       "operating_point_outputs": [
         {
           "index": 0,
-          "Lm_H": 0.033738581794067406,
-          "Llk_H": 6.28179059637683e-05,
-          "core_loss_W": 5.333201935398137e-06,
-          "B_peak_T": 0.013380174003727745,
-          "B_pp_T": 0.026615553300879453,
-          "B_offset_T": 7.239735328801958e-05,
-          "winding_loss_W": 0.03558123803708044
+          "Lm_H": 0.002613315116708706,
+          "Llk_H": 4.2561582015529045e-06,
+          "core_loss_W": 9.924849152472564e-06,
+          "B_peak_T": 0.020120418104382063,
+          "B_pp_T": 0.039979109153935544,
+          "B_offset_T": 0.00013086352741428948,
+          "winding_loss_W": 0.0258106037178555
         },
         {
           "index": 1,
-          "Lm_H": 0.033738581794067406,
-          "Llk_H": 6.28179059637683e-05,
-          "core_loss_W": 5.064212058073566e-06,
-          "B_peak_T": 0.013036912567762215,
-          "B_pp_T": 0.026007197796859352,
-          "B_offset_T": 3.3313669332540007e-05,
-          "winding_loss_W": 0.03580004693588827
+          "Lm_H": 0.002613315116708706,
+          "Llk_H": 4.2561582015529045e-06,
+          "core_loss_W": 6.315961530009601e-06,
+          "B_peak_T": 0.016047969253558083,
+          "B_pp_T": 0.03201392265583343,
+          "B_offset_T": 4.100792564137e-05,
+          "winding_loss_W": 0.02926897106516429
         }
       ],
-      "Lm_uH": 33738.5817940674,
-      "Llk_uH": 62.8179059637683,
-      "B_peak_mT": 13.380174003727745,
-      "B_pp_mT": 26.615553300879455,
-      "B_offset_mT": 0.07239735328801958,
-      "core_loss_W": 5.333201935398137e-06,
-      "winding_loss_W": 0.03558123803708044,
-      "Ae_m2": 0.0006141825000000002,
-      "le_m": 0.07563384313517427,
-      "Ve_m3": 4.6452982861369185e-05,
-      "core_shape_local_key": "T_30_18_0_16_9",
+      "Lm_uH": 2613.315116708706,
+      "Llk_uH": 4.256158201552904,
+      "B_peak_mT": 20.120418104382065,
+      "B_pp_mT": 39.979109153935546,
+      "B_offset_mT": 0.13086352741428947,
+      "core_loss_W": 9.924849152472564e-06,
+      "winding_loss_W": 0.0258106037178555,
+      "Ae_m2": 0.00047815499999999996,
+      "le_m": 0.09197012493384117,
+      "Ve_m3": 4.397597508774082e-05,
+      "core_shape_local_key": "T_36_23_12_7",
       "material_local_key": "W_75",
-      "primary_wire_local_key": "Litz_SXXL20_34FX_3_MWXX_",
+      "primary_wire_local_key": "Litz_SXXL100_38FX_3_MWXX_",
       "secondary_wire_local_key": "Round_10_0___Heavy_Build",
-      "ui_weighted_score": 0.8314287532047553,
-      "ui_score": 0.8314287532047553,
-      "weighted_score": 0.8314287532047553,
+      "ui_weighted_score": 0.9327244622365076,
+      "ui_score": 0.9327244622365076,
+      "weighted_score": 0.9327244622365076,
       "score_mode": "raw_mkf"
     },
     {
-      "raw_score": 2.279436455260923,
-      "score": 2.279436455260923,
+      "raw_score": 2.6572919974095655,
+      "score": 2.6572919974095655,
       "scoring_per_filter": {
         "COST": 1.0,
-        "DIMENSIONS": 0.7231782670403905,
-        "EFFECTIVE_CURRENT_DENSITY": 0.9764413770812119,
-        "EFFECTIVE_RESISTANCE": 0.9236036688118217,
-        "LOSSES": 0.5562581882205326,
+        "DIMENSIONS": 0.7459055846564431,
+        "EFFECTIVE_CURRENT_DENSITY": 0.5012980018822665,
+        "EFFECTIVE_RESISTANCE": 0.9211853063444286,
+        "LOSSES": 0.9113864127531227,
         "MAGNETOMOTIVE_FORCE": 1.0
       },
-      "core_shape": "T 40/24/16",
-      "core_shape_raw": "T 40/24/16",
+      "core_shape": "T 63/38/25",
+      "core_shape_raw": "T 63/38/25",
       "material": "3E6",
       "material_raw": "3E6",
       "gapping": [],
       "n_windings": 2,
-      "primary_turns": 23,
+      "primary_turns": 8,
       "primary_parallels": 1,
-      "primary_wire": "Litz SXXL66/38FX-3(MWXX)",
-      "primary_wire_raw": "Litz SXXL66/38FX-3(MWXX)",
+      "primary_wire": "Litz SXXL100/38FX-3(MWXX)",
+      "primary_wire_raw": "Litz SXXL100/38FX-3(MWXX)",
       "primary_wire_info": {
-        "original_name": "Litz SXXL66/38FX-3(MWXX)",
+        "original_name": "Litz SXXL100/38FX-3(MWXX)",
         "wire_type": "litz",
         "conducting_diameter": 0.0,
         "conducting_width": 0.0,
         "conducting_height": 0.0,
-        "number_conductors": 66,
+        "number_conductors": 100,
         "matched_name": null
       },
       "secondary_turns": 1,
@@ -135,79 +135,79 @@
         "matched_name": "Round 10.0 - Heavy Build"
       },
       "secondary_wire_matched": "Round 10.0 - Heavy Build",
-      "core_losses_w": 3.6344430838177685e-05,
-      "winding_losses_w": 0.033219141145814514,
-      "total_losses_w": 0.03325548557665269,
+      "core_losses_w": 0.00012404011317000157,
+      "winding_losses_w": 0.019782554420582233,
+      "total_losses_w": 0.019906594533752233,
       "loss_source": "OpenMagnetics",
       "operating_point_outputs": [
         {
           "index": 0,
-          "Lm_H": 0.05078400002764558,
-          "Llk_H": 6.891549246953077e-05,
-          "core_loss_W": 3.6344430838177685e-05,
-          "B_peak_T": 0.010700349895891297,
-          "B_pp_T": 0.021284905032835148,
-          "B_offset_T": 5.789737947372274e-05,
-          "winding_loss_W": 0.033219141145814514
+          "Lm_H": 0.0031683168334079234,
+          "Llk_H": 4.79914208724688e-06,
+          "core_loss_W": 0.00012404011317000157,
+          "B_peak_T": 0.015393085629921283,
+          "B_pp_T": 0.030585937500000073,
+          "B_offset_T": 0.00010011687992124603,
+          "winding_loss_W": 0.019782554420582233
         },
         {
           "index": 1,
-          "Lm_H": 0.05078400002764558,
-          "Llk_H": 6.891549246953077e-05,
-          "core_loss_W": 3.757755666943846e-05,
-          "B_peak_T": 0.010425837959830233,
-          "B_pp_T": 0.02079839291779892,
-          "B_offset_T": 2.6641500930772548e-05,
-          "winding_loss_W": 0.033397706422628605
+          "Lm_H": 0.0031683168334079234,
+          "Llk_H": 4.79914208724688e-06,
+          "core_loss_W": 9.9903973105872e-05,
+          "B_peak_T": 0.012277466781496103,
+          "B_pp_T": 0.024492187500000047,
+          "B_offset_T": 3.137303149607952e-05,
+          "winding_loss_W": 0.0224386976161599
         }
       ],
-      "Lm_uH": 50784.00002764558,
-      "Llk_uH": 68.91549246953078,
-      "B_peak_mT": 10.700349895891296,
-      "B_pp_mT": 21.284905032835148,
-      "B_offset_mT": 0.05789737947372274,
-      "core_loss_W": 3.6344430838177685e-05,
-      "winding_loss_W": 0.033219141145814514,
-      "Ae_m2": 0.000768,
-      "le_m": 0.10053096491487339,
-      "Ve_m3": 7.720778105462277e-05,
-      "core_shape_local_key": "T_40_24_16",
+      "Lm_uH": 3168.3168334079232,
+      "Llk_uH": 4.79914208724688,
+      "B_peak_mT": 15.393085629921282,
+      "B_pp_mT": 30.585937500000075,
+      "B_offset_mT": 0.10011687992124603,
+      "core_loss_W": 0.00012404011317000157,
+      "winding_loss_W": 0.019782554420582233,
+      "Ae_m2": 0.0006250000000000001,
+      "le_m": 0.15865042900628457,
+      "Ve_m3": 9.91565181289279e-05,
+      "core_shape_local_key": "T_63_38_25",
       "material_local_key": "W_3E6",
-      "primary_wire_local_key": "Litz_SXXL66_38FX_3_MWXX_",
+      "primary_wire_local_key": "Litz_SXXL100_38FX_3_MWXX_",
       "secondary_wire_local_key": "Round_10_0___Heavy_Build",
-      "ui_weighted_score": 0.7598121517536409,
-      "ui_score": 0.7598121517536409,
-      "weighted_score": 0.7598121517536409,
+      "ui_weighted_score": 0.8857639991365218,
+      "ui_score": 0.8857639991365218,
+      "weighted_score": 0.8857639991365218,
       "score_mode": "raw_mkf"
     },
     {
-      "raw_score": 2.275153989862313,
-      "score": 2.275153989862313,
+      "raw_score": 2.590831843229877,
+      "score": 2.590831843229877,
       "scoring_per_filter": {
         "COST": 1.0,
-        "DIMENSIONS": 0.7207654740775365,
-        "EFFECTIVE_CURRENT_DENSITY": 0.9764413770812119,
-        "EFFECTIVE_RESISTANCE": 0.9236036688118217,
-        "LOSSES": 0.5543885157847765,
+        "DIMENSIONS": 0.5908318432298771,
+        "EFFECTIVE_CURRENT_DENSITY": 0.5012980018822665,
+        "EFFECTIVE_RESISTANCE": 0.9211853063444286,
+        "LOSSES": 1.0,
         "MAGNETOMOTIVE_FORCE": 1.0
       },
-      "core_shape": "T 40/24/16",
-      "core_shape_raw": "T 40/24/16",
+      "core_shape": "T 80/40/15",
+      "core_shape_raw": "T 80/40/15",
       "material": "3E6",
       "material_raw": "3E6",
       "gapping": [],
       "n_windings": 2,
-      "primary_turns": 23,
+      "primary_turns": 8,
       "primary_parallels": 1,
-      "primary_wire": "Litz TXXL66/38FXXX-3(MWXX)",
-      "primary_wire_raw": "Litz TXXL66/38FXXX-3(MWXX)",
+      "primary_wire": "Litz SXXL100/38FX-3(MWXX)",
+      "primary_wire_raw": "Litz SXXL100/38FX-3(MWXX)",
       "primary_wire_info": {
-        "original_name": "Litz TXXL66/38FXXX-3(MWXX)",
+        "original_name": "Litz SXXL100/38FX-3(MWXX)",
         "wire_type": "litz",
         "conducting_diameter": 0.0,
         "conducting_width": 0.0,
         "conducting_height": 0.0,
-        "number_conductors": 66,
+        "number_conductors": 100,
         "matched_name": null
       },
       "secondary_turns": 1,
@@ -224,49 +224,49 @@
         "matched_name": "Round 10.0 - Heavy Build"
       },
       "secondary_wire_matched": "Round 10.0 - Heavy Build",
-      "core_losses_w": 3.6344430838177685e-05,
-      "winding_losses_w": 0.0332875104165746,
-      "total_losses_w": 0.03332385484741278,
+      "core_losses_w": 0.00017509828738829745,
+      "winding_losses_w": 0.016082830550658987,
+      "total_losses_w": 0.016257928838047282,
       "loss_source": "OpenMagnetics",
       "operating_point_outputs": [
         {
           "index": 0,
-          "Lm_H": 0.05078400002764558,
-          "Llk_H": 5.044283324773255e-05,
-          "core_loss_W": 3.6344430838177685e-05,
-          "B_peak_T": 0.010700349895891297,
-          "B_pp_T": 0.021284905032835148,
-          "B_offset_T": 5.789737947372274e-05,
-          "winding_loss_W": 0.0332875104165746
+          "Lm_H": 0.0025600000013936016,
+          "Llk_H": 4.886323632304617e-06,
+          "core_loss_W": 0.00017509828738829745,
+          "B_peak_T": 0.016034464197834674,
+          "B_pp_T": 0.03186035156250008,
+          "B_offset_T": 0.00010428841658463237,
+          "winding_loss_W": 0.016082830550658987
         },
         {
           "index": 1,
-          "Lm_H": 0.05078400002764558,
-          "Llk_H": 5.044283324773255e-05,
-          "core_loss_W": 3.757755666943846e-05,
-          "B_peak_T": 0.010425837959830233,
-          "B_pp_T": 0.02079839291779892,
-          "B_offset_T": 2.6641500930772548e-05,
-          "winding_loss_W": 0.033466527680148773
+          "Lm_H": 0.0025600000013936016,
+          "Llk_H": 4.886323632304617e-06,
+          "core_loss_W": 0.00011142880159942145,
+          "B_peak_T": 0.012789027897391777,
+          "B_pp_T": 0.025512695312500056,
+          "B_offset_T": 3.268024114174914e-05,
+          "winding_loss_W": 0.018236901257372005
         }
       ],
-      "Lm_uH": 50784.00002764558,
-      "Llk_uH": 50.442833247732544,
-      "B_peak_mT": 10.700349895891296,
-      "B_pp_mT": 21.284905032835148,
-      "B_offset_mT": 0.05789737947372274,
-      "core_loss_W": 3.6344430838177685e-05,
-      "winding_loss_W": 0.0332875104165746,
-      "Ae_m2": 0.000768,
-      "le_m": 0.10053096491487339,
-      "Ve_m3": 7.720778105462277e-05,
-      "core_shape_local_key": "T_40_24_16",
+      "Lm_uH": 2560.0000013936015,
+      "Llk_uH": 4.886323632304617,
+      "B_peak_mT": 16.034464197834673,
+      "B_pp_mT": 31.86035156250008,
+      "B_offset_mT": 0.10428841658463237,
+      "core_loss_W": 0.00017509828738829745,
+      "winding_loss_W": 0.016082830550658987,
+      "Ae_m2": 0.0006,
+      "le_m": 0.18849555921538758,
+      "Ve_m3": 0.00011309733552923254,
+      "core_shape_local_key": "T_80_40_15",
       "material_local_key": "W_3E6",
-      "primary_wire_local_key": "Litz_TXXL66_38FXXX_3_MWXX_",
+      "primary_wire_local_key": "Litz_SXXL100_38FX_3_MWXX_",
       "secondary_wire_local_key": "Round_10_0___Heavy_Build",
-      "ui_weighted_score": 0.7583846632874377,
-      "ui_score": 0.7583846632874377,
-      "weighted_score": 0.7583846632874377,
+      "ui_weighted_score": 0.863610614409959,
+      "ui_score": 0.863610614409959,
+      "weighted_score": 0.863610614409959,
       "score_mode": "raw_mkf"
     }
   ],
@@ -292,15 +292,15 @@
     "designRequirements": {
       "topology": "Two Switch Forward Converter",
       "magnetizingInductance": {
-        "nominal": 0.031973684210526314,
-        "minimum": 0.025578947368421052,
-        "maximum": 0.03836842105263157
+        "nominal": 0.0035526315789473676,
+        "minimum": 0.0028421052631578945,
+        "maximum": 0.004263157894736841
       },
       "turnsRatios": [
         {
-          "nominal": 23.684210526315788,
-          "minimum": 22.499999999999996,
-          "maximum": 24.86842105263158
+          "nominal": 7.894736842105263,
+          "minimum": 7.499999999999999,
+          "maximum": 8.289473684210526
         }
       ],
       "operatingTemperature": {
@@ -318,9 +318,9 @@
           "maximum": 2000
         },
         "mainSupplyVoltage": {
-          "nominal": 310,
-          "minimum": 300,
-          "maximum": 320
+          "nominal": 145,
+          "minimum": 100,
+          "maximum": 190
         }
       }
     },
@@ -337,17 +337,17 @@
             "current": {
               "processed": {
                 "label": "Triangular",
-                "peakToPeak": 0.021111111111111115,
-                "offset": 0.1393147592702856,
-                "dutyCycle": 0.43548387096774194
+                "peakToPeak": 0.06333333333333334,
+                "offset": 0.35282114253639857,
+                "dutyCycle": 0.3103448275862069
               }
             },
             "voltage": {
               "processed": {
                 "label": "Rectangular",
-                "peakToPeak": 310.0,
+                "peakToPeak": 145.0,
                 "offset": 0.0,
-                "dutyCycle": 0.43548387096774194
+                "dutyCycle": 0.3103448275862069
               }
             }
           },
@@ -358,16 +358,16 @@
               "processed": {
                 "label": "Rectangular",
                 "peakToPeak": 5.0,
-                "offset": 1.0887096774193548,
-                "dutyCycle": 0.43548387096774194
+                "offset": 0.7758620689655172,
+                "dutyCycle": 0.3103448275862069
               }
             },
             "voltage": {
               "processed": {
                 "label": "Rectangular",
-                "peakToPeak": 13.421702622430525,
+                "peakToPeak": 13.014148283908385,
                 "offset": 0,
-                "dutyCycle": 0.43548387096774194
+                "dutyCycle": 0.3103448275862069
               }
             }
           }
@@ -385,15 +385,15 @@
             "current": {
               "processed": {
                 "label": "Triangular",
-                "peakToPeak": 0.021111111111111115,
-                "offset": 0.1416176385749867,
+                "peakToPeak": 0.06333333333333332,
+                "offset": 0.4248529157249601,
                 "dutyCycle": 0.44999999999999996
               }
             },
             "voltage": {
               "processed": {
                 "label": "Rectangular",
-                "peakToPeak": 300.0,
+                "peakToPeak": 100.0,
                 "offset": 0.0,
                 "dutyCycle": 0.44999999999999996
               }

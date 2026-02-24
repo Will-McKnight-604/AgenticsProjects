@@ -115,6 +115,12 @@ def build_grid(cfg):
     line_scales = cfg.get("line_scales", [1.0]) or [1.0]
     load_scales = cfg.get("load_scales", [1.0]) or [1.0]
 
+    # Handle case where MATLAB's jsonencode converts single-element arrays to scalars
+    if isinstance(line_scales, (int, float)):
+        line_scales = [line_scales]
+    if isinstance(load_scales, (int, float)):
+        load_scales = [load_scales]
+
     line_scales = [as_float(v, 1.0) for v in line_scales]
     load_scales = [as_float(v, 1.0) for v in load_scales]
     line_scales = sorted(set(line_scales))

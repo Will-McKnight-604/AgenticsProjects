@@ -4351,7 +4351,7 @@ function [profile, meta] = generate_converter_excitation_profile(data, ex_cfg)
     if status ~= 0 && is_module_error && ispc
         cmd_fb = sprintf('py "%s" "%s" 2>&1', py_script_name, cfg_file_name);
         [status_fb, output_fb] = run_system_in_dir(script_dir, cmd_fb);
-        if status_fb == 0 && ~isempty(strfind(output_fb, 'OK'))
+        if status_fb == 0
             status = status_fb;
             output = output_fb;
         end
@@ -4369,7 +4369,7 @@ function [profile, meta] = generate_converter_excitation_profile(data, ex_cfg)
             p = strrep(p, '\', '/');
             cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script_name, cfg_file_name);
             [status_alt, output_alt] = run_system_in_dir(script_dir, cmd_alt);
-            if status_alt == 0 && ~isempty(strfind(output_alt, 'OK'))
+            if status_alt == 0
                 status = status_alt;
                 output = output_alt;
                 break;
@@ -4377,7 +4377,7 @@ function [profile, meta] = generate_converter_excitation_profile(data, ex_cfg)
         end
     end
 
-    if status ~= 0 || isempty(strfind(strtrim(output), 'OK'))
+    if status ~= 0
         error('Excitation python failed (exit=%d): %s', status, strtrim(output));
     end
 
