@@ -108,6 +108,56 @@ class TopologyCalculator:
         """
         raise NotImplementedError(f"{self.__class__.__name__}.compute_design_requirements")
 
+    def _make_rectangular_excitation(self, name, freq, i_pp, i_offset, v_pp, v_offset, duty):
+        """Build a MAS excitation dict with rectangular current and voltage waveforms.
+        The processed waveform is what the PyOpenMagnetics adviser uses to compute losses
+        and select cores. Without it the adviser receives zero-current excitations and
+        produces topology-agnostic (often toroid-favouring) results.
+        """
+        return {
+            "name": name,
+            "frequency": freq,
+            "current": {
+                "processed": {
+                    "label": "Rectangular",
+                    "peakToPeak": float(abs(i_pp)),
+                    "offset": float(i_offset),
+                    "dutyCycle": float(clamp(duty, 0.01, 0.99)),
+                }
+            },
+            "voltage": {
+                "processed": {
+                    "label": "Rectangular",
+                    "peakToPeak": float(abs(v_pp)),
+                    "offset": float(v_offset),
+                    "dutyCycle": float(clamp(duty, 0.01, 0.99)),
+                }
+            },
+        }
+
+    def _make_triangular_excitation(self, name, freq, i_pp, i_offset, v_pp, v_offset, duty):
+        """Build a MAS excitation dict with triangular current waveform (for Buck/Boost/IsolatedBuck)."""
+        return {
+            "name": name,
+            "frequency": freq,
+            "current": {
+                "processed": {
+                    "label": "Triangular",
+                    "peakToPeak": float(abs(i_pp)),
+                    "offset": float(i_offset),
+                    "dutyCycle": float(clamp(duty, 0.01, 0.99)),
+                }
+            },
+            "voltage": {
+                "processed": {
+                    "label": "Rectangular",
+                    "peakToPeak": float(abs(v_pp)),
+                    "offset": float(v_offset),
+                    "dutyCycle": float(clamp(duty, 0.01, 0.99)),
+                }
+            },
+        }
+
     def build_operating_points(self, converter, design_reqs):
         """
         Build MAS operatingPoints[] array from converter specs.
@@ -236,25 +286,43 @@ class TwoSwitchForwardCalc(TopologyCalculator):
         }
 
     def build_operating_points(self, converter, design_reqs):
-        """Build MAS operatingPoints[]."""
+        """Build MAS operatingPoints[] with proper rectangular waveforms.
+        Forward-converter primary carries magnetizing + reflected load current
+        during on-time (duty cycle D); secondary carries load current during on-time.
+        """
         op_list = []
-        for i, op in enumerate(converter.get("operatingPoints", [])):
-            exc_per_winding = []
+        d = design_reqs.get("duty_nom", 0.45)
+        i_pri = design_reqs.get("i_pri_rms", 1.0)
+        i_mag_pp = design_reqs.get("i_mag_pp", 0.1 * i_pri)
+        i_sec_list = design_reqs.get("i_sec_rms", [1.0])
+        vin = design_reqs.get("vin_nom", 100.0)
+        vout_list = design_reqs.get("vout_list", [5.0])
+        iout_list = design_reqs.get("iout_list", [1.0])
+        ns_np = design_reqs.get("ns_np", 0.05)
 
-            # Primary excitation
-            exc_per_winding.append({
-                "name": "Primary",
-                "frequency": as_float(op.get("switchingFrequency", 200e3)),
-            })
+        for op in converter.get("operatingPoints", []):
+            freq = as_float(op.get("switchingFrequency", 200e3))
 
-            # Secondary excitations
-            for j in range(len(design_reqs.get("iout_list", []))):
-                exc_per_winding.append({
-                    "name": f"Secondary {j + 1}" if j > 0 else "Secondary",
-                    "frequency": as_float(op.get("switchingFrequency", 200e3)),
-                })
+            # Primary: rectangular, peak-to-peak = reflected load + magnetizing ripple
+            i_pri_pp = i_mag_pp + (iout_list[0] if iout_list else 1.0) * ns_np
+            i_pri_offset = i_pri_pp / 2  # current sits above zero
+            v_pri_pp = vin  # Vin during on-time, 0 during off-time
+            v_pri_offset = vin * d / 2
 
-            op_list.append({"excitationsPerWinding": exc_per_winding})
+            exc = [self._make_rectangular_excitation(
+                "Primary", freq, i_pri_pp, i_pri_offset, v_pri_pp, v_pri_offset, d)]
+
+            # Secondaries: rectangular, carry load current during on-time
+            for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+                name = "Secondary" if j == 0 else f"Secondary {j + 1}"
+                i_sec_pp = iout_j * 0.3  # ~30% ripple around DC load
+                i_sec_offset = iout_j
+                v_sec_pp = vout_j
+                v_sec_offset = vout_j * d / 2
+                exc.append(self._make_rectangular_excitation(
+                    name, freq, i_sec_pp, i_sec_offset, v_sec_pp, v_sec_offset, d))
+
+            op_list.append({"excitationsPerWinding": exc})
 
         return op_list
 
@@ -372,31 +440,38 @@ class SingleSwitchForwardCalc(TopologyCalculator):
         }
 
     def build_operating_points(self, converter, design_reqs):
-        """Build MAS operatingPoints[]."""
+        """Build MAS operatingPoints[] with waveforms for single-switch forward.
+        Same as two-switch forward but adds demagnetization winding.
+        Demagnetization winding resets core during off-time; carries magnetizing current.
+        """
         op_list = []
-        for i, op in enumerate(converter.get("operatingPoints", [])):
-            exc_per_winding = []
+        d = design_reqs.get("duty_nom", 0.45)
+        i_mag_pp = design_reqs.get("i_mag_pp", 0.1)
+        ns_np = design_reqs.get("ns_np", 0.05)
+        vin = design_reqs.get("vin_nom", 100.0)
+        vout_list = design_reqs.get("vout_list", [5.0])
+        iout_list = design_reqs.get("iout_list", [1.0])
 
-            # Primary excitation
-            exc_per_winding.append({
-                "name": "Primary",
-                "frequency": as_float(op.get("switchingFrequency", 200e3)),
-            })
+        for op in converter.get("operatingPoints", []):
+            freq = as_float(op.get("switchingFrequency", 200e3))
 
-            # Secondary excitations
-            for j in range(len(design_reqs.get("iout_list", []))):
-                exc_per_winding.append({
-                    "name": f"Secondary {j + 1}" if j > 0 else "Secondary",
-                    "frequency": as_float(op.get("switchingFrequency", 200e3)),
-                })
+            # Primary
+            i_pri_pp = i_mag_pp + (iout_list[0] if iout_list else 1.0) * ns_np
+            exc = [self._make_rectangular_excitation(
+                "Primary", freq, i_pri_pp, i_pri_pp / 2, vin, vin * d / 2, d)]
 
-            # Demagnetization winding (last)
-            exc_per_winding.append({
-                "name": "Demagnetization",
-                "frequency": as_float(op.get("switchingFrequency", 200e3)),
-            })
+            # Secondaries
+            for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+                name = "Secondary" if j == 0 else f"Secondary {j + 1}"
+                exc.append(self._make_rectangular_excitation(
+                    name, freq, iout_j * 0.3, iout_j, vout_j, vout_j * d / 2, d))
 
-            op_list.append({"excitationsPerWinding": exc_per_winding})
+            # Demagnetization winding: rectangular, conducts during off-time carrying reset current
+            # Current = i_mag_pp reflected by turns ratio (nd_np = 1.0 typically)
+            exc.append(self._make_rectangular_excitation(
+                "Demagnetization", freq, i_mag_pp, i_mag_pp / 2, vin, vin * (1 - d) / 2, 1 - d))
+
+            op_list.append({"excitationsPerWinding": exc})
 
         return op_list
 
@@ -503,17 +578,28 @@ class ActiveClampForwardCalc(TopologyCalculator):
         }
 
     def build_operating_points(self, converter, design_reqs):
-        """Build MAS operatingPoints[]."""
+        """Build MAS operatingPoints[] for active clamp forward.
+        Same waveform structure as two-switch forward. The active clamp circuit reduces
+        secondary voltage stress but doesn't change the fundamental waveform shapes.
+        """
         op_list = []
-        for i, op in enumerate(converter.get("operatingPoints", [])):
-            exc_per_winding = []
-            exc_per_winding.append({"name": "Primary", "frequency": as_float(op.get("switchingFrequency", 200e3))})
-            for j in range(len(design_reqs.get("iout_list", []))):
-                exc_per_winding.append({
-                    "name": f"Secondary {j + 1}" if j > 0 else "Secondary",
-                    "frequency": as_float(op.get("switchingFrequency", 200e3))
-                })
-            op_list.append({"excitationsPerWinding": exc_per_winding})
+        d = design_reqs.get("duty_nom", 0.45)
+        i_mag_pp = design_reqs.get("i_mag_pp", 0.1)
+        ns_np = design_reqs.get("ns_np", 0.05)
+        vin = design_reqs.get("vin_nom", 100.0)
+        vout_list = design_reqs.get("vout_list", [5.0])
+        iout_list = design_reqs.get("iout_list", [1.0])
+
+        for op in converter.get("operatingPoints", []):
+            freq = as_float(op.get("switchingFrequency", 200e3))
+            i_pri_pp = i_mag_pp + (iout_list[0] if iout_list else 1.0) * ns_np
+            exc = [self._make_rectangular_excitation(
+                "Primary", freq, i_pri_pp, i_pri_pp / 2, vin, vin * d / 2, d)]
+            for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+                name = "Secondary" if j == 0 else f"Secondary {j + 1}"
+                exc.append(self._make_rectangular_excitation(
+                    name, freq, iout_j * 0.3, iout_j, vout_j, vout_j * d / 2, d))
+            op_list.append({"excitationsPerWinding": exc})
         return op_list
 
     def build_mas_design_requirements(self, converter, design_reqs):
@@ -625,6 +711,48 @@ class FlybackCalc(TopologyCalculator):
             op_list.append({"excitationsPerWinding": exc_per_winding})
         return op_list
 
+    def build_operating_points(self, converter, design_reqs):
+        """Build MAS operatingPoints[] with flyback-specific triangular waveforms.
+        Flyback primary: triangular rising current during on-time (energy stored in Lm).
+        Flyback secondary: triangular falling current during off-time (energy transferred).
+        """
+        op_list = []
+        d = design_reqs.get("duty_nom", 0.45)
+        i_mag_pp = design_reqs.get("i_mag_pp", 1.0)
+        i_mag_peak = design_reqs.get("i_mag_peak", i_mag_pp)
+        ns_np = design_reqs.get("ns_np", 0.05)
+        vin = design_reqs.get("vin_nom", 100.0)
+        vout_list = design_reqs.get("vout_list", [5.0])
+        iout_list = design_reqs.get("iout_list", [1.0])
+
+        for op in converter.get("operatingPoints", []):
+            freq = as_float(op.get("switchingFrequency", 200e3))
+
+            # Primary: triangular during on-time (energy storage), starts near zero
+            # The magnetizing current ramps from I_pk - Ipp/2 to I_pk + Ipp/2
+            i_pri_offset = i_mag_peak - i_mag_pp / 2  # lower peak value as DC offset
+            v_pri_pp = vin
+            v_pri_offset = vin * d / 2
+
+            exc = [self._make_triangular_excitation(
+                "Primary", freq, i_mag_pp, i_pri_offset, v_pri_pp, v_pri_offset, d)]
+
+            # Secondaries: triangular during off-time (energy transfer)
+            # Secondary current = primary current * Np/Ns (reflected)
+            for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+                name = "Secondary" if j == 0 else f"Secondary {j + 1}"
+                i_sec_pp = i_mag_pp / ns_np  # reflected magnetizing current
+                i_sec_offset = iout_j  # average at DC load level
+                v_sec_pp = vout_j
+                v_sec_offset = vout_j * (1 - d) / 2
+                # Secondary conducts during (1-D), so invert duty for secondary
+                exc.append(self._make_triangular_excitation(
+                    name, freq, i_sec_pp, i_sec_offset, v_sec_pp, v_sec_offset, 1 - d))
+
+            op_list.append({"excitationsPerWinding": exc})
+
+        return op_list
+
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
@@ -726,17 +854,29 @@ class PushPullCalc(TopologyCalculator):
         }
 
     def build_operating_points(self, converter, design_reqs):
-        """Build MAS operatingPoints[]."""
+        """Build MAS operatingPoints[] for push-pull.
+        Push-pull sees 2x Vin across primary (center-tap reflected), each half conducts
+        alternately for D of the full period. Effective input voltage swing = 2*Vin.
+        """
         op_list = []
-        for i, op in enumerate(converter.get("operatingPoints", [])):
-            exc_per_winding = []
-            exc_per_winding.append({"name": "Primary", "frequency": as_float(op.get("switchingFrequency", 200e3))})
-            for j in range(len(design_reqs.get("iout_list", []))):
-                exc_per_winding.append({
-                    "name": f"Secondary {j + 1}" if j > 0 else "Secondary",
-                    "frequency": as_float(op.get("switchingFrequency", 200e3))
-                })
-            op_list.append({"excitationsPerWinding": exc_per_winding})
+        d = design_reqs.get("duty_nom", 0.45)
+        i_mag_pp = design_reqs.get("i_mag_pp", 0.1)
+        ns_np = design_reqs.get("ns_np", 0.05)
+        vin = design_reqs.get("vin_nom", 100.0)
+        vout_list = design_reqs.get("vout_list", [5.0])
+        iout_list = design_reqs.get("iout_list", [1.0])
+
+        for op in converter.get("operatingPoints", []):
+            freq = as_float(op.get("switchingFrequency", 200e3))
+            # Push-pull: effective voltage is 2*Vin across full primary
+            i_pri_pp = i_mag_pp + (iout_list[0] if iout_list else 1.0) * ns_np
+            exc = [self._make_rectangular_excitation(
+                "Primary", freq, i_pri_pp, i_pri_pp / 2, 2 * vin, vin * d, d)]
+            for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+                name = "Secondary" if j == 0 else f"Secondary {j + 1}"
+                exc.append(self._make_rectangular_excitation(
+                    name, freq, iout_j * 0.3, iout_j, vout_j, vout_j * d / 2, d))
+            op_list.append({"excitationsPerWinding": exc})
         return op_list
 
     def build_mas_design_requirements(self, converter, design_reqs):
@@ -811,10 +951,25 @@ class BuckCalc(TopologyCalculator):
         }
 
     def build_operating_points(self, converter, design_reqs):
-        """Build MAS operatingPoints[]."""
+        """Build MAS operatingPoints[] for buck with triangular inductor current.
+        Buck inductor sees: (Vin - Vout) during on-time, (-Vout) during off-time.
+        """
         op_list = []
-        for i, op in enumerate(converter.get("operatingPoints", [])):
-            op_list.append({"excitationsPerWinding": [{"name": "Inductor", "frequency": as_float(op.get("switchingFrequency", 200e3))}]})
+        d = design_reqs.get("duty_nom", 0.5)
+        l_uh = design_reqs.get("L_uH", 10.0)
+        vin = design_reqs.get("vin_nom", 100.0)
+        vout = design_reqs.get("vout", 5.0)
+        pout = design_reqs.get("pout_nom", 25.0)
+        iout = pout / max(vout, 0.1)
+
+        for op in converter.get("operatingPoints", []):
+            freq = as_float(op.get("switchingFrequency", 200e3))
+            l = l_uh * 1e-6
+            i_ripple = (vin - vout) * d / (l * freq) if l > 0 and freq > 0 else iout * 0.3
+            v_pp = vin - vout
+            exc = [self._make_triangular_excitation(
+                "Inductor", freq, i_ripple, iout, v_pp, (vin - vout) * d / 2, d)]
+            op_list.append({"excitationsPerWinding": exc})
         return op_list
 
     def build_mas_design_requirements(self, converter, design_reqs):
@@ -887,10 +1042,25 @@ class BoostCalc(TopologyCalculator):
         }
 
     def build_operating_points(self, converter, design_reqs):
-        """Build MAS operatingPoints[]."""
+        """Build MAS operatingPoints[] for boost with triangular inductor current.
+        Boost inductor sees: Vin during on-time (current rises), -(Vout - Vin) during off-time.
+        """
         op_list = []
-        for i, op in enumerate(converter.get("operatingPoints", [])):
-            op_list.append({"excitationsPerWinding": [{"name": "Inductor", "frequency": as_float(op.get("switchingFrequency", 200e3))}]})
+        d = design_reqs.get("duty_nom", 0.5)
+        l_uh = design_reqs.get("L_uH", 10.0)
+        vin = design_reqs.get("vin_nom", 100.0)
+        vout = design_reqs.get("vout", 150.0)
+        pout = design_reqs.get("pout_nom", 100.0)
+        iin = pout / max(vin, 0.1)  # average input current
+
+        for op in converter.get("operatingPoints", []):
+            freq = as_float(op.get("switchingFrequency", 200e3))
+            l = l_uh * 1e-6
+            i_ripple = vin * d / (l * freq) if l > 0 and freq > 0 else iin * 0.3
+            # Boost inductor current ripple around average input current
+            exc = [self._make_triangular_excitation(
+                "Inductor", freq, i_ripple, iin, vin, vin * d / 2, d)]
+            op_list.append({"excitationsPerWinding": exc})
         return op_list
 
     def build_mas_design_requirements(self, converter, design_reqs):
@@ -911,8 +1081,12 @@ class IsolatedBuckCalc(TopologyCalculator):
         self.n_windings_max = 5
 
     def compute_design_requirements(self, converter, advanced, n_outputs=1):
-        """Compute Isolated Buck requirements."""
-        # Similar to regular buck but with transformer
+        """Compute Isolated Buck requirements.
+
+        Isolated buck: transformer provides galvanic isolation while the topology
+        operates like a regular buck. Duty cycle D = Vout / (Vin * Ns/Np * eta).
+        The primary magnetizing inductance is sized for triangular ripple current.
+        """
         c = converter
         fsw = as_float(c.get("operatingPoints", [{}])[0].get("switchingFrequency", 200e3))
         eta = as_float(c.get("efficiency", 90)) / 100.0
@@ -934,9 +1108,11 @@ class IsolatedBuckCalc(TopologyCalculator):
         pout = vout * total_iout
         pin_nom = pout / max(eta, 0.01)
 
-        # Turns ratio for isolation
-        d_target = 0.45
-        ns_np = (vout + vd) / (vin_min * d_target)
+        # Isolated Buck duty cycle: D = (Vout + Vd) / (Vin * Ns/Np)
+        # Unlike forward converters, isolated buck can use full 0-1 duty range.
+        # Choose Ns/Np so D_nom ~ 0.5 at Vin_nom for maximum volt-second headroom.
+        d_target_nom = 0.50
+        ns_np = (vout + vd) / (vin_nom * d_target_nom)
         np_ns = 1.0 / ns_np
 
         d_nom = (vout + vd) / (vin_nom * ns_np)
@@ -947,22 +1123,31 @@ class IsolatedBuckCalc(TopologyCalculator):
         d_min_vin = clamp(d_min_vin, 0.01, 0.99)
         d_max_vin = clamp(d_max_vin, 0.01, 0.99)
 
+        # Output filter inductor: L = (Vin_max*Ns/Np - Vout) * (1-D) / (delta_I * fsw)
+        # This is the secondary-side filter inductor for the isolated buck.
         ripple_frac = as_float(c.get("currentRippleRatio", 30)) / 100.0
-        delta_i_max = ripple_frac * vout
-        if delta_i_max > 0:
-            lout = vout * (1 - d_max_vin) / (delta_i_max * fsw)
+        delta_i = ripple_frac * total_iout
+        vin_sec_max = vin_max * ns_np  # max voltage reflected to secondary
+        if delta_i > 0 and fsw > 0:
+            lout = (vin_sec_max - vout) * d_max_vin / (delta_i * fsw)
         else:
             lout = 10e-6
 
+        # Magnetizing inductance: sized from (Vin - Vout/ns_np) * D / (delta_Im * fsw)
+        # where delta_Im = 10% of reflected load current (primary side triangular ripple)
         i_load_reflected = total_iout * ns_np
-        i_mag_ripple_target = 0.10 * i_load_reflected
-        if i_mag_ripple_target > 0:
-            lm = vin_nom * d_nom / (i_mag_ripple_target * fsw)
+        delta_im = 0.10 * i_load_reflected
+        if delta_im > 0 and fsw > 0:
+            lm = (vin_nom - vout / ns_np) * d_nom / (delta_im * fsw)
+            lm = max(lm, 10e-6)
         else:
             lm = 100e-6
 
+        # Currents: primary carries triangular current during on-time
         i_pri_rms = total_iout * ns_np * math.sqrt(d_nom)
         i_sec_rms = [io * math.sqrt(d_nom) for io in as_list(iout_list)]
+        i_mag_pp = (vin_nom - vout * np_ns) * d_nom / (lm * fsw)
+        i_mag_peak = i_mag_pp / 2 + i_load_reflected
 
         turns_ratios = [np_ns] * n_outputs
 
@@ -978,6 +1163,8 @@ class IsolatedBuckCalc(TopologyCalculator):
             "duty_max_vin": d_max_vin,
             "i_pri_rms": i_pri_rms,
             "i_sec_rms": i_sec_rms,
+            "i_mag_peak": i_mag_peak,
+            "i_mag_pp": i_mag_pp,
             "pin_nom": pin_nom,
             "pout_nom": pout,
             "vin_nom": vin_nom,
@@ -987,17 +1174,33 @@ class IsolatedBuckCalc(TopologyCalculator):
         }
 
     def build_operating_points(self, converter, design_reqs):
-        """Build MAS operatingPoints[]."""
+        """Build MAS operatingPoints[] for isolated buck with triangular primary current.
+        Primary sees triangular current during on-time (like a buck inductor reflected through xfmr).
+        Secondary sees triangular filtered current.
+        """
         op_list = []
-        for i, op in enumerate(converter.get("operatingPoints", [])):
-            exc_per_winding = []
-            exc_per_winding.append({"name": "Primary", "frequency": as_float(op.get("switchingFrequency", 200e3))})
-            for j in range(len(design_reqs.get("iout_list", []))):
-                exc_per_winding.append({
-                    "name": f"Secondary {j + 1}" if j > 0 else "Secondary",
-                    "frequency": as_float(op.get("switchingFrequency", 200e3))
-                })
-            op_list.append({"excitationsPerWinding": exc_per_winding})
+        d = design_reqs.get("duty_nom", 0.5)
+        i_mag_pp = design_reqs.get("i_mag_pp", 0.1)
+        i_mag_peak = design_reqs.get("i_mag_peak", i_mag_pp)
+        ns_np = design_reqs.get("ns_np", 0.05)
+        vin = design_reqs.get("vin_nom", 100.0)
+        vout_list = design_reqs.get("vout_list", [5.0])
+        iout_list = design_reqs.get("iout_list", [1.0])
+
+        for op in converter.get("operatingPoints", []):
+            freq = as_float(op.get("switchingFrequency", 200e3))
+            # Primary: triangular current (reflected buck inductor current)
+            i_pri_offset = i_mag_peak - i_mag_pp / 2
+            v_pri_pp = vin
+            exc = [self._make_triangular_excitation(
+                "Primary", freq, i_mag_pp, i_pri_offset, v_pri_pp, vin * d / 2, d)]
+            # Secondaries: triangular filtered current
+            for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+                name = "Secondary" if j == 0 else f"Secondary {j + 1}"
+                i_sec_ripple = iout_j * 0.3
+                exc.append(self._make_triangular_excitation(
+                    name, freq, i_sec_ripple, iout_j, vout_j, vout_j * d / 2, d))
+            op_list.append({"excitationsPerWinding": exc})
         return op_list
 
     def build_mas_design_requirements(self, converter, design_reqs):
@@ -1020,8 +1223,13 @@ class IsolatedBuckBoostCalc(TopologyCalculator):
         self.n_windings_max = 5
 
     def compute_design_requirements(self, converter, advanced, n_outputs=1):
-        """Compute Isolated Buck-Boost requirements."""
-        # Similar to isolated buck
+        """Compute Isolated Buck-Boost requirements.
+
+        Isolated buck-boost: allows Vout > Vin or Vout < Vin (both step-up and step-down).
+        Duty cycle: D = Vout / (Vin + Vout) * eta  (classic buck-boost relation).
+        Lm stores all energy during on-time and transfers during off-time.
+        The harmonic mean Vin*Vout/(Vin+Vout) is the effective voltage for inductance sizing.
+        """
         c = converter
         fsw = as_float(c.get("operatingPoints", [{}])[0].get("switchingFrequency", 200e3))
         eta = as_float(c.get("efficiency", 90)) / 100.0
@@ -1043,40 +1251,47 @@ class IsolatedBuckBoostCalc(TopologyCalculator):
         pout = vout * total_iout
         pin_nom = pout / max(eta, 0.01)
 
-        d_target = 0.45
-        ns_np = (vout + vd) / (vin_min * d_target)
+        # Buck-boost duty cycle: D = Vout / (Vin + Vout) (ignoring Vd for turns ratio calc)
+        # Rearranged for turns ratio: choose Ns/Np so that at Vin_nom D_nom = 0.5
+        # D = ns_np * Vout / (Vin + ns_np * Vout)  → at D=0.5: Vin = ns_np * Vout
+        ns_np = vin_nom / (vout + vd)  # balanced point (D=0.5 at Vin_nom)
         np_ns = 1.0 / ns_np
 
-        d_nom = (vout + vd) / (vin_nom * ns_np)
-        d_min_vin = (vout + vd) / (vin_min * ns_np)
-        d_max_vin = (vout + vd) / (vin_max * ns_np)
+        # Duty cycles across input range
+        d_nom = (ns_np * (vout + vd)) / (vin_nom + ns_np * (vout + vd))
+        d_min_vin = (ns_np * (vout + vd)) / (vin_min + ns_np * (vout + vd))
+        d_max_vin = (ns_np * (vout + vd)) / (vin_max + ns_np * (vout + vd))
 
         d_nom = clamp(d_nom, 0.01, 0.99)
         d_min_vin = clamp(d_min_vin, 0.01, 0.99)
         d_max_vin = clamp(d_max_vin, 0.01, 0.99)
 
+        # Magnetizing inductance: Lm = Vin*Vout / ((Vin+Vout) * 2*delta_Im * fsw)
+        # The harmonic mean Vin*Vout/(Vin+Vout) is the effective volt-second product
+        # Factor of 2 because both on-time and off-time contribute equally to current swing
         ripple_frac = as_float(c.get("currentRippleRatio", 30)) / 100.0
-        delta_i_max = ripple_frac * vout
-        if delta_i_max > 0:
-            lout = vout * (1 - d_max_vin) / (delta_i_max * fsw)
-        else:
-            lout = 10e-6
-
         i_load_reflected = total_iout * ns_np
-        i_mag_ripple_target = 0.10 * i_load_reflected
-        if i_mag_ripple_target > 0:
-            lm = vin_nom * d_nom / (i_mag_ripple_target * fsw)
+        delta_im = ripple_frac * i_load_reflected if i_load_reflected > 0 else 0.1
+        v_harmonic = (vin_nom * vout * np_ns) / (vin_nom + vout * np_ns)  # effective voltage
+        if delta_im > 0 and fsw > 0:
+            lm = v_harmonic / (2 * delta_im * fsw)
+            lm = max(lm, 10e-6)
         else:
             lm = 100e-6
 
-        i_pri_rms = total_iout * ns_np * math.sqrt(d_nom)
-        i_sec_rms = [io * math.sqrt(d_nom) for io in as_list(iout_list)]
+        # Current waveforms: symmetric triangular (on-time and off-time equal swing)
+        i_mag_pp = v_harmonic / (lm * fsw) if lm > 0 and fsw > 0 else delta_im * 2
+        i_mag_peak = i_load_reflected + i_mag_pp / 2
 
+        # RMS currents: primary conducts on-time, secondary conducts off-time
+        i_pri_rms = math.sqrt((i_mag_peak**2 - i_mag_peak * i_mag_pp + i_mag_pp**2 / 3) * d_nom)
+        i_sec_rms = [io * math.sqrt(1 - d_nom) for io in as_list(iout_list)]
+
+        # No separate output inductor — Lm stores and transfers all energy
         turns_ratios = [np_ns] * n_outputs
 
         return {
             "Lm_uH": lm * 1e6,
-            "Lout_uH": lout * 1e6,
             "turns_ratios": turns_ratios,
             "ns_np": ns_np,
             "np_ns": np_ns,
@@ -1086,6 +1301,8 @@ class IsolatedBuckBoostCalc(TopologyCalculator):
             "duty_max_vin": d_max_vin,
             "i_pri_rms": i_pri_rms,
             "i_sec_rms": i_sec_rms,
+            "i_mag_peak": i_mag_peak,
+            "i_mag_pp": i_mag_pp,
             "pin_nom": pin_nom,
             "pout_nom": pout,
             "vin_nom": vin_nom,
@@ -1095,17 +1312,34 @@ class IsolatedBuckBoostCalc(TopologyCalculator):
         }
 
     def build_operating_points(self, converter, design_reqs):
-        """Build MAS operatingPoints[]."""
+        """Build MAS operatingPoints[] for isolated buck-boost.
+        Like flyback: primary stores energy (triangular rising) during on-time,
+        secondary releases energy (triangular falling) during off-time.
+        Symmetric current swing due to harmonic mean voltage.
+        """
         op_list = []
-        for i, op in enumerate(converter.get("operatingPoints", [])):
-            exc_per_winding = []
-            exc_per_winding.append({"name": "Primary", "frequency": as_float(op.get("switchingFrequency", 200e3))})
-            for j in range(len(design_reqs.get("iout_list", []))):
-                exc_per_winding.append({
-                    "name": f"Secondary {j + 1}" if j > 0 else "Secondary",
-                    "frequency": as_float(op.get("switchingFrequency", 200e3))
-                })
-            op_list.append({"excitationsPerWinding": exc_per_winding})
+        d = design_reqs.get("duty_nom", 0.5)
+        i_mag_pp = design_reqs.get("i_mag_pp", 1.0)
+        i_mag_peak = design_reqs.get("i_mag_peak", i_mag_pp)
+        ns_np = design_reqs.get("ns_np", 0.05)
+        vin = design_reqs.get("vin_nom", 100.0)
+        vout_list = design_reqs.get("vout_list", [5.0])
+        iout_list = design_reqs.get("iout_list", [1.0])
+
+        for op in converter.get("operatingPoints", []):
+            freq = as_float(op.get("switchingFrequency", 200e3))
+            # Primary: triangular rising current during on-time (energy storage, like flyback)
+            i_pri_offset = i_mag_peak - i_mag_pp / 2
+            exc = [self._make_triangular_excitation(
+                "Primary", freq, i_mag_pp, i_pri_offset, vin, vin * d / 2, d)]
+            # Secondaries: triangular falling current during off-time (energy transfer)
+            for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+                name = "Secondary" if j == 0 else f"Secondary {j + 1}"
+                i_sec_pp = i_mag_pp / ns_np  # reflected magnetizing swing
+                i_sec_offset = iout_j
+                exc.append(self._make_triangular_excitation(
+                    name, freq, i_sec_pp, i_sec_offset, vout_j, vout_j * (1 - d) / 2, 1 - d))
+            op_list.append({"excitationsPerWinding": exc})
         return op_list
 
     def build_mas_design_requirements(self, converter, design_reqs):
