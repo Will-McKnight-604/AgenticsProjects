@@ -43,6 +43,20 @@ def get_pm_runtime_version():
         return "unknown"
 
 
+# Topology key mapping for multi-topology support
+TOPOLOGY_MAP = {
+    "two_switch_forward": "two-switch-forward",
+    "single_switch_forward": "single-switch-forward",
+    "active_clamp_forward": "active-clamp-forward",
+    "flyback": "flyback",
+    "push_pull": "push-pull",
+    "buck": "buck",
+    "boost": "boost",
+    "isolated_buck": "isolated-buck",
+    "isolated_buck_boost": "isolated-buck-boost",
+}
+
+
 def sanitize_local_key(raw):
     """Match MATLAB make_valid_name/sanitize_field_name behavior."""
     if raw is None:
@@ -336,10 +350,25 @@ def _build_excitations_for_op(op_windings, freq_hz, duty):
 def build_mas_inputs(config):
     """Build MAS inputs structure from recommendation config.
 
-    Supports two config formats:
+    Supports three config formats:
+      - MAS passthrough: config.operating_points_mas[] (pre-built by topology calculator)
       - New: config.operating_points[] array (each with .windings, .duty, .vin, etc.)
       - Legacy: config.operating_point + config.windings (single operating point)
     """
+
+    # NEW: If pre-built MAS operating points provided by topology calculator, use them directly
+    if "operating_points_mas" in config and config["operating_points_mas"]:
+        design_req = config.get("design_requirements", {})
+        # Map topology key to MAS topology string if present
+        if "topology" in design_req:
+            topology_key = str(design_req["topology"]).lower().replace(" ", "_").replace("-", "_")
+            if topology_key in TOPOLOGY_MAP:
+                design_req["topology"] = TOPOLOGY_MAP[topology_key]
+
+        return {
+            "designRequirements": design_req,
+            "operatingPoints": config["operating_points_mas"],
+        }
 
     dr = config.get("design_requirements", {})
     samples = int(as_float(config.get("samples_per_period", 512), 512))
@@ -408,22 +437,28 @@ def build_mas_inputs(config):
     if isinstance(mag_ind, (int, float)):
         mag_ind = {"nominal": float(mag_ind)}
 
-    # --- Map topology names ---
-    topology_map = {
-        "two_switch_forward": "Two Switch Forward Converter",
-        "2_switch_forward": "Two Switch Forward Converter",
-        "2-switch forward": "Two Switch Forward Converter",
-        "forward": "Two Switch Forward Converter",
-        "flyback": "Flyback Converter",
-        "buck": "Buck Converter",
-        "boost": "Boost Converter",
-        "push_pull": "Push-Pull Converter",
-        "half_bridge": "Half-Bridge Converter",
-        "full_bridge": "Full-Bridge Converter",
-    }
+    # --- Map topology names using TOPOLOGY_MAP and fallback for full names ---
     raw_topo = dr.get("topology", "Two Switch Forward Converter")
+
+    # First try to normalize using TOPOLOGY_MAP (converts underscored keys to hyphenated MAS keys)
     topo_key = raw_topo.lower().replace("-", "_").replace(" ", "_")
-    topology = topology_map.get(topo_key, raw_topo)
+    if topo_key in TOPOLOGY_MAP:
+        topology = TOPOLOGY_MAP[topo_key]
+    else:
+        # Fallback to human-readable format for backward compatibility
+        topology_name_map = {
+            "two_switch_forward": "Two Switch Forward Converter",
+            "2_switch_forward": "Two Switch Forward Converter",
+            "2-switch forward": "Two Switch Forward Converter",
+            "forward": "Two Switch Forward Converter",
+            "flyback": "Flyback Converter",
+            "buck": "Buck Converter",
+            "boost": "Boost Converter",
+            "push_pull": "Push-Pull Converter",
+            "half_bridge": "Half-Bridge Converter",
+            "full_bridge": "Full-Bridge Converter",
+        }
+        topology = topology_name_map.get(topo_key, raw_topo)
 
     # --- Assemble MAS inputs ---
     design_req = {

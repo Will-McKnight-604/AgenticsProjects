@@ -282,7 +282,7 @@ function data = apply_design_spec(data, spec)
         end
     end
 
-    % --- Insulation ---
+    % --- Insulation (from topology wizard) ---
     if isfield(spec, 'insulation')
         ins = spec.insulation;
         if isfield(ins, 'class')
@@ -296,6 +296,60 @@ function data = apply_design_spec(data, spec)
             ovc_key = strrep(ins.overvoltage_cat, ' ', '');
             if isfield(ovc_map, ovc_key)
                 data.overvoltage_category = ovc_map.(ovc_key);
+            end
+        end
+    end
+
+    % --- Insulation (from MAS import) ---
+    if isfield(spec, 'mas_content') && isstruct(spec.mas_content)
+        if isfield(spec.mas_content, 'inputs') && isstruct(spec.mas_content.inputs)
+            dr = spec.mas_content.inputs.designRequirements;
+            if isfield(dr, 'insulation') && isstruct(dr.insulation)
+                ins = dr.insulation;
+
+                % insulationType: 'Basic' -> 'basic', 'Reinforced' -> 'reinforced'
+                if isfield(ins, 'insulationType')
+                    data.insulation_class = lower(ins.insulationType);
+                end
+
+                % standards: cell array -> single string (take first)
+                if isfield(ins, 'standards') && ~isempty(ins.standards)
+                    if iscell(ins.standards)
+                        data.insulation_standard = ins.standards{1};
+                    else
+                        data.insulation_standard = ins.standards;
+                    end
+                end
+
+                % pollutionDegree: 'P2' -> 2
+                if isfield(ins, 'pollutionDegree')
+                    pd_str = ins.pollutionDegree;
+                    if ischar(pd_str) && length(pd_str) > 1
+                        data.pollution_degree = str2double(pd_str(2));  % Extract digit from 'P2'
+                    end
+                end
+
+                % overvoltageCategory: 'OVC-II' -> 'OVC-II' (direct)
+                if isfield(ins, 'overvoltageCategory')
+                    data.overvoltage_category = ins.overvoltageCategory;
+                end
+
+                % cti: 'Group II' -> 'Group II' (direct)
+                if isfield(ins, 'cti')
+                    data.cti_group = ins.cti;
+                end
+
+                % altitude: nominal in meters
+                if isfield(ins, 'altitude') && isstruct(ins.altitude)
+                    if isfield(ins.altitude, 'nominal')
+                        data.altitude_m = ins.altitude.nominal;
+                    end
+                end
+
+                % wiringTechnology
+                if isfield(ins, 'wiringTechnology')
+                    data.wiring_technology = ins.wiringTechnology;
+                end
             end
         end
     end
@@ -6111,6 +6165,18 @@ function export_mas_file(~, ~)
         mas.inputs.designRequirements.turnsRatios = {struct('nominal', ratio)};
     end
 
+    % Insulation specification (required by MAS schema)
+    ins = struct();
+    ins.insulationType = capitalize_first(data.insulation_class);  % 'Basic', 'Reinforced', etc.
+    ins.standards = {data.insulation_standard};  % cell array: {'IEC 60664-1'}
+    ins.pollutionDegree = sprintf('P%d', data.pollution_degree);  % 'P1', 'P2', 'P3'
+    ins.overvoltageCategory = data.overvoltage_category;  % 'OVC-II'
+    ins.cti = data.cti_group;  % 'Group II'
+    ins.altitude = struct('nominal', data.altitude_m, 'maximum', data.altitude_m, 'minimum', data.altitude_m);
+    ins.wiringTechnology = data.wiring_technology;  % 'Wound'
+    ins.mainSupplyVoltage = struct('nominal', 230);  % default mains voltage (230V)
+    mas.inputs.designRequirements.insulation = ins;
+
     % Operating point
     op = struct();
     op.name = 'nominal';
@@ -6189,16 +6255,31 @@ function export_mas_file(~, ~)
     winding_desc = {};
     for w = 1:data.n_windings
         wd = struct();
-        wd.name = data.windings(w).name;
-        wd.numberTurns = data.windings(w).n_turns;
-        wd.numberParallels = data.windings(w).n_filar;
 
-        % Isolation side (required by schema)
+        % Winding naming convention:
+        %   w=1: 'Primary'
+        %   w=2 in single_switch_forward: 'Demagnetization'
+        %   other secondaries: 'Secondary 1', 'Secondary 2', etc.
         if w == 1
+            wd.name = 'Primary';
             wd.isolationSide = 'primary';
+        elseif w == 2 && isfield(data, 'excitation') && isfield(data.excitation, 'topology') ...
+                && strcmp(data.excitation.topology, 'single_switch_forward')
+            wd.name = 'Demagnetization';
+            wd.isolationSide = 'secondary';
         else
+            % Secondary outputs numbered: Secondary 1, Secondary 2, etc.
+            secondary_idx = w - 1;  % Start from 1
+            if w > 2 && isfield(data, 'excitation') && isfield(data.excitation, 'topology') ...
+                    && strcmp(data.excitation.topology, 'single_switch_forward')
+                secondary_idx = w - 2;  % Account for demagnetization
+            end
+            wd.name = sprintf('Secondary %d', secondary_idx);
             wd.isolationSide = 'secondary';
         end
+
+        wd.numberTurns = data.windings(w).n_turns;
+        wd.numberParallels = data.windings(w).n_filar;
 
         % Wire: build full wire object per MAS schema
         wire_key = data.windings(w).wire_type;
@@ -7479,4 +7560,15 @@ end
 
 function p_out = normalize_shell_path(p_in)
     p_out = strrep(char(p_in), '\', '/');
+end
+
+
+function result = capitalize_first(str)
+    % Capitalize the first letter of a string, leave rest unchanged.
+    % Usage: 'basic' -> 'Basic', 'reinforced' -> 'Reinforced'
+    if isempty(str)
+        result = '';
+    else
+        result = [upper(str(1)) str(2:end)];
+    end
 end

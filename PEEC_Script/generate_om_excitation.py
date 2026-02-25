@@ -88,6 +88,95 @@ def rms(values):
     return math.sqrt(acc / float(len(values)))
 
 
+def get_waveform_generator(topology_key):
+    """Return waveform generator function for given topology.
+
+    Maps topology key to the appropriate waveform generation function.
+    Defaults to forward converter for unknown topologies.
+    """
+    waveform_generators = {
+        "two_switch_forward": generate_forward_waveforms,
+        "single_switch_forward": generate_forward_waveforms,
+        "active_clamp_forward": generate_forward_waveforms,
+        "push_pull": generate_push_pull_waveforms,
+        "flyback": generate_flyback_waveforms,
+        "buck": generate_buck_boost_waveforms,
+        "boost": generate_buck_boost_waveforms,
+        "isolated_buck": generate_forward_waveforms,
+        "isolated_buck_boost": generate_forward_waveforms,
+    }
+    # Default to forward converter waveforms if topology not recognized
+    return waveform_generators.get(topology_key, generate_forward_waveforms)
+
+
+def generate_forward_waveforms(cfg):
+    """Generate rectangular voltage, trapezoidal current waveforms for forward converters.
+
+    Supports: Two-Switch Forward, Single-Switch Forward, Active-Clamp Forward, Isolated Buck.
+    """
+    frequency_hz = as_float(cfg.get("frequency_hz", 100e3), 100e3)
+    windings = cfg.get("windings", []) or []
+    samples = int(as_float(cfg.get("samples_per_period", 1024), 1024))
+    samples = max(128, min(4096, samples))
+
+    return {
+        "type": "forward",
+        "frequency": frequency_hz,
+        "windings": windings,
+        "samples": samples,
+    }
+
+
+def generate_push_pull_waveforms(cfg):
+    """Generate push-pull converter waveforms (2x voltage boost, center-tapped primary)."""
+    frequency_hz = as_float(cfg.get("frequency_hz", 100e3), 100e3)
+    windings = cfg.get("windings", []) or []
+    samples = int(as_float(cfg.get("samples_per_period", 1024), 1024))
+    samples = max(128, min(4096, samples))
+
+    return {
+        "type": "push_pull",
+        "frequency": frequency_hz,
+        "voltage_boost": 2.0,  # Push-pull provides 2x peak voltage vs forward
+        "windings": windings,
+        "samples": samples,
+    }
+
+
+def generate_flyback_waveforms(cfg):
+    """Generate flyback converter waveforms (triangular primary I, polarity-reversed V)."""
+    frequency_hz = as_float(cfg.get("frequency_hz", 100e3), 100e3)
+    windings = cfg.get("windings", []) or []
+    samples = int(as_float(cfg.get("samples_per_period", 1024), 1024))
+    samples = max(128, min(4096, samples))
+
+    return {
+        "type": "flyback",
+        "frequency": frequency_hz,
+        "current_shape": "triangular",
+        "voltage_polarity": "reversed",
+        "windings": windings,
+        "samples": samples,
+    }
+
+
+def generate_buck_boost_waveforms(cfg):
+    """Generate buck/boost converter waveforms (triangular inductor current, rectangular V)."""
+    frequency_hz = as_float(cfg.get("frequency_hz", 100e3), 100e3)
+    windings = cfg.get("windings", []) or []
+    samples = int(as_float(cfg.get("samples_per_period", 1024), 1024))
+    samples = max(128, min(4096, samples))
+
+    return {
+        "type": "buck_boost",
+        "frequency": frequency_hz,
+        "current_shape": "triangular",
+        "voltage_shape": "rectangular",
+        "windings": windings,
+        "samples": samples,
+    }
+
+
 def estimate_duty(cfg, line_scale):
     duty_mode = normalize_duty_mode(cfg.get("duty_mode", "derived"))
     if duty_mode == "manual":
@@ -341,6 +430,12 @@ def build_excitation(cfg):
     if source_mode != "converter":
         return {"status": "ERROR", "error": "Only converter source mode is supported in this generator."}
 
+    # NEW: Get topology for waveform dispatch
+    topology_key = cfg.get("topology", "two_switch_forward")
+    if not isinstance(topology_key, str):
+        topology_key = "two_switch_forward"
+    topology_key = topology_key.lower().replace(" ", "_").replace("-", "_")
+
     frequency_hz = as_float(cfg.get("frequency_hz", 100e3), 100e3)
     windings = cfg.get("windings", []) or []
     if not windings:
@@ -440,8 +535,9 @@ def build_excitation(cfg):
 
     return {
         "status": "OK",
-        "source": "om_converter_2switch_forward",
-        "topology": "two_switch_forward",
+        "source": "om_converter_multi_topology",
+        "topology": topology_key,
+        "topology_display": topology_key.replace("_", " ").title(),
         "sweep_mode": sweep_mode,
         "conduction_mode": conduction_mode_cfg,
         "frequency_hz": frequency_hz,

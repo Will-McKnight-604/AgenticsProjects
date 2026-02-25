@@ -15,8 +15,11 @@ function topology_wizard()
     data = struct();
     data.path_selected = '';   % 'wizard', 'mas_import', 'manual'
 
-    % Topology wizard defaults (Two-Switch Forward)
-    data.topology = 'two_switch_forward';
+    % Topology wizard defaults
+    data.topology = 'two_switch_forward';  % key name
+    data.topology_display = 'Two-Switch Forward Converter';  % display name
+    data.design_mode = 'auto';  % 'auto' or 'advanced'
+    data.n_outputs = 1;  % for isolated topologies
 
     % Converter specs - required
     data.converter.vin_min = 100;      % V
@@ -63,6 +66,9 @@ function topology_wizard()
     data.requirements.i_mag_pp_worst = 0;
     data.requirements.pin_nom = 0;
     data.requirements.pout_nom = 0;
+
+    % MAS inputs (from Python topology calculator)
+    data.mas_inputs = struct();  % populated by generate_om_topology.py
 
     % Recommendation settings
     data.rec.n_results = 5;
@@ -211,21 +217,77 @@ function build_wizard_panel(data)
     panel = data.panel_wizard;
 
     % ----- LEFT: Converter Specifications -----
+    spec_title = sprintf('%s - Converter Specifications', data.topology_display);
     spec_panel = uipanel('Parent', panel, ...
                          'Position', [0.01 0.01 0.48 0.98], ...
-                         'Title', 'Two-Switch Forward - Converter Specifications', ...
+                         'Title', spec_title, ...
                          'FontSize', 10, 'FontWeight', 'bold');
+
+    % --- Topology Selection & Design Mode ---
+    make_label(spec_panel, 'Converter Topology', [0.02 0.93 0.35 0.04]);
+    data.pop_topology = uicontrol('Parent', spec_panel, 'Style', 'popupmenu', ...
+              'String', {'Two-Switch Forward', 'Single-Switch Forward', 'Active Clamp Forward', ...
+                        'Flyback', 'Push-Pull', 'Buck', 'Boost', 'Isolated Buck', 'Isolated Buck-Boost'}, ...
+              'Units', 'normalized', ...
+              'Position', [0.38 0.93 0.60 0.045], ...
+              'Value', 1, ...
+              'Tag', 'topology_popup', ...
+              'Callback', @cb_topology_changed);
+
+    % Design mode: Auto or Advanced
+    make_label(spec_panel, 'Design Mode', [0.02 0.87 0.35 0.04]);
+    data.radio_auto = uicontrol('Parent', spec_panel, 'Style', 'radiobutton', ...
+              'String', 'Help me (Auto)', ...
+              'Units', 'normalized', ...
+              'Position', [0.38 0.87 0.20 0.045], ...
+              'Value', 1, ...
+              'Tag', 'design_mode_auto', ...
+              'Callback', @cb_design_mode_changed);
+    data.radio_advanced = uicontrol('Parent', spec_panel, 'Style', 'radiobutton', ...
+              'String', 'I know (Advanced)', ...
+              'Units', 'normalized', ...
+              'Position', [0.60 0.87 0.20 0.045], ...
+              'Value', 0, ...
+              'Tag', 'design_mode_advanced', ...
+              'Callback', @cb_design_mode_changed);
+
+    % Number of outputs spinner (for isolated topologies)
+    make_label(spec_panel, 'Outputs', [0.02 0.81 0.35 0.04]);
+    data.edit_n_outputs = make_edit(spec_panel, num2str(data.n_outputs), ...
+                                     [0.38 0.81 0.10 0.045], @cb_n_outputs);
+    data.btn_n_outputs_plus = uicontrol('Parent', spec_panel, 'Style', 'pushbutton', ...
+              'String', '+', ...
+              'Units', 'normalized', ...
+              'Position', [0.49 0.81 0.05 0.045], ...
+              'FontSize', 8, ...
+              'Callback', @cb_n_outputs_plus);
+    data.btn_n_outputs_minus = uicontrol('Parent', spec_panel, 'Style', 'pushbutton', ...
+              'String', '-', ...
+              'Units', 'normalized', ...
+              'Position', [0.55 0.81 0.05 0.045], ...
+              'FontSize', 8, ...
+              'Callback', @cb_n_outputs_minus);
+
+    % Compute button (trigger topology requirements calculation)
+    data.btn_compute = uicontrol('Parent', spec_panel, 'Style', 'pushbutton', ...
+              'String', 'Compute Requirements', ...
+              'Units', 'normalized', ...
+              'Position', [0.38 0.75 0.60 0.045], ...
+              'FontSize', 9, 'FontWeight', 'bold', ...
+              'BackgroundColor', [0.0 0.5 0.7], ...
+              'ForegroundColor', 'w', ...
+              'Callback', @cb_compute_topology);
 
     % --- Required fields ---
     req_label = uicontrol('Parent', spec_panel, 'Style', 'text', ...
               'String', 'Required Specifications', ...
               'Units', 'normalized', ...
-              'Position', [0.02 0.92 0.96 0.04], ...
+              'Position', [0.02 0.70 0.96 0.04], ...
               'FontSize', 9, 'FontWeight', 'bold', ...
               'ForegroundColor', [0.0 0.6 0.6], ...
               'HorizontalAlignment', 'left');
 
-    y = 0.86;
+    y = 0.64;
     dy = 0.065;
 
     % Input Voltage Min
@@ -1093,6 +1155,371 @@ end
 
 
 % ===============================================================
+% TOPOLOGY SELECTION CALLBACKS
+% ===============================================================
+
+function cb_topology_changed(src, ~)
+    fig = gcbf();
+    data = guidata(fig);
+
+    % Map selection index to topology key
+    topology_keys = {'two_switch_forward', 'single_switch_forward', 'active_clamp_forward', ...
+                     'flyback', 'push_pull', 'buck', 'boost', 'isolated_buck', 'isolated_buck_boost'};
+    topology_names = {'Two-Switch Forward Converter', 'Single-Switch Forward Converter', ...
+                      'Active Clamp Forward Converter', 'Flyback Converter', 'Push-Pull Converter', ...
+                      'Buck Converter', 'Boost Converter', 'Isolated Buck Converter', ...
+                      'Isolated Buck-Boost Converter'};
+
+    idx = get(src, 'Value');
+    if idx >= 1 && idx <= numel(topology_keys)
+        data.topology = topology_keys{idx};
+        data.topology_display = topology_names{idx};
+    end
+
+    % Update title
+    spec_panel = findobj(fig, 'Type', 'uipanel', '-regexp', 'Title', '.*Converter Specifications');
+    if ~isempty(spec_panel)
+        spec_title = sprintf('%s - Converter Specifications', data.topology_display);
+        set(spec_panel(1), 'Title', spec_title);
+    end
+
+    % Update field visibility based on topology
+    update_topology_visibility(data);
+
+    guidata(fig, data);
+end
+
+
+function cb_design_mode_changed(src, ~)
+    fig = gcbf();
+    data = guidata(fig);
+
+    tag = get(src, 'Tag');
+    if strcmp(tag, 'design_mode_auto')
+        data.design_mode = 'auto';
+        set(findobj(fig, 'Tag', 'design_mode_auto'), 'Value', 1);
+        set(findobj(fig, 'Tag', 'design_mode_advanced'), 'Value', 0);
+    else
+        data.design_mode = 'advanced';
+        set(findobj(fig, 'Tag', 'design_mode_auto'), 'Value', 0);
+        set(findobj(fig, 'Tag', 'design_mode_advanced'), 'Value', 1);
+    end
+
+    guidata(fig, data);
+end
+
+
+function cb_n_outputs(src, ~)
+    fig = gcbf();
+    data = guidata(fig);
+    val = str2double(get(src, 'String'));
+    if ~isnan(val) && val >= 1 && val <= 4
+        data.n_outputs = round(val);
+    else
+        set(src, 'String', num2str(data.n_outputs));
+    end
+    guidata(fig, data);
+end
+
+
+function cb_n_outputs_plus(~, ~)
+    fig = gcbf();
+    data = guidata(fig);
+    if data.n_outputs < 4
+        data.n_outputs = data.n_outputs + 1;
+        set(data.edit_n_outputs, 'String', num2str(data.n_outputs));
+    end
+    guidata(fig, data);
+end
+
+
+function cb_n_outputs_minus(~, ~)
+    fig = gcbf();
+    data = guidata(fig);
+    if data.n_outputs > 1
+        data.n_outputs = data.n_outputs - 1;
+        set(data.edit_n_outputs, 'String', num2str(data.n_outputs));
+    end
+    guidata(fig, data);
+end
+
+
+function cb_compute_topology(~, ~)
+    fig = gcbf();
+    data = guidata(fig);
+
+    % Validate required fields
+    c = data.converter;
+    if c.vin_min <= 0 || c.vin_max <= 0 || c.vout <= 0 || c.iout <= 0 || c.fsw_khz <= 0
+        errordlg('Please fill in all required converter specifications.', 'Missing Data');
+        return;
+    end
+    if c.vin_min >= c.vin_max
+        errordlg('Input voltage min must be less than max.', 'Invalid Data');
+        return;
+    end
+
+    set(data.btn_compute, 'String', 'Computing...', 'Enable', 'off');
+    drawnow();
+
+    try
+        % Request topology computation
+        data = request_topology_compute(data);
+
+    catch err
+        errordlg(sprintf('Topology computation failed:\n%s', err.message), 'Error');
+    end
+
+    set(data.btn_compute, 'String', 'Compute Requirements', 'Enable', 'on');
+    guidata(fig, data);
+end
+
+
+function data = request_topology_compute(data)
+    % Call generate_om_topology.py to compute topology-specific requirements
+
+    fig = gcbf();
+    script_dir = pwd();
+    config_file = 'om_topology_config.json';
+    output_file = 'om_topology_results.json';
+    py_script = 'generate_om_topology.py';
+    config_path = fullfile(script_dir, config_file);
+    output_path = fullfile(script_dir, output_file);
+
+    % Build config JSON
+    config = struct();
+    config.mode = 'compute_topology';
+    config.topology = data.topology;
+    config.design_mode = data.design_mode;
+    config.n_outputs = data.n_outputs;
+    config.converter = data.converter;
+    config.converter.fsw_hz = data.converter.fsw_khz * 1e3;
+    config.output_file = strrep(output_path, '\', '/');
+
+    % Optional advanced params
+    config.advanced = struct();
+    config.advanced.max_duty = data.converter.max_duty;
+    config.advanced.max_switch_current = data.converter.max_switch_current;
+
+    % Write JSON config
+    fid = fopen(config_path, 'w', 'n', 'UTF-8');
+    fprintf(fid, '%s', jsonencode(config));
+    fclose(fid);
+
+    % Verify script exists
+    if ~exist(fullfile(script_dir, py_script), 'file')
+        error('Python script "%s" not found in %s', py_script, script_dir);
+    end
+
+    % Find Python - same fallback chain as recommendations
+    python_cmd = 'python';
+    venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
+    if exist(venv_python, 'file')
+        python_cmd = ['"' strrep(venv_python, '\', '/') '"'];
+    end
+
+    cmd = sprintf('%s "%s" "%s" 2>&1', python_cmd, py_script, config_file);
+    fprintf('[TOPOLOGY] Running: %s\n', cmd);
+    [status, output] = system(cmd);
+    fprintf('[TOPOLOGY] Status: %d, Output: %s\n', status, strtrim(output));
+
+    % Check for module import errors
+    is_module_error = ~isempty(strfind(output, 'ModuleNotFoundError')) || ...
+                      ~isempty(strfind(output, 'ImportError')) || ...
+                      ~isempty(strfind(output, 'No module named'));
+
+    % Fallback 1: Try Windows Python Launcher (py)
+    if status ~= 0 && is_module_error && ispc
+        fprintf('[TOPOLOGY] Standard python failed. Trying ''py'' launcher...\n');
+        cmd_fb = sprintf('py "%s" "%s" 2>&1', py_script, config_file);
+        [status_fb, output_fb] = system(cmd_fb);
+        fprintf('[TOPOLOGY] py launcher exit=%d, output: %s\n', status_fb, strtrim(output_fb));
+        if status_fb == 0
+            status = status_fb;
+            output = output_fb;
+            fprintf('[TOPOLOGY] Success using ''py'' launcher.\n');
+        end
+    end
+
+    % Fallback 2: Try specific python paths from 'where python'
+    if status ~= 0 && is_module_error && ispc
+        [~, py_paths_str] = system('where python');
+        py_paths = strsplit(strtrim(py_paths_str), char(10));
+        for i = 1:length(py_paths)
+            p = strtrim(py_paths{i});
+            if isempty(p); continue; end
+            % Skip Octave bundled python
+            if ~isempty(strfind(lower(p), 'octave')) || ~isempty(strfind(lower(p), 'usr\bin'))
+                continue;
+            end
+            % Convert backslashes for MSYS shell compatibility
+            p = strrep(p, '\', '/');
+            fprintf('[TOPOLOGY] Trying alternative python: %s\n', p);
+            cmd_alt = sprintf('"%s" "%s" "%s" 2>&1', p, py_script, config_file);
+            [status_alt, output_alt] = system(cmd_alt);
+            fprintf('[TOPOLOGY] Alt python exit=%d, output: %s\n', status_alt, strtrim(output_alt));
+            if status_alt == 0
+                status = status_alt;
+                output = output_alt;
+                fprintf('[TOPOLOGY] Success using alternative python.\n');
+                break;
+            end
+        end
+    end
+
+    if status ~= 0
+        error('Python script failed: %s', output);
+    end
+
+    % Load results
+    fid = fopen(output_path, 'r', 'n', 'UTF-8');
+    raw = fread(fid, '*char')';
+    fclose(fid);
+    results = jsondecode(raw);
+
+    if isfield(results, 'status') && ~strcmp(results.status, 'OK')
+        error('Topology computation failed: %s', results.error);
+    end
+
+    % Extract computed requirements
+    if isfield(results, 'computed')
+        comp = results.computed;
+        % Update requirements from computed values
+        if isfield(comp, 'Lm_uH')
+            data.requirements.Lm_uH = comp.Lm_uH;
+        end
+        if isfield(comp, 'turns_ratio')
+            data.requirements.turns_ratio = comp.turns_ratio;
+        end
+        if isfield(comp, 'n_windings')
+            data.requirements.n_windings = comp.n_windings;
+        end
+        if isfield(comp, 'duty_nom')
+            data.requirements.duty_nom = comp.duty_nom;
+        end
+        if isfield(comp, 'duty_min_vin')
+            data.requirements.duty_min_vin = comp.duty_min_vin;
+        end
+        if isfield(comp, 'duty_max_vin')
+            data.requirements.duty_max_vin = comp.duty_max_vin;
+        end
+        if isfield(comp, 'pin_nom')
+            data.requirements.pin_nom = comp.pin_nom;
+        end
+        if isfield(comp, 'pout_nom')
+            data.requirements.pout_nom = comp.pout_nom;
+        end
+    end
+
+    % Store MAS inputs from Python for later use in recommendations
+    if isfield(results, 'mas_inputs')
+        data.mas_inputs = results.mas_inputs;
+    end
+
+    % Update display
+    data = update_topology_requirements_display(data, results);
+
+    guidata(fig, data);
+end
+
+
+function update_topology_visibility(data)
+    % Update field visibility based on selected topology
+
+    fig = gcbf();
+
+    % Get topology key
+    topology = data.topology;
+
+    % Determine if isolated topology (has multiple outputs)
+    is_isolated = strcmp(topology, 'flyback') || ...
+                  strcmp(topology, 'push_pull') || ...
+                  strcmp(topology, 'isolated_buck') || ...
+                  strcmp(topology, 'isolated_buck_boost') || ...
+                  strcmp(topology, 'two_switch_forward') || ...
+                  strcmp(topology, 'single_switch_forward') || ...
+                  strcmp(topology, 'active_clamp_forward');
+
+    % Show/hide N outputs spinner
+    n_out_controls = [data.edit_n_outputs, data.btn_n_outputs_plus, data.btn_n_outputs_minus];
+    if is_isolated && data.n_outputs > 1
+        set(n_out_controls, 'Visible', 'on');
+    else
+        set(n_out_controls, 'Visible', 'off');
+    end
+
+    % For buck/boost, hide N outputs
+    if strcmp(topology, 'buck') || strcmp(topology, 'boost')
+        set(n_out_controls, 'Visible', 'off');
+    end
+end
+
+
+function data = update_topology_requirements_display(data, results)
+    % Update requirements display from computed topology values
+
+    fig = gcbf();
+    r = data.requirements;
+    c = data.converter;
+
+    % Build display text
+    lines = {};
+    lines{end+1} = sprintf('--- %s Design ---', data.topology_display);
+    lines{end+1} = '';
+
+    if isfield(results, 'topology_display')
+        lines{end+1} = sprintf('Topology: %s', results.topology_display);
+        lines{end+1} = '';
+    end
+
+    if r.turns_ratio > 0
+        lines{end+1} = sprintf('Turns ratio Np:Ns = %.2f : 1', r.turns_ratio);
+        lines{end+1} = '';
+    end
+
+    if r.duty_nom > 0
+        lines{end+1} = sprintf('Duty cycle:');
+        if r.duty_min_vin > 0
+            lines{end+1} = sprintf('  at Vin_min (%g V): D = %.3f', c.vin_min, r.duty_min_vin);
+        end
+        if r.duty_nom > 0
+            lines{end+1} = sprintf('  at Vin_nom (%g V): D = %.3f', c.vin_min, r.duty_nom);
+        end
+        if r.duty_max_vin > 0
+            lines{end+1} = sprintf('  at Vin_max (%g V): D = %.3f', c.vin_max, r.duty_max_vin);
+        end
+        lines{end+1} = '';
+    end
+
+    if r.Lm_uH > 0
+        lines{end+1} = sprintf('Magnetizing inductance Lm = %.1f uH', r.Lm_uH);
+        lines{end+1} = '';
+    end
+
+    if r.i_pri_rms > 0
+        lines{end+1} = sprintf('Primary RMS current = %.2f A', r.i_pri_rms);
+    end
+    if r.i_sec_rms > 0
+        lines{end+1} = sprintf('Secondary RMS current = %.2f A', r.i_sec_rms);
+    end
+
+    if r.pout_nom > 0
+        lines{end+1} = '';
+        lines{end+1} = sprintf('Output power = %.1f W', r.pout_nom);
+    end
+    if r.pin_nom > 0
+        lines{end+1} = sprintf('Input power = %.1f W (at %.0f%% eff.)', r.pin_nom, c.efficiency);
+    end
+    lines{end+1} = sprintf('Frequency = %g kHz', c.fsw_khz);
+
+    txt = findobj(fig, 'Style', 'text', '-regexp', 'String', '(computing|---.*Design)');
+    if ~isempty(txt)
+        set(txt(1), 'String', strjoin(lines, char(10)));
+    end
+end
+
+
+% ===============================================================
 % MAS IMPORT CALLBACKS
 % ===============================================================
 
@@ -1396,6 +1823,8 @@ function spec = build_design_spec_wizard(data)
     spec = struct();
     spec.source = 'wizard';
     spec.topology = data.topology;
+    spec.topology_display = data.topology_display;
+    spec.design_mode = data.design_mode;
 
     % Converter specs
     spec.converter = data.converter;
@@ -1403,6 +1832,14 @@ function spec = build_design_spec_wizard(data)
 
     % Computed requirements
     spec.requirements = data.requirements;
+    spec.requirements.n_windings = data.requirements.n_windings;
+
+    % MAS inputs (from Python topology calculator)
+    if ~isempty(data.mas_inputs) && isstruct(data.mas_inputs)
+        spec.mas_inputs = data.mas_inputs;
+    else
+        spec.mas_inputs = [];
+    end
 
     % Operating points will be generated by the Python script
     spec.operating_points = [];
@@ -1742,9 +2179,14 @@ function config = build_recommendation_config(data)
 
     config = struct();
     config.mode = 'recommend';
-    config.topology = 'two_switch_forward';
+    config.topology = data.topology;  % Use selected topology, not hardcoded
     config.max_results = data.rec.n_results;
     config.wire_family_mode = data.rec.wire_family_mode;
+
+    % If MAS inputs already computed, pass them through
+    if ~isempty(data.mas_inputs) && isstruct(data.mas_inputs)
+        config.mas_inputs = data.mas_inputs;
+    end
 
     config.weights = struct();
     config.weights.COST = data.rec.weight_cost;
