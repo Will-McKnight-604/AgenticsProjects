@@ -190,42 +190,65 @@ function plot_current_density(geom, results)
               'FaceColor', 'flat', 'EdgeColor', 'none');
     end
 
-    % ---- Winding outline overlays (one patch per winding, not per filament) ----
+    % ---- Winding zone backgrounds (semi-transparent colored regions) ----
+    % Instead of thin colored outlines around each filament (which are invisible at small scales),
+    % draw semi-transparent background zones that clearly separate windings spatially.
+    % This preserves the current density colormap visibility while providing strong winding identity.
     if size(fil,2) >= 6 && ~isempty(winding_colors)
         winding_idx_col = round(fil(:,6));
         unique_windings = unique(winding_idx_col);
+
+        % Compute bounding box for each winding and draw zone
         for w = unique_windings(:)'
             if w < 1 || w > numel(winding_colors), continue; end
-            ec         = winding_colors{w};
-            mask_w     = (winding_idx_col == w);
-            fil_w      = fil(mask_w, :);
-            is_round_w = is_round(mask_w);
-            idx_r_w    = find(is_round_w);
-            idx_q_w    = find(~is_round_w);
-            % Round outlines
-            if ~isempty(idx_r_w)
-                Nr_w  = numel(idx_r_w);
-                R_w   = sqrt(fil_w(idx_r_w,3) .* fil_w(idx_r_w,4)) / 2;
-                vx_w  = bsxfun(@plus, fil_w(idx_r_w,1), bsxfun(@times, R_w, cos(theta)));
-                vy_w  = bsxfun(@plus, fil_w(idx_r_w,2), bsxfun(@times, R_w, sin(theta)));
-                vts_w = [reshape(vx_w', [], 1), reshape(vy_w', [], 1)];
-                fcs_w = reshape(1:Nr_w*Nv, Nv, Nr_w)';
-                patch(ax, 'Faces', fcs_w, 'Vertices', vts_w, ...
-                      'FaceColor', 'none', 'EdgeColor', ec, 'LineWidth', 0.5);
+            mask_w = (winding_idx_col == w);
+            fil_w = fil(mask_w, :);
+
+            % Get filament bounds (including their half-widths/heights as radii)
+            x_min = min(fil_w(:,1) - fil_w(:,3)/2);
+            x_max = max(fil_w(:,1) + fil_w(:,3)/2);
+            y_min = min(fil_w(:,2) - fil_w(:,4)/2);
+            y_max = max(fil_w(:,2) + fil_w(:,4)/2);
+
+            % Add 10% margin to zone bounds for visual separation
+            x_margin = 0.1 * (x_max - x_min);
+            y_margin = 0.1 * (y_max - y_min);
+            x_min = x_min - x_margin;
+            x_max = x_max + x_margin;
+            y_min = y_min - y_margin;
+            y_max = y_max + y_margin;
+
+            % Draw semi-transparent rectangular zone
+            zone_color = winding_colors{w};
+            try
+                % Try to set FaceAlpha and EdgeAlpha (MATLAB R2014b+)
+                zone_patch = patch(ax, ...
+                    [x_min, x_max, x_max, x_min], ...
+                    [y_min, y_min, y_max, y_max], ...
+                    zone_color, ...
+                    'FaceAlpha', 0.12, ...
+                    'EdgeColor', zone_color, ...
+                    'EdgeAlpha', 0.25, ...
+                    'LineWidth', 1.5);
+            catch
+                % Fallback for older Octave without EdgeAlpha
+                zone_patch = patch(ax, ...
+                    [x_min, x_max, x_max, x_min], ...
+                    [y_min, y_min, y_max, y_max], ...
+                    zone_color, ...
+                    'EdgeColor', zone_color, ...
+                    'LineWidth', 1.5);
+                try
+                    set(zone_patch, 'FaceAlpha', 0.12);
+                catch
+                end
             end
-            % Rect outlines
-            if ~isempty(idx_q_w)
-                Nq_w  = numel(idx_q_w);
-                hx_w  = fil_w(idx_q_w,3) / 2;
-                hy_w  = fil_w(idx_q_w,4) / 2;
-                cx_w  = fil_w(idx_q_w,1);
-                cy_w  = fil_w(idx_q_w,2);
-                vx_w  = [cx_w-hx_w, cx_w+hx_w, cx_w+hx_w, cx_w-hx_w];
-                vy_w  = [cy_w-hy_w, cy_w-hy_w, cy_w+hy_w, cy_w+hy_w];
-                vts_w = [reshape(vx_w', [], 1), reshape(vy_w', [], 1)];
-                fcs_w = reshape(1:Nq_w*4, 4, Nq_w)';
-                patch(ax, 'Faces', fcs_w, 'Vertices', vts_w, ...
-                      'FaceColor', 'none', 'EdgeColor', ec, 'LineWidth', 0.5);
+
+            % Try to send zone to back (behind the filament patches drawn above)
+            try
+                uistack(zone_patch, 'bottom');
+            catch
+                % Octave may not support uistack; zones are still visible
             end
         end
     end
