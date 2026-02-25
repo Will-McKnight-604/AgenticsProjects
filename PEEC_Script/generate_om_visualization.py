@@ -967,14 +967,26 @@ def build_magnetic_from_config(config):
 
             # Toroidal cores use overlapping layers and cannot use wind_by_sections
             # (the C++ slot calculator always errors for toroids regardless of
-            # isolation side settings). Go straight to wind_by_turns for toroids.
+            # isolation side settings). Autocomplete the coil first, then call wind_by_turns.
             if core_type == 'toroidal':
-                print('[VIZ] Toroidal core: skipping wind_by_sections/layers, '
-                      'using wind_by_turns directly', file=sys.stderr)
-                coil_tmp = dict(base_coil)
-                coil_tmp = ensure_dict(pm.wind_by_turns(coil_tmp))
-                if isinstance(coil_tmp, str):
-                    raise RuntimeError(coil_tmp)
+                print('[VIZ] Toroidal core: autocompleting then using wind_by_turns', file=sys.stderr)
+                # Build a minimal magnetic object for autocomplete
+                mag_minimal = {
+                    'core': core_full,
+                    'coil': {
+                        'bobbin': bobbin,
+                        'functionalDescription': coil_func
+                    }
+                }
+                mag_ac = ensure_dict(pm.magnetic_autocomplete(mag_minimal, {}))
+                if isinstance(mag_ac, str):
+                    raise RuntimeError(mag_ac)
+                coil_tmp = mag_ac.get('coil', {})
+                # If autocomplete didn't generate turnsDescription, call wind_by_turns
+                if not coil_tmp.get('turnsDescription'):
+                    coil_tmp = ensure_dict(pm.wind_by_turns(coil_tmp))
+                    if isinstance(coil_tmp, str):
+                        raise RuntimeError(coil_tmp)
             else:
                 # Use three-step winding: wind_by_sections → wind_by_layers → wind_by_turns
                 insul_thick_val = insulation_thickness if insulation_thickness > 0 else 0.0

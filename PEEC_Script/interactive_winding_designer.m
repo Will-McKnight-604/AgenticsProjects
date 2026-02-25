@@ -3811,8 +3811,9 @@ function visualize_openmagnetics(data, ax)
                           ~isempty(strfind(output, 'ImportError')) || ...
                           ~isempty(strfind(output, 'No module named'));
 
-        % Fallback: If python failed with ModuleNotFoundError, try 'py' launcher (Windows)
-        if status ~= 0 && is_module_error && ispc
+        % Fallback: If python failed, try alternatives
+        % Try 'py' launcher first (Windows)
+        if status ~= 0 && ispc
             fprintf('[OM_VIZ] Standard python failed. Trying Windows Python Launcher (py)...\n');
             cmd_fallback = sprintf('py "%s" "%s" 2>&1', py_script_name, config_file_name);
             [status_fb, output_fb] = run_system_in_dir(script_dir, cmd_fallback);
@@ -3823,8 +3824,8 @@ function visualize_openmagnetics(data, ax)
             end
         end
 
-        % Fallback 2: Try specific python paths from 'where python' if they look like system installs
-        if status ~= 0 && is_module_error && ispc
+        % Fallback 2: Try specific python paths from 'where python' if still failing
+        if status ~= 0 && ispc
              [~, py_paths_str] = system('where python');
              % Split by newlines
              py_paths = strsplit(strtrim(py_paths_str), char(10));
