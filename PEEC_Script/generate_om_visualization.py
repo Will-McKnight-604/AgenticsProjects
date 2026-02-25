@@ -861,12 +861,24 @@ def build_magnetic_from_config(config):
                 'numberConductors': 1,
                 'material': wire.get('material', 'copper')
             }
+        # For toroidal cores, all windings must use the same isolationSide
+        # to avoid the "slots cannot be less than 1" error in the OM engine.
+        # The OM slot calculation for toroids requires all windings to share
+        # a single isolation side; mixing sides (e.g. primary + secondary)
+        # causes the slot count to fall below 1.
+        iso_side = w.get('isolation_side', 'primary')
+        if core_type == 'toroidal':
+            if i > 0:
+                print(f'NOTE: Toroidal core - forcing isolationSide=primary for '
+                      f'winding {i} to avoid slot error', file=sys.stderr)
+            iso_side = 'primary'
+
         winding_entry = {
             'name': w.get('name', f'winding_{i}'),
             'numberTurns': w.get('num_turns', 10),
             'numberParallels': w.get('num_parallels', 1),
             'wire': wire,
-            'isolationSide': w.get('isolation_side', 'primary')
+            'isolationSide': iso_side
         }
 
         # Add margin tape if enabled globally in config
@@ -968,10 +980,23 @@ def build_magnetic_from_config(config):
 
             try:
                 coil_tmp = sections_once(insul_thick_val)
-            except Exception:
+            except Exception as e1:
+                e1_str = str(e1).lower()
                 if insul_thick_val > 0:
-                    coil_tmp = sections_once(0.0)
+                    try:
+                        coil_tmp = sections_once(0.0)
+                    except Exception as e2:
+                        e2_str = str(e2).lower()
+                        if 'slot' in e2_str:
+                            # Slots error persists even with zero insulation.
+                            # Re-raise with the original message so the outer
+                            # handler records a clear diagnostic.
+                            raise RuntimeError(str(e2)) from e2
+                        raise
                 else:
+                    if 'slot' in e1_str:
+                        # Slots error with no insulation thickness to reduce.
+                        raise RuntimeError(str(e1)) from e1
                     raise
 
             # Inject alignment into each sectionsDescription entry before
