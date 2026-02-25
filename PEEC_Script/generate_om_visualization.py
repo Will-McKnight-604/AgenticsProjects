@@ -965,88 +965,99 @@ def build_magnetic_from_config(config):
                 'functionalDescription': coil_func,
             }
 
-            # Use three-step winding: wind_by_sections → wind_by_layers → wind_by_turns
-            insul_thick_val = insulation_thickness if insulation_thickness > 0 else 0.0
-
-            def sections_once(insul):
-                out = ensure_dict(pm.wind_by_sections(
-                    base_coil, 1, proportions, section_order, insul
-                ))
-                if isinstance(out, str):
-                    raise RuntimeError(out)
-                if isinstance(out, dict) and out.get('errorMessage'):
-                    raise RuntimeError(out.get('errorMessage'))
-                return out
-
-            try:
-                coil_tmp = sections_once(insul_thick_val)
-            except Exception as e1:
-                e1_str = str(e1).lower()
-                if insul_thick_val > 0:
-                    try:
-                        coil_tmp = sections_once(0.0)
-                    except Exception as e2:
-                        e2_str = str(e2).lower()
-                        if 'slot' in e2_str:
-                            # Slots error persists even with zero insulation.
-                            # Re-raise with the original message so the outer
-                            # handler records a clear diagnostic.
-                            raise RuntimeError(str(e2)) from e2
-                        raise
-                else:
-                    if 'slot' in e1_str:
-                        # Slots error with no insulation thickness to reduce.
-                        raise RuntimeError(str(e1)) from e1
-                    raise
-
-            # Inject alignment into each sectionsDescription entry before
-            # calling wind_by_layers. Per MAS schema:
-            #   section.layersOrientation: "contiguous" | "overlapping"
-            #   section.layersAlignment:   "inner or top" | "outer or bottom" | "spread" | "centered"
-            # wind_by_layers reads these from the section objects, not from
-            # coil-level fields.
-            sections_desc = coil_tmp.get('sectionsDescription', [])
-            if isinstance(sections_desc, list):
-                for i, sec in enumerate(sections_desc):
-                    if not isinstance(sec, dict):
-                        continue
-                    # Apply per-section turns alignment if available, else global
-                    sec_ta = (per_section_turns_alignment[i]
-                              if i < len(per_section_turns_alignment)
-                              else turns_alignment)
-                    sec['layersOrientation'] = layers_orientation
-                    sec['layersAlignment'] = sec_ta
-                coil_tmp['sectionsDescription'] = sections_desc
-
-            try:
-                print(
-                    f'[VIZ] wind_by_layers: sections={len(sections_desc)}, '
-                    f'layersOrientation={layers_orientation!r}, '
-                    f'layersAlignment={turns_alignment!r}',
-                    file=sys.stderr,
-                )
-                coil_tmp = ensure_dict(pm.wind_by_layers(coil_tmp, {}, 0.0))
-                if isinstance(coil_tmp, str):
-                    raise RuntimeError(coil_tmp)
-            except Exception as e:
-                print(f'NOTE: wind_by_layers failed ({e}), '
-                      f'falling back to pm.wind()', file=sys.stderr)
-                # pm.wind() is the all-in-one function; it accepts layersOrientation
-                # and turnsAlignment at the coil level (per its own docstring).
-                fallback_coil = {
-                    'bobbin': bobbin,
-                    'functionalDescription': coil_func,
-                    'layersOrientation': layers_orientation,
-                    'turnsAlignment': turns_alignment,
-                }
-                coil_tmp = ensure_dict(pm.wind(
-                    fallback_coil, 1, proportions, section_order, []
-                ))
-                if isinstance(coil_tmp, str):
-                    raise RuntimeError(coil_tmp)
-
-            if not coil_tmp.get('turnsDescription'):
+            # Toroidal cores use overlapping layers and cannot use wind_by_sections
+            # (the C++ slot calculator always errors for toroids regardless of
+            # isolation side settings). Go straight to wind_by_turns for toroids.
+            if core_type == 'toroidal':
+                print('[VIZ] Toroidal core: skipping wind_by_sections/layers, '
+                      'using wind_by_turns directly', file=sys.stderr)
+                coil_tmp = dict(base_coil)
                 coil_tmp = ensure_dict(pm.wind_by_turns(coil_tmp))
+                if isinstance(coil_tmp, str):
+                    raise RuntimeError(coil_tmp)
+            else:
+                # Use three-step winding: wind_by_sections → wind_by_layers → wind_by_turns
+                insul_thick_val = insulation_thickness if insulation_thickness > 0 else 0.0
+
+                def sections_once(insul):
+                    out = ensure_dict(pm.wind_by_sections(
+                        base_coil, 1, proportions, section_order, insul
+                    ))
+                    if isinstance(out, str):
+                        raise RuntimeError(out)
+                    if isinstance(out, dict) and out.get('errorMessage'):
+                        raise RuntimeError(out.get('errorMessage'))
+                    return out
+
+                try:
+                    coil_tmp = sections_once(insul_thick_val)
+                except Exception as e1:
+                    e1_str = str(e1).lower()
+                    if insul_thick_val > 0:
+                        try:
+                            coil_tmp = sections_once(0.0)
+                        except Exception as e2:
+                            e2_str = str(e2).lower()
+                            if 'slot' in e2_str:
+                                # Slots error persists even with zero insulation.
+                                # Re-raise with the original message so the outer
+                                # handler records a clear diagnostic.
+                                raise RuntimeError(str(e2)) from e2
+                            raise
+                    else:
+                        if 'slot' in e1_str:
+                            # Slots error with no insulation thickness to reduce.
+                            raise RuntimeError(str(e1)) from e1
+                        raise
+
+                # Inject alignment into each sectionsDescription entry before
+                # calling wind_by_layers. Per MAS schema:
+                #   section.layersOrientation: "contiguous" | "overlapping"
+                #   section.layersAlignment:   "inner or top" | "outer or bottom" | "spread" | "centered"
+                # wind_by_layers reads these from the section objects, not from
+                # coil-level fields.
+                sections_desc = coil_tmp.get('sectionsDescription', [])
+                if isinstance(sections_desc, list):
+                    for i, sec in enumerate(sections_desc):
+                        if not isinstance(sec, dict):
+                            continue
+                        # Apply per-section turns alignment if available, else global
+                        sec_ta = (per_section_turns_alignment[i]
+                                  if i < len(per_section_turns_alignment)
+                                  else turns_alignment)
+                        sec['layersOrientation'] = layers_orientation
+                        sec['layersAlignment'] = sec_ta
+                    coil_tmp['sectionsDescription'] = sections_desc
+
+                try:
+                    print(
+                        f'[VIZ] wind_by_layers: sections={len(sections_desc)}, '
+                        f'layersOrientation={layers_orientation!r}, '
+                        f'layersAlignment={turns_alignment!r}',
+                        file=sys.stderr,
+                    )
+                    coil_tmp = ensure_dict(pm.wind_by_layers(coil_tmp, {}, 0.0))
+                    if isinstance(coil_tmp, str):
+                        raise RuntimeError(coil_tmp)
+                except Exception as e:
+                    print(f'NOTE: wind_by_layers failed ({e}), '
+                          f'falling back to pm.wind()', file=sys.stderr)
+                    # pm.wind() is the all-in-one function; it accepts layersOrientation
+                    # and turnsAlignment at the coil level (per its own docstring).
+                    fallback_coil = {
+                        'bobbin': bobbin,
+                        'functionalDescription': coil_func,
+                        'layersOrientation': layers_orientation,
+                        'turnsAlignment': turns_alignment,
+                    }
+                    coil_tmp = ensure_dict(pm.wind(
+                        fallback_coil, 1, proportions, section_order, []
+                    ))
+                    if isinstance(coil_tmp, str):
+                        raise RuntimeError(coil_tmp)
+
+                if not coil_tmp.get('turnsDescription'):
+                    coil_tmp = ensure_dict(pm.wind_by_turns(coil_tmp))
 
             # delimit_and_compact generates additionalCoordinates for toroidal
             # turns (outer-edge positions), which the painter needs to draw

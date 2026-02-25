@@ -78,6 +78,7 @@ function topology_wizard()
     data.rec.wire_family_mode = 'auto_all';  % auto_all | round_litz_rect | foil_planar
     data.rec.results = {};       % cell array of result structs
     data.rec.selected_idx = 0;   % index of selected recommendation
+    data.rec.cores_in_stock = false;  % false = all cores, true = in-stock only
 
     % MAS import
     data.mas.filepath = '';
@@ -384,6 +385,16 @@ function build_wizard_panel(data)
               'Position', [0.80 0.76 0.18 0.14], ...
               'Value', 1, ...
               'Callback', @cb_wire_family_mode);
+
+    % Cores in stock toggle
+    data.chk_cores_in_stock = uicontrol('Parent', rec_panel, 'Style', 'checkbox', ...
+              'String', 'In-stock cores only', ...
+              'Units', 'normalized', ...
+              'Position', [0.62 0.62 0.36 0.12], ...
+              'Value', 0, ...
+              'FontSize', 8, ...
+              'TooltipString', 'When checked, only cores marked as in-stock are considered', ...
+              'Callback', @cb_cores_in_stock);
 
     % Priority sliders (linked: always sum to 100%)
     make_label(rec_panel, 'Cost', [0.02 0.52 0.08 0.14]);
@@ -1029,6 +1040,13 @@ function cb_wire_family_mode(src, ~)
         otherwise
             data.rec.wire_family_mode = 'auto_all';
     end
+    guidata(fig, data);
+end
+
+function cb_cores_in_stock(src, ~)
+    fig = gcbf();
+    data = guidata(fig);
+    data.rec.cores_in_stock = logical(get(src, 'Value'));
     guidata(fig, data);
 end
 
@@ -2187,6 +2205,8 @@ function config = build_recommendation_config(data)
     if ~isempty(data.mas_inputs) && isstruct(data.mas_inputs)
         config.mas_inputs = data.mas_inputs;
     end
+
+    config.cores_in_stock = data.rec.cores_in_stock;
 
     config.weights = struct();
     config.weights.COST = data.rec.weight_cost;

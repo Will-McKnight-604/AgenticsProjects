@@ -15,10 +15,11 @@ function plot_loss_density(geom, results)
     xlabel(ax, 'x (m)');
     ylabel(ax, 'y (m)');
 
-    % Calculate power density in kW/mm^2
-    % fil areas are in m^2; 1 m^2 = 1e6 mm^2, so P(W/mm^2) = P/(area_m2 * 1e6)
-    % multiply by 1e-9 to convert W/m^2 → kW/mm^2
-    pdens = P ./ (fil(:,3) .* fil(:,4)) * 1e-9;
+    % Calculate volumetric power loss density in mW/mm^3
+    % P_fil is in W/m (power per unit axial length, 2D PEEC model).
+    % Dividing by cross-sectional area [m^2] gives W/m^3.
+    % 1 W/m^3 = 1e-9 W/mm^3 = 1e-6 mW/mm^3
+    pdens = P ./ (fil(:,3) .* fil(:,4)) * 1e-6;
     pmax  = max(pdens);
 
     if pmax == 0
@@ -265,7 +266,7 @@ function plot_loss_density(geom, results)
     % Add colorbar first (before legend to avoid resize conflicts in Octave)
     try
         cb = colorbar(ax);
-        ylabel(cb, 'P (kW/mm^2)');
+        ylabel(cb, 'p (mW/mm^3)');
     catch
         colorbar;
     end

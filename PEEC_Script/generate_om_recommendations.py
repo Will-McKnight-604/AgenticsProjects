@@ -689,13 +689,14 @@ def run_recommendations(config):
         settings_obj = pm.get_settings()
         if isinstance(settings_obj, dict) and "data" not in settings_obj:
             previous_settings = dict(settings_obj)
-            if settings_obj.get("useOnlyCoresInStock", True):
-                settings_obj["useOnlyCoresInStock"] = False
+            # Use value from config (default False = all cores, not just in-stock)
+            use_in_stock = bool(config.get("cores_in_stock", False))
+            if settings_obj.get("useOnlyCoresInStock", True) != use_in_stock:
+                settings_obj["useOnlyCoresInStock"] = use_in_stock
                 pm.set_settings(settings_obj)
                 settings_overridden = True
                 print(
-                    "[ADVISOR] Set useOnlyCoresInStock=False "
-                    "(available cores mode; mixed families enabled)",
+                    f"[ADVISOR] Set useOnlyCoresInStock={use_in_stock}",
                     file=sys.stderr,
                 )
     except Exception as exc:
