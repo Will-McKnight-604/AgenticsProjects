@@ -7356,45 +7356,65 @@ function parse_om_svg(svg_str, ax, om_meta, data)
     end
 
     % --- Draw circles from SVG when metadata is not available ---
+    % First pass: collect all circle info
     if ~use_meta_turns
         circle_tags = regexp(svg_str, '<circle[^>]*>', 'match');
+        stroke_only_circles = {};
+        filled_circles = {};
+
         for i = 1:length(circle_tags)
             tag = circle_tags{i};
             cx = get_attr(tag, 'cx');
             cy = get_attr(tag, 'cy');
             r = get_attr(tag, 'r');
-        class_name = get_attr_str(tag, 'class');
-        [rgb, alpha, has_fill, known, stroke_rgb, stroke_w, has_stroke] = get_class_style(class_name, color_map);
+            class_name = get_attr_str(tag, 'class');
+            [rgb, alpha, has_fill, known, stroke_rgb, stroke_w, has_stroke] = get_class_style(class_name, color_map);
 
-        if ~isnan(cx) && ~isnan(cy) && ~isnan(r)
-            is_no_fill = tag_has_fill_none(tag) || (known && ~has_fill);
-            if is_no_fill
-                if has_stroke
-                    draw_stroke_circle_local(cx, cy, r, stroke_rgb, stroke_w, alpha);
+            if ~isnan(cx) && ~isnan(cy) && ~isnan(r)
+                is_no_fill = tag_has_fill_none(tag) || (known && ~has_fill);
+                if is_no_fill
+                    % Stroke-only circle (like toroid inner hole) — draw FIRST (behind)
+                    stroke_only_circles{end+1} = struct('cx', cx, 'cy', cy, 'r', r, ...
+                        'rgb', stroke_rgb, 'w', stroke_w, 'alpha', alpha, 'has_stroke', has_stroke);
+                else
+                    % Filled circle (turn conductor) — draw SECOND (on top)
+                    if ~(known && has_fill)
+                        rgb = get_default_color(class_name);
+                        alpha = 1.0;
+                    end
+                    edge_color = 'none';
+                    edge_w = 0.1;
+                    if has_stroke
+                        edge_color = stroke_rgb;
+                        edge_w = max(0.1, min(stroke_w, 2.0));
+                    end
+                    filled_circles{end+1} = struct('cx', cx, 'cy', cy, 'r', r, ...
+                        'rgb', rgb, 'alpha', alpha, 'edge_color', edge_color, 'edge_w', edge_w);
                 end
-                continue;
             end
-            if ~(known && has_fill)
-                rgb = get_default_color(class_name);
-                alpha = 1.0;
+        end
+
+        % Draw stroke-only circles first (background)
+        for i = 1:length(stroke_only_circles)
+            c = stroke_only_circles{i};
+            if c.has_stroke
+                draw_stroke_circle_local(c.cx, c.cy, c.r, c.rgb, c.w, c.alpha);
             end
+        end
+
+        % Draw filled circles second (foreground, on top of stroke circles)
+        for i = 1:length(filled_circles)
+            c = filled_circles{i};
             theta = linspace(0, 2*pi, 30);
-            edge_color = 'none';
-            edge_w = 0.1;
-            if has_stroke
-                edge_color = stroke_rgb;
-                edge_w = max(0.1, min(stroke_w, 2.0));
-            end
-            h = fill(ax, cx + r*cos(theta), cy + r*sin(theta), ...
-                rgb, 'EdgeColor', edge_color, 'LineWidth', edge_w);
-            if alpha < 1.0
+            h = fill(ax, c.cx + c.r*cos(theta), c.cy + c.r*sin(theta), ...
+                c.rgb, 'EdgeColor', c.edge_color, 'LineWidth', c.edge_w);
+            if c.alpha < 1.0
                 try
-                    set(h, 'FaceAlpha', alpha);
+                    set(h, 'FaceAlpha', c.alpha);
                 catch
                 end
             end
         end
-    end
     end
 
     axis(ax, 'equal');
