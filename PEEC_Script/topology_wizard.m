@@ -1201,10 +1201,17 @@ function cb_topology_changed(src, ~)
         set(spec_panel(1), 'Title', spec_title);
     end
 
-    % Update field visibility based on topology
+    % Save updated data BEFORE calling update functions
+    guidata(fig, data);
+
+    % Update field visibility based on topology (now data is saved)
     update_topology_visibility(data);
 
-    guidata(fig, data);
+    % Update computed design requirements display
+    if isfield(data, 'requirements') && isstruct(data.requirements)
+        update_topology_requirements_display(data, data.requirements);
+    end
+
 end
 
 
@@ -1443,33 +1450,127 @@ end
 
 function update_topology_visibility(data)
     % Update field visibility based on selected topology
+    % Shows/hides topology-specific input fields in the Converter Specifications panel
 
     fig = gcbf();
-
-    % Get topology key
     topology = data.topology;
 
-    % Determine if isolated topology (has multiple outputs)
-    is_isolated = strcmp(topology, 'flyback') || ...
-                  strcmp(topology, 'push_pull') || ...
-                  strcmp(topology, 'isolated_buck') || ...
-                  strcmp(topology, 'isolated_buck_boost') || ...
-                  strcmp(topology, 'two_switch_forward') || ...
-                  strcmp(topology, 'single_switch_forward') || ...
-                  strcmp(topology, 'active_clamp_forward');
+    % Determine topology categories
+    is_isolated = any(strcmp(topology, {'flyback', 'push_pull', 'isolated_buck', ...
+                                        'isolated_buck_boost', 'two_switch_forward', ...
+                                        'single_switch_forward', 'active_clamp_forward'}));
+    is_forward = any(strcmp(topology, {'two_switch_forward', 'single_switch_forward', ...
+                                       'active_clamp_forward'}));
+    is_flyback = strcmp(topology, 'flyback');
+    is_buck_boost = any(strcmp(topology, {'buck', 'boost', 'isolated_buck', 'isolated_buck_boost'}));
 
-    % Show/hide N outputs spinner
-    n_out_controls = [data.edit_n_outputs, data.btn_n_outputs_plus, data.btn_n_outputs_minus];
-    if is_isolated && data.n_outputs > 1
-        set(n_out_controls, 'Visible', 'on');
-    else
-        set(n_out_controls, 'Visible', 'off');
+    % ===== Show/Hide N Outputs Spinner =====
+    % Only show for isolated topologies
+    if isfield(data, 'edit_n_outputs') && ~isempty(data.edit_n_outputs)
+        if is_isolated
+            set(data.edit_n_outputs, 'Visible', 'on');
+            if isfield(data, 'btn_n_outputs_plus') && ~isempty(data.btn_n_outputs_plus)
+                set(data.btn_n_outputs_plus, 'Visible', 'on');
+            end
+            if isfield(data, 'btn_n_outputs_minus') && ~isempty(data.btn_n_outputs_minus)
+                set(data.btn_n_outputs_minus, 'Visible', 'on');
+            end
+        else
+            set(data.edit_n_outputs, 'Visible', 'off');
+            if isfield(data, 'btn_n_outputs_plus') && ~isempty(data.btn_n_outputs_plus)
+                set(data.btn_n_outputs_plus, 'Visible', 'off');
+            end
+            if isfield(data, 'btn_n_outputs_minus') && ~isempty(data.btn_n_outputs_minus)
+                set(data.btn_n_outputs_minus, 'Visible', 'off');
+            end
+        end
     end
 
-    % For buck/boost, hide N outputs
-    if strcmp(topology, 'buck') || strcmp(topology, 'boost')
-        set(n_out_controls, 'Visible', 'off');
+    % ===== Update Input Voltage Fields =====
+    % All topologies need input voltage, but visibility may change dynamically
+    if isfield(data, 'edit_vin_min') && ~isempty(data.edit_vin_min)
+        set(data.edit_vin_min, 'Visible', 'on');
     end
+    if isfield(data, 'edit_vin_max') && ~isempty(data.edit_vin_max)
+        set(data.edit_vin_max, 'Visible', 'on');
+    end
+    if isfield(data, 'edit_vin_nom') && ~isempty(data.edit_vin_nom)
+        set(data.edit_vin_nom, 'Visible', 'on');
+    end
+
+    % ===== Output Voltage/Current Fields =====
+    % All topologies except Buck/Boost (non-isolated single winding) need output
+    if isfield(data, 'edit_vout') && ~isempty(data.edit_vout)
+        if is_isolated || strcmp(topology, 'boost')  % Boost has output voltage
+            set(data.edit_vout, 'Visible', 'on');
+        else
+            set(data.edit_vout, 'Visible', 'on');  % Most topologies need this
+        end
+    end
+    if isfield(data, 'edit_iout') && ~isempty(data.edit_iout)
+        if is_isolated || strcmp(topology, 'boost')
+            set(data.edit_iout, 'Visible', 'on');
+        else
+            set(data.edit_iout, 'Visible', 'on');
+        end
+    end
+
+    % ===== Switching Frequency (all topologies) =====
+    if isfield(data, 'edit_fsw') && ~isempty(data.edit_fsw)
+        set(data.edit_fsw, 'Visible', 'on');
+    end
+
+    % ===== Efficiency (all topologies) =====
+    if isfield(data, 'edit_efficiency') && ~isempty(data.edit_efficiency)
+        set(data.edit_efficiency, 'Visible', 'on');
+    end
+
+    % ===== Diode Forward Drop (all topologies except ideal cases) =====
+    if isfield(data, 'edit_vd') && ~isempty(data.edit_vd)
+        set(data.edit_vd, 'Visible', 'on');
+    end
+
+    % ===== Ripple Current (all topologies) =====
+    if isfield(data, 'edit_ripple') && ~isempty(data.edit_ripple)
+        set(data.edit_ripple, 'Visible', 'on');
+    end
+
+    % ===== Max Switch Current (most isolated topologies, not buck/boost) =====
+    % Not yet implemented in GUI, but reserve for future use
+    if isfield(data, 'edit_max_switch_current') && ~isempty(data.edit_max_switch_current)
+        if ~any(strcmp(topology, {'buck', 'boost'}))
+            set(data.edit_max_switch_current, 'Visible', 'on');
+        else
+            set(data.edit_max_switch_current, 'Visible', 'off');
+        end
+    end
+
+    % ===== Flyback-Specific Controls =====
+    % Flyback may have max_duty OR max_Vds constraint selector (future implementation)
+    if isfield(data, 'rb_flyback_max_duty') && ~isempty(data.rb_flyback_max_duty)
+        if is_flyback
+            set(data.rb_flyback_max_duty, 'Visible', 'on');
+        else
+            set(data.rb_flyback_max_duty, 'Visible', 'off');
+        end
+    end
+    if isfield(data, 'rb_flyback_max_vds') && ~isempty(data.rb_flyback_max_vds)
+        if is_flyback
+            set(data.rb_flyback_max_vds, 'Visible', 'on');
+        else
+            set(data.rb_flyback_max_vds, 'Visible', 'off');
+        end
+    end
+
+    % ===== Dead Time (Flyback advanced) =====
+    if isfield(data, 'edit_dead_time') && ~isempty(data.edit_dead_time)
+        if is_flyback && isfield(data, 'design_mode') && strcmp(data.design_mode, 'advanced')
+            set(data.edit_dead_time, 'Visible', 'on');
+        else
+            set(data.edit_dead_time, 'Visible', 'off');
+        end
+    end
+
 end
 
 
