@@ -3967,7 +3967,8 @@ function config = build_om_viz_config(data)
             'wire_cond_h', cond_h, ...
             'num_turns', winding.n_turns, ...
             'num_parallels', winding.n_filar, ...
-            'isolation_side', iso_side ...
+            'isolation_side', iso_side, ...
+            'wire_insulation', winding.wire_insulation ...
         );
     end
 
@@ -3989,6 +3990,33 @@ function config = build_om_viz_config(data)
     config.proportions_per_winding = data.om_proportions;
     if isfield(data, 'tape_thickness'); config.tape_thickness = data.tape_thickness; end
     if isfield(data, 'tape_layers'); config.tape_layers = data.tape_layers; end
+
+    % === INSULATION FIELDS ===
+    % Pass global insulation parameters to visualization
+    if isfield(data, 'insulation_standard') || isfield(data, 'insulation_standards')
+        if isfield(data, 'insulation_standards') && iscell(data.insulation_standards)
+            config.insulation_standard = data.insulation_standards{1};
+        else
+            config.insulation_standard = data.insulation_standard;
+        end
+    end
+
+    if isfield(data, 'insulation_class')
+        config.insulation_class = lower(data.insulation_class);
+    end
+
+    if isfield(data, 'allow_insulated_wire')
+        config.allow_insulated_wire = data.allow_insulated_wire;
+    end
+
+    if isfield(data, 'allow_margin_tape')
+        config.allow_margin_tape = data.allow_margin_tape;
+    end
+
+    if isfield(data, 'tape_kv_per_mm')
+        config.tape_kv_per_mm = data.tape_kv_per_mm;
+    end
+
     config.plot_type = 'magnetic';
 end
 

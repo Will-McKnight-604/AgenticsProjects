@@ -319,6 +319,49 @@ def resolve_wire_data(winding_cfg):
     return ensure_dict(pm.get_wire_data_by_name('Round 0.5 - Grade 1'))
 
 
+def get_wire_with_insulation_type(wire_name, insulation_type, pm_api):
+    """Get wire, attempting TIW variant if requested.
+
+    Args:
+        wire_name: Original wire name (e.g., 'AWG_22')
+        insulation_type: 'standard' or 'tiw'
+        pm_api: PyOpenMagnetics API handle
+
+    Returns:
+        Wire dict with applied insulation type
+    """
+    insulation_type = str(insulation_type).lower()
+
+    try:
+        wire = ensure_dict(pm_api.find_wire_by_name(wire_name))
+        if is_exception_payload(wire):
+            return wire
+    except Exception:
+        return {}
+
+    # If TIW requested, try TIW variant
+    if insulation_type == 'tiw' and 'tiw' not in wire_name.lower():
+        try:
+            # Try common TIW naming: add "TIW", "Served", or "Coated"
+            tiw_variants = [
+                wire_name.replace('Grade', 'Grade') + ' TIW',
+                wire_name + ' Served',
+                'TIW ' + wire_name,
+            ]
+            for variant in tiw_variants:
+                try:
+                    tiw_wire = ensure_dict(pm_api.find_wire_by_name(variant))
+                    if not is_exception_payload(tiw_wire):
+                        return tiw_wire
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    # Return original wire as fallback
+    return wire
+
+
 def strip_elements_by_class(svg_content, class_names):
     if not class_names:
         return svg_content
@@ -780,7 +823,20 @@ def build_magnetic_from_config(config):
     # 5. Build coil functional description
     coil_func = []
     for i, w in enumerate(windings):
-        wire = resolve_wire_data(w)
+        # Check for wire insulation type (standard vs TIW)
+        wire_insulation = w.get('wire_insulation', 'standard')
+        wire_name = w.get('wire_name', '')
+
+        # Try to get wire with insulation type first, fallback to resolve_wire_data
+        if wire_insulation and wire_insulation.lower() != 'standard' and wire_name:
+            try:
+                wire = get_wire_with_insulation_type(wire_name, wire_insulation, pm)
+                if not wire or is_exception_payload(wire):
+                    wire = resolve_wire_data(w)
+            except Exception:
+                wire = resolve_wire_data(w)
+        else:
+            wire = resolve_wire_data(w)
         # Pre-flight check: foil/planar wires are not supported on toroidal cores
         wire_type = (wire.get('type', '') or '').lower()
         if core_type == 'toroidal' and wire_type in ('foil', 'planar'):
@@ -812,6 +868,21 @@ def build_magnetic_from_config(config):
             'wire': wire,
             'isolationSide': w.get('isolation_side', 'primary')
         }
+
+        # Add margin tape if enabled globally in config
+        try:
+            allow_margin_tape = config.get('allow_margin_tape', False)
+            if allow_margin_tape:
+                tape_thickness = float(config.get('tape_thickness', 0.05e-3) or 0.05e-3)
+                winding_entry['marginTape'] = {
+                    'top': tape_thickness,
+                    'bottom': tape_thickness,
+                    'left': tape_thickness,
+                    'right': tape_thickness,
+                }
+        except Exception:
+            pass
+
         coil_func.append(winding_entry)
 
     # 6. Assemble magnetic
