@@ -120,7 +120,9 @@ function interactive_winding_designer(design_spec)
     data.core_gap_length = 0;          % Gap length in meters (0 = ungapped)
     data.core_num_gaps = 1;            % Number of gaps
     data.insulation_class = 'basic';
-    data.insulation_standard = 'IEC 60664-1';
+    data.insulation_standards = {'IEC 60664-1'};  % cell array of standards
+    data.insulation_standard_index = 1;           % currently selected standard
+    data.main_supply_voltage = 230;               % main supply voltage in volts
     data.overvoltage_category = 'OVC-II';
     data.pollution_degree = 2;
     data.cti_group = 'Group II';
@@ -218,6 +220,15 @@ function data = apply_design_spec(data, spec)
 
     fprintf('Applying design_spec (source: %s)\n', spec.source);
 
+    % --- Number of windings (MUST be before other winding operations) ---
+    if isfield(spec, 'requirements') && isfield(spec.requirements, 'n_windings')
+        n_w = spec.requirements.n_windings;
+        if ~isnan(n_w) && n_w >= 1 && n_w <= 4
+            fprintf('[APPLY_SPEC] Resizing windings to %d\n', n_w);
+            data = resize_windings(data, n_w);
+        end
+    end
+
     % --- Frequency ---
     if isfield(spec, 'requirements') && isfield(spec.requirements, 'fsw_hz')
         data.f = spec.requirements.fsw_hz;
@@ -312,12 +323,21 @@ function data = apply_design_spec(data, spec)
                     data.insulation_class = lower(ins.insulationType);
                 end
 
-                % standards: cell array -> single string (take first)
+                % standards: cell array or single string
                 if isfield(ins, 'standards') && ~isempty(ins.standards)
                     if iscell(ins.standards)
-                        data.insulation_standard = ins.standards{1};
+                        data.insulation_standards = ins.standards;
+                        data.insulation_standard_index = 1;  % default to first
                     else
-                        data.insulation_standard = ins.standards;
+                        data.insulation_standards = {ins.standards};
+                        data.insulation_standard_index = 1;
+                    end
+                end
+
+                % mainSupplyVoltage: nominal in volts
+                if isfield(ins, 'mainSupplyVoltage') && isstruct(ins.mainSupplyVoltage)
+                    if isfield(ins.mainSupplyVoltage, 'nominal')
+                        data.main_supply_voltage = ins.mainSupplyVoltage.nominal;
                     end
                 end
 
@@ -915,6 +935,54 @@ function build_gui(data)
               'Tag', 'insulation_class', ...
               'Callback', @update_insulation_class);
 
+    % Insulation Standard (radio buttons)
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'Insulation Standard:', ...
+              'Position', [20 135 180 20], ...
+              'HorizontalAlignment', 'left', 'FontWeight', 'bold', ...
+              'FontSize', 9);
+
+    insulation_standard_group = uibuttongroup('Parent', core_panel, ...
+              'Position', [0.145 0.09 0.85 0.065], ...
+              'BorderType', 'none', ...
+              'SelectionChangedFcn', @cb_insulation_standard_changed);
+
+    % Find current standard index
+    std_labels = {'IEC 60664-1', 'IEC 62368-1', 'IEC 61558-1', 'IEC 60335-1'};
+    std_idx = 1;
+    if numel(data.insulation_standards) > 0
+        current_std = data.insulation_standards{1};
+        for i = 1:numel(std_labels)
+            if strcmp(std_labels{i}, current_std)
+                std_idx = i;
+                break;
+            end
+        end
+    end
+
+    % Radio buttons (evenly spaced)
+    radio_w = 160;
+    for i = 1:4
+        uicontrol('Parent', insulation_standard_group, 'Style', 'radiobutton', ...
+                  'String', std_labels{i}, ...
+                  'Position', [10 + (i-1) * 170 5 160 20], ...
+                  'Value', (i == std_idx), ...
+                  'FontSize', 8, ...
+                  'Tag', sprintf('insulation_std_%d', i));
+    end
+
+    % Main Supply Voltage
+    uicontrol('Parent', core_panel, 'Style', 'text', ...
+              'String', 'Main Supply Voltage (V):', ...
+              'Position', [20 105 180 20], ...
+              'HorizontalAlignment', 'left');
+
+    uicontrol('Parent', core_panel, 'Style', 'edit', ...
+              'String', num2str(data.main_supply_voltage), ...
+              'Position', [210 105 80 25], ...
+              'Tag', 'main_supply_voltage', ...
+              'Callback', @update_main_supply_voltage);
+
     % Tape thickness + layers
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Tape Thickness (mm):', ...
@@ -1074,17 +1142,53 @@ function build_gui(data)
     winding_panel = uipanel('Parent', fig, ...
                            'Position', [0.33 0.10 0.34 0.82], ...
                            'Title', 'Winding Configuration', ...
-                           'FontSize', 11, 'FontWeight', 'bold');
+                           'FontSize', 11, 'FontWeight', 'bold', ...
+                           'Tag', 'winding_panel');
+
+    % ========== N-WINDINGS CONTROLS ==========
+    uicontrol('Parent', winding_panel, 'Style', 'text', ...
+              'String', 'Number of Windings:', ...
+              'Units', 'normalized', ...
+              'Position', [0.02 0.965 0.40 0.03], ...
+              'HorizontalAlignment', 'left', ...
+              'FontSize', 9, 'FontWeight', 'bold');
+
+    % Edit field for n_windings
+    uicontrol('Parent', winding_panel, 'Style', 'edit', ...
+              'String', num2str(data.n_windings), ...
+              'Units', 'normalized', ...
+              'Position', [0.45 0.96 0.08 0.035], ...
+              'Tag', 'n_windings_edit', ...
+              'FontSize', 9, ...
+              'Callback', @cb_n_windings_changed);
+
+    % Increment button
+    uicontrol('Parent', winding_panel, 'Style', 'pushbutton', ...
+              'String', '+', ...
+              'Units', 'normalized', ...
+              'Position', [0.55 0.96 0.08 0.035], ...
+              'FontSize', 10, 'FontWeight', 'bold', ...
+              'Tag', 'n_windings_plus', ...
+              'Callback', @cb_n_windings_plus);
+
+    % Decrement button
+    uicontrol('Parent', winding_panel, 'Style', 'pushbutton', ...
+              'String', '-', ...
+              'Units', 'normalized', ...
+              'Position', [0.65 0.96 0.08 0.035], ...
+              'FontSize', 10, 'FontWeight', 'bold', ...
+              'Tag', 'n_windings_minus', ...
+              'Callback', @cb_n_windings_minus);
 
     % Tab buttons
     tab_group = uibuttongroup('Parent', winding_panel, ...
-                              'Position', [0.02 0.90 0.96 0.08], ...
+                              'Position', [0.02 0.90 0.96 0.06], ...
                               'BorderType', 'none');
 
     for w = 1:data.n_windings
         uicontrol('Parent', tab_group, 'Style', 'togglebutton', ...
                   'String', data.windings(w).name, ...
-                  'Position', [10 + (w-1)*130, 6, 120, 28], ...
+                  'Position', [10 + (w-1)*130, 3, 120, 25], ...
                   'FontSize', 10, ...
                   'Tag', sprintf('tab%d', w), ...
                   'Callback', {@switch_tab, w});
@@ -1094,7 +1198,7 @@ function build_gui(data)
     % Content panels for each winding
     for w = 1:data.n_windings
         panel = uipanel('Parent', winding_panel, ...
-                        'Position', [0.02 0.02 0.96 0.86], ...
+                        'Position', [0.02 0.02 0.96 0.87], ...
                         'Visible', 'off', ...
                         'Tag', sprintf('content%d', w));
 
@@ -2682,6 +2786,59 @@ function update_phase(src, ~, winding)
     guidata(fig, data);
 end
 
+function cb_n_windings_changed(src, ~)
+    % Callback for n_windings edit field
+    fig = gcbf();
+    data = guidata(fig);
+    try
+        n = str2double(get(src, 'String'));
+        if isnan(n) || n < 1 || n > 4
+            % Invalid input, restore old value
+            set(src, 'String', num2str(data.n_windings));
+            return;
+        end
+        n = round(n);
+        n = max(1, min(4, n));  % Clamp 1-4
+        set(src, 'String', num2str(n));
+
+        if n ~= data.n_windings
+            fprintf('[N_WINDINGS] Changing from %d to %d\n', data.n_windings, n);
+            data = resize_windings(data, n);
+            rebuild_winding_panels(fig, data);
+            guidata(fig, data);
+            update_visualization(data);
+        end
+    catch
+        set(src, 'String', num2str(data.n_windings));
+    end
+end
+
+function cb_n_windings_plus(~, ~)
+    % Increment winding count (max 4)
+    fig = gcbf();
+    data = guidata(fig);
+    if data.n_windings < 4
+        n_ctrl = findobj(fig, 'Tag', 'n_windings_edit');
+        if ~isempty(n_ctrl)
+            set(n_ctrl, 'String', num2str(data.n_windings + 1));
+            cb_n_windings_changed(n_ctrl, []);
+        end
+    end
+end
+
+function cb_n_windings_minus(~, ~)
+    % Decrement winding count (min 1)
+    fig = gcbf();
+    data = guidata(fig);
+    if data.n_windings > 1
+        n_ctrl = findobj(fig, 'Tag', 'n_windings_edit');
+        if ~isempty(n_ctrl)
+            set(n_ctrl, 'String', num2str(data.n_windings - 1));
+            cb_n_windings_changed(n_ctrl, []);
+        end
+    end
+end
+
 function update_insulation_class(src, ~)
     fig = gcbf;
     data = guidata(fig);
@@ -2693,6 +2850,41 @@ function update_insulation_class(src, ~)
     if idx >= 1 && idx <= numel(list)
         data.insulation_class = list{idx};
     end
+    update_all_summaries(fig, data);
+    guidata(fig, data);
+    update_visualization(data);
+end
+
+function cb_insulation_standard_changed(src, event)
+    fig = ancestor(src, 'figure');
+    data = guidata(fig);
+    std_labels = {'IEC 60664-1', 'IEC 62368-1', 'IEC 61558-1', 'IEC 60335-1'};
+
+    selected_button = event.NewValue;
+    button_tag = get(selected_button, 'Tag');
+    if local_contains(button_tag, 'insulation_std_')
+        idx_str = button_tag(length('insulation_std_')+1:end);
+        idx = str2double(idx_str);
+        if ~isnan(idx) && idx >= 1 && idx <= numel(std_labels)
+            data.insulation_standards = {std_labels{idx}};
+            data.insulation_standard_index = idx;
+        end
+    end
+
+    update_all_summaries(fig, data);
+    guidata(fig, data);
+    update_visualization(data);
+end
+
+function update_main_supply_voltage(src, ~)
+    fig = gcbf;
+    data = guidata(fig);
+    val = str2double(get(src, 'String'));
+    if isnan(val) || val < 0 || val > 1000
+        val = 230;  % fallback to default
+    end
+    data.main_supply_voltage = val;
+    set(src, 'String', num2str(val));
     update_all_summaries(fig, data);
     guidata(fig, data);
     update_visualization(data);
@@ -3100,6 +3292,327 @@ function cb_winding_opts_apply(~, ~, h)
 
     % Refresh visualization in main GUI
     update_visualization(data);
+end
+
+% ===============================================================
+% WINDING MANAGEMENT HELPERS
+% ===============================================================
+
+function data = resize_windings(data, new_n)
+    % Resize the windings array to new_n windings
+    % Extends or truncates data.windings, and updates associated arrays
+    % Auto-names windings with proper conventions
+
+    old_n = data.n_windings;
+
+    % Extend windings array with defaults
+    if new_n > old_n
+        for w = (old_n + 1):new_n
+            data.windings(w).name = '';
+            data.windings(w).n_turns = 5;
+            data.windings(w).n_filar = 1;
+            data.windings(w).current = 5;
+            data.windings(w).phase = 0;
+            data.windings(w).wire_type = 'AWG_22';
+            data.windings(w).wire_shape = 'round';
+            data.windings(w).voltage = 0;
+            data.windings(w).wire_insulation = 'standard';
+        end
+    elseif new_n < old_n
+        % Truncate windings array
+        data.windings = data.windings(1:new_n);
+    end
+
+    % Update winding names with proper conventions
+    for w = 1:new_n
+        if w == 1
+            data.windings(w).name = 'Primary';
+        else
+            % Check if single_switch_forward topology and winding 2
+            is_single_switch_forward = false;
+            if isfield(data, 'excitation') && isfield(data.excitation, 'topology')
+                is_single_switch_forward = strcmp(data.excitation.topology, 'single_switch_forward');
+            end
+
+            if is_single_switch_forward && w == 2
+                data.windings(w).name = 'Demagnetization';
+            else
+                % Secondary naming: Secondary 1, Secondary 2, etc.
+                if is_single_switch_forward
+                    sec_idx = w - 2;  % Demagnetization is winding 2, so winding 3 = Secondary 1
+                else
+                    sec_idx = w - 1;  % No special winding 2, so winding 2 = Secondary 1
+                end
+                data.windings(w).name = sprintf('Secondary %d', sec_idx);
+            end
+        end
+    end
+
+    % Update winding colors (basic color scheme)
+    colors = {[0.2 0.4 0.8], [0.8 0.2 0.2], [0.2 0.8 0.2], [0.8 0.8 0.2]};
+    data.winding_colors = colors(1:min(new_n, 4));
+    if new_n > 4
+        % Add more distinct colors if needed
+        for w = 5:new_n
+            data.winding_colors{w} = [rand() rand() rand()];
+        end
+    end
+
+    % Resize OM alignment arrays
+    data.om_turns_alignment = cell(1, new_n);
+    data.om_proportions = cell(1, new_n);
+    for ww = 1:new_n
+        data.om_turns_alignment{ww} = 'spread';
+        data.om_proportions{ww} = 1.0 / new_n;
+    end
+
+    data.n_windings = new_n;
+end
+
+function rebuild_winding_panels(fig, data)
+    % Rebuild winding panel tabs and content with updated winding count
+    % Strategy: Update tab buttons and content panel visibility (minimal rebuild)
+
+    winding_panel = findobj(fig, 'Tag', 'winding_panel');
+    if isempty(winding_panel)
+        return;
+    end
+
+    % Delete old tab_group
+    old_tab_group = findobj(winding_panel, 'Type', 'uibuttongroup');
+    if ~isempty(old_tab_group)
+        delete(old_tab_group);
+    end
+
+    % Create new tab_group
+    tab_group = uibuttongroup('Parent', winding_panel, ...
+                              'Position', [0.02 0.90 0.96 0.06], ...
+                              'BorderType', 'none');
+
+    % Create new tab buttons
+    for w = 1:data.n_windings
+        uicontrol('Parent', tab_group, 'Style', 'togglebutton', ...
+                  'String', data.windings(w).name, ...
+                  'Position', [10 + (w-1)*130, 3, 120, 25], ...
+                  'FontSize', 10, ...
+                  'Tag', sprintf('tab%d', w), ...
+                  'Callback', {@switch_tab, w});
+    end
+    set(findobj(tab_group, 'Tag', 'tab1'), 'Value', 1);
+
+    % Delete old content panels
+    for w = 1:10  % Try to delete up to 10 old panels (max possible)
+        old_content = findobj(winding_panel, 'Tag', sprintf('content%d', w));
+        if ~isempty(old_content)
+            delete(old_content);
+        end
+    end
+
+    % Create new content panels for each winding
+    for w = 1:data.n_windings
+        panel = uipanel('Parent', winding_panel, ...
+                        'Position', [0.02 0.02 0.96 0.87], ...
+                        'Visible', 'off', ...
+                        'Tag', sprintf('content%d', w));
+
+        % Winding name header
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', sprintf('%s Winding', data.windings(w).name), ...
+                  'Position', [20 480 300 25], ...
+                  'FontSize', 12, 'FontWeight', 'bold', ...
+                  'HorizontalAlignment', 'left');
+
+        % --- Wire Type dropdown ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'Wire Type:', ...
+                  'Position', [20 430 100 20], ...
+                  'FontWeight', 'bold', 'HorizontalAlignment', 'left');
+
+        wire_list = fieldnames(data.wires);
+        if isempty(wire_list); wire_list = {'AWG_22'}; end
+        wire_idx = find(strcmp(wire_list, data.windings(w).wire_type), 1);
+        if isempty(wire_idx); wire_idx = 1; end
+
+        uicontrol('Parent', panel, 'Style', 'popupmenu', ...
+                  'String', wire_list, ...
+                  'Position', [130 430 230 25], ...
+                  'Value', wire_idx, ...
+                  'Tag', sprintf('wire_type_%d', w), ...
+                  'Callback', {@select_wire, w});
+
+        % --- Wire Standard dropdown ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'Standard:', ...
+                  'Position', [20 395 100 20], ...
+                  'HorizontalAlignment', 'left');
+
+        uicontrol('Parent', panel, 'Style', 'popupmenu', ...
+                  'String', data.wire_options.standards, ...
+                  'Position', [130 395 230 25], ...
+                  'Tag', sprintf('wire_std_%d', w), ...
+                  'Callback', {@select_wire_attribute, w, 'standard'});
+
+        % --- Conductor diameter dropdown ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'Cond. diameter:', ...
+                  'Position', [20 360 120 20], ...
+                  'HorizontalAlignment', 'left');
+
+        uicontrol('Parent', panel, 'Style', 'popupmenu', ...
+                  'String', data.wire_options.cond_diameters, ...
+                  'Position', [130 360 230 25], ...
+                  'Tag', sprintf('wire_diam_%d', w), ...
+                  'Callback', {@select_wire_attribute, w, 'cond_diameter'});
+
+        % --- Coating dropdown ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'Coating:', ...
+                  'Position', [20 325 100 20], ...
+                  'HorizontalAlignment', 'left');
+
+        uicontrol('Parent', panel, 'Style', 'popupmenu', ...
+                  'String', data.wire_options.coatings, ...
+                  'Position', [130 325 230 25], ...
+                  'Tag', sprintf('wire_coat_%d', w), ...
+                  'Callback', {@select_wire_attribute, w, 'coating'});
+
+        % --- Wire insulation type ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'Wire Insulation:', ...
+                  'Position', [20 290 120 20], ...
+                  'HorizontalAlignment', 'left');
+
+        insulation_opts = {'Standard', 'TIW'};
+        if isfield(data.windings(w), 'wire_insulation') && strcmpi(data.windings(w).wire_insulation, 'tiw')
+            ins_val = 2;
+        else
+            ins_val = 1;
+        end
+
+        uicontrol('Parent', panel, 'Style', 'popupmenu', ...
+                  'String', insulation_opts, ...
+                  'Position', [130 290 230 25], ...
+                  'Value', ins_val, ...
+                  'Tag', sprintf('wire_insulation_%d', w), ...
+                  'Callback', {@update_wire_insulation, w});
+
+        % --- No. Turns ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'No. Turns:', ...
+                  'Position', [20 255 120 20], ...
+                  'FontWeight', 'bold', 'HorizontalAlignment', 'left');
+
+        uicontrol('Parent', panel, 'Style', 'pushbutton', ...
+                  'String', '-', ...
+                  'Position', [180 255 30 25], ...
+                  'FontSize', 14, ...
+                  'Callback', {@adjust_turns, w, -1});
+
+        uicontrol('Parent', panel, 'Style', 'edit', ...
+                  'String', num2str(data.windings(w).n_turns), ...
+                  'Position', [215 255 60 25], ...
+                  'FontSize', 11, 'HorizontalAlignment', 'center', ...
+                  'Tag', sprintf('turns_val_%d', w), ...
+                  'Callback', {@update_turns_manual, w});
+
+        uicontrol('Parent', panel, 'Style', 'pushbutton', ...
+                  'String', '+', ...
+                  'Position', [280 255 30 25], ...
+                  'FontSize', 14, ...
+                  'Callback', {@adjust_turns, w, 1});
+
+        % --- No. Parallels (Filar) ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'No. Parallels:', ...
+                  'Position', [20 220 120 20], ...
+                  'FontWeight', 'bold', 'HorizontalAlignment', 'left');
+
+        uicontrol('Parent', panel, 'Style', 'pushbutton', ...
+                  'String', '-', ...
+                  'Position', [180 220 30 25], ...
+                  'FontSize', 14, ...
+                  'Callback', {@adjust_filar, w, -1});
+
+        uicontrol('Parent', panel, 'Style', 'edit', ...
+                  'String', num2str(data.windings(w).n_filar), ...
+                  'Position', [215 220 60 25], ...
+                  'FontSize', 11, 'HorizontalAlignment', 'center', ...
+                  'Tag', sprintf('filar_val_%d', w), ...
+                  'Callback', {@update_filar_manual, w});
+
+        uicontrol('Parent', panel, 'Style', 'pushbutton', ...
+                  'String', '+', ...
+                  'Position', [280 220 30 25], ...
+                  'FontSize', 14, ...
+                  'Callback', {@adjust_filar, w, 1});
+
+        % Filar type label
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', get_filar_name(data.windings(w).n_filar), ...
+                  'Position', [305 220 80 25], ...
+                  'FontSize', 9, 'FontWeight', 'bold', ...
+                  'HorizontalAlignment', 'left', ...
+                  'ForegroundColor', [0.2 0.6 0.2], ...
+                  'Tag', sprintf('filar_name_%d', w));
+
+        % --- RMS Current ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'RMS Current (A):', ...
+                  'Position', [20 180 150 20], ...
+                  'HorizontalAlignment', 'left');
+
+        uicontrol('Parent', panel, 'Style', 'edit', ...
+                  'String', num2str(data.windings(w).current), ...
+                  'Position', [180 180 80 25], ...
+                  'Tag', sprintf('current_%d', w), ...
+                  'Callback', {@update_current, w});
+
+        % --- Voltage ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'Voltage (V):', ...
+                  'Position', [20 150 150 20], ...
+                  'HorizontalAlignment', 'left');
+
+        uicontrol('Parent', panel, 'Style', 'edit', ...
+                  'String', num2str(data.windings(w).voltage), ...
+                  'Position', [180 150 80 25], ...
+                  'Tag', sprintf('voltage_%d', w), ...
+                  'Callback', {@update_voltage, w});
+
+        % --- Phase ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'Phase (degrees):', ...
+                  'Position', [20 120 150 20], ...
+                  'HorizontalAlignment', 'left');
+
+        uicontrol('Parent', panel, 'Style', 'edit', ...
+                  'String', num2str(data.windings(w).phase), ...
+                  'Position', [180 120 80 25], ...
+                  'Tag', sprintf('phase_%d', w), ...
+                  'Callback', {@update_phase, w});
+
+        % --- Configuration Summary ---
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', 'Configuration Summary:', ...
+                  'Position', [20 90 300 20], ...
+                  'FontSize', 10, 'FontWeight', 'bold', ...
+                  'HorizontalAlignment', 'left');
+
+        uicontrol('Parent', panel, 'Style', 'text', ...
+                  'String', get_winding_summary(data, w), ...
+                  'Position', [20 5 360 80], ...
+                  'HorizontalAlignment', 'left', ...
+                  'VerticalAlignment', 'top', ...
+                  'Tag', sprintf('summary_%d', w));
+    end
+
+    % Show first panel
+    set(findobj(winding_panel, 'Tag', 'content1'), 'Visible', 'on');
+
+    % Update wire info for all windings
+    for w = 1:data.n_windings
+        update_wire_info_fields(fig, data, w);
+    end
 end
 
 % ===============================================================
@@ -6168,13 +6681,27 @@ function export_mas_file(~, ~)
     % Insulation specification (required by MAS schema)
     ins = struct();
     ins.insulationType = capitalize_first(data.insulation_class);  % 'Basic', 'Reinforced', etc.
-    ins.standards = {data.insulation_standard};  % cell array: {'IEC 60664-1'}
+
+    % Handle both new (insulation_standards) and old (insulation_standard) formats
+    if isfield(data, 'insulation_standards') && ~isempty(data.insulation_standards)
+        ins.standards = data.insulation_standards;  % cell array
+    else
+        ins.standards = {data.insulation_standard};  % backward compatibility
+    end
+
     ins.pollutionDegree = sprintf('P%d', data.pollution_degree);  % 'P1', 'P2', 'P3'
     ins.overvoltageCategory = data.overvoltage_category;  % 'OVC-II'
     ins.cti = data.cti_group;  % 'Group II'
     ins.altitude = struct('nominal', data.altitude_m, 'maximum', data.altitude_m, 'minimum', data.altitude_m);
     ins.wiringTechnology = data.wiring_technology;  % 'Wound'
-    ins.mainSupplyVoltage = struct('nominal', 230);  % default mains voltage (230V)
+
+    % Use main_supply_voltage if available, otherwise default to 230V
+    msv = 230;
+    if isfield(data, 'main_supply_voltage')
+        msv = data.main_supply_voltage;
+    end
+    ins.mainSupplyVoltage = struct('nominal', msv);
+
     mas.inputs.designRequirements.insulation = ins;
 
     % Operating point
