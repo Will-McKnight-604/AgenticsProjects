@@ -279,16 +279,53 @@ function build_wizard_panel(data)
               'ForegroundColor', 'w', ...
               'Callback', @cb_compute_topology);
 
-    % --- Required fields ---
-    req_label = uicontrol('Parent', spec_panel, 'Style', 'text', ...
-              'String', 'Required Specifications', ...
+    % --- Output Specification Table (for multi-output topologies) ---
+    output_title = uicontrol('Parent', spec_panel, 'Style', 'text', ...
+              'String', 'Output Specification', ...
               'Units', 'normalized', ...
-              'Position', [0.02 0.70 0.96 0.04], ...
+              'Position', [0.02 0.68 0.96 0.04], ...
               'FontSize', 9, 'FontWeight', 'bold', ...
               'ForegroundColor', [0.0 0.6 0.6], ...
               'HorizontalAlignment', 'left');
 
-    y = 0.64;
+    % Output 1
+    data.output1_label = make_label(spec_panel, 'Output 1:', [0.02 0.62 0.15 0.04]);
+    data.output1_v = make_edit(spec_panel, '5.0', [0.18 0.62 0.15 0.045], @cb_output_v);
+    make_label(spec_panel, 'V', [0.34 0.62 0.05 0.04]);
+    data.output1_i = make_edit(spec_panel, '5.0', [0.40 0.62 0.15 0.045], @cb_output_i);
+    make_label(spec_panel, 'A', [0.56 0.62 0.05 0.04]);
+
+    % Output 2 (hidden by default for single-output topologies)
+    data.output2_label = make_label(spec_panel, 'Output 2:', [0.02 0.56 0.15 0.04], 'off');
+    data.output2_v = make_edit(spec_panel, '3.3', [0.18 0.56 0.15 0.045], @cb_output_v, 'off');
+    make_label(spec_panel, 'V', [0.34 0.56 0.05 0.04], 'off');
+    data.output2_i = make_edit(spec_panel, '2.0', [0.40 0.56 0.15 0.045], @cb_output_i, 'off');
+    make_label(spec_panel, 'A', [0.56 0.56 0.05 0.04], 'off');
+
+    % Output 3 (hidden by default)
+    data.output3_label = make_label(spec_panel, 'Output 3:', [0.02 0.50 0.15 0.04], 'off');
+    data.output3_v = make_edit(spec_panel, '12.0', [0.18 0.50 0.15 0.045], @cb_output_v, 'off');
+    make_label(spec_panel, 'V', [0.34 0.50 0.05 0.04], 'off');
+    data.output3_i = make_edit(spec_panel, '1.0', [0.40 0.50 0.15 0.045], @cb_output_i, 'off');
+    make_label(spec_panel, 'A', [0.56 0.50 0.05 0.04], 'off');
+
+    % Output 4 (hidden by default)
+    data.output4_label = make_label(spec_panel, 'Output 4:', [0.02 0.44 0.15 0.04], 'off');
+    data.output4_v = make_edit(spec_panel, '5.0', [0.18 0.44 0.15 0.045], @cb_output_v, 'off');
+    make_label(spec_panel, 'V', [0.34 0.44 0.05 0.04], 'off');
+    data.output4_i = make_edit(spec_panel, '1.0', [0.40 0.44 0.15 0.045], @cb_output_i, 'off');
+    make_label(spec_panel, 'A', [0.56 0.44 0.05 0.04], 'off');
+
+    % --- Required fields ---
+    req_label = uicontrol('Parent', spec_panel, 'Style', 'text', ...
+              'String', 'Required Specifications', ...
+              'Units', 'normalized', ...
+              'Position', [0.02 0.40 0.96 0.04], ...
+              'FontSize', 9, 'FontWeight', 'bold', ...
+              'ForegroundColor', [0.0 0.6 0.6], ...
+              'HorizontalAlignment', 'left');
+
+    y = 0.34;
     dy = 0.065;
 
     % Input Voltage Min
@@ -742,22 +779,30 @@ end
 % UI HELPERS
 % ===============================================================
 
-function h = make_label(parent, str, pos)
+function h = make_label(parent, str, pos, vis)
+    if nargin < 4
+        vis = 'on';
+    end
     h = uicontrol('Parent', parent, 'Style', 'text', ...
                   'String', str, ...
                   'Units', 'normalized', ...
                   'Position', pos, ...
                   'HorizontalAlignment', 'left', ...
-                  'FontSize', 9);
+                  'FontSize', 9, ...
+                  'Visible', vis);
 end
 
-function h = make_edit(parent, str, pos, cb)
+function h = make_edit(parent, str, pos, cb, vis)
+    if nargin < 5
+        vis = 'on';
+    end
     h = uicontrol('Parent', parent, 'Style', 'edit', ...
                   'String', str, ...
                   'Units', 'normalized', ...
                   'Position', pos, ...
                   'FontSize', 9, ...
-                  'Callback', cb);
+                  'Callback', cb, ...
+                  'Visible', vis);
 end
 
 
@@ -873,6 +918,30 @@ function cb_iout(src, ~)
         data = update_requirements_display(data);
     end
     guidata(fig, data);
+end
+
+
+function cb_output_v(src, ~)
+    % Callback for multi-output voltage fields (output1_v, output2_v, etc.)
+    fig = gcbf();
+    data = guidata(fig);
+    % Just validate that it's a positive number, don't recompute
+    val = str2double(get(src, 'String'));
+    if isnan(val) || val <= 0
+        set(src, 'String', '0');
+    end
+end
+
+
+function cb_output_i(src, ~)
+    % Callback for multi-output current fields (output1_i, output2_i, etc.)
+    fig = gcbf();
+    data = guidata(fig);
+    % Just validate that it's a positive number, don't recompute
+    val = str2double(get(src, 'String'));
+    if isnan(val) || val <= 0
+        set(src, 'String', '0');
+    end
 end
 
 function cb_fsw(src, ~)
@@ -1272,6 +1341,16 @@ function cb_n_outputs(src, ~)
     val = str2double(get(src, 'String'));
     if ~isnan(val) && val >= 1 && val <= 4
         data.n_outputs = round(val);
+        % Rebuild output table when user changes spinner
+        topology_key = get(data.pop_topology, 'Value');
+        topology_names = {'two_switch_forward', 'single_switch_forward', 'active_clamp_forward', ...
+                         'flyback', 'push_pull', 'buck', 'boost', 'isolated_buck', 'isolated_buck_boost'};
+        if topology_key > 0 && topology_key <= length(topology_names)
+            topo_key = topology_names{topology_key};
+            metadata = get_topology_metadata(topo_key);
+            output_type = metadata.output_type;
+            rebuild_output_spec_table(fig, topo_key, output_type);
+        end
     else
         set(src, 'String', num2str(data.n_outputs));
     end
@@ -1285,6 +1364,16 @@ function cb_n_outputs_plus(~, ~)
     if data.n_outputs < 4
         data.n_outputs = data.n_outputs + 1;
         set(data.edit_n_outputs, 'String', num2str(data.n_outputs));
+        % Rebuild output table when user increments
+        topology_key = get(data.pop_topology, 'Value');
+        topology_names = {'two_switch_forward', 'single_switch_forward', 'active_clamp_forward', ...
+                         'flyback', 'push_pull', 'buck', 'boost', 'isolated_buck', 'isolated_buck_boost'};
+        if topology_key > 0 && topology_key <= length(topology_names)
+            topo_key = topology_names{topology_key};
+            metadata = get_topology_metadata(topo_key);
+            output_type = metadata.output_type;
+            rebuild_output_spec_table(fig, topo_key, output_type);
+        end
     end
     guidata(fig, data);
 end
@@ -1296,6 +1385,16 @@ function cb_n_outputs_minus(~, ~)
     if data.n_outputs > 1
         data.n_outputs = data.n_outputs - 1;
         set(data.edit_n_outputs, 'String', num2str(data.n_outputs));
+        % Rebuild output table when user decrements
+        topology_key = get(data.pop_topology, 'Value');
+        topology_names = {'two_switch_forward', 'single_switch_forward', 'active_clamp_forward', ...
+                         'flyback', 'push_pull', 'buck', 'boost', 'isolated_buck', 'isolated_buck_boost'};
+        if topology_key > 0 && topology_key <= length(topology_names)
+            topo_key = topology_names{topology_key};
+            metadata = get_topology_metadata(topo_key);
+            output_type = metadata.output_type;
+            rebuild_output_spec_table(fig, topo_key, output_type);
+        end
     end
     guidata(fig, data);
 end
@@ -1409,7 +1508,23 @@ function cb_compute_topology(~, ~)
         % Check for module import errors and try fallback
         is_module_error = ~isempty(strfind(output, 'ModuleNotFoundError')) || ...
                          ~isempty(strfind(output, 'ImportError')) || ...
+                         ~isempty(strfind(output, 'No module named')) || ...
                          ~isempty(strfind(output, 'No module named'));
+
+        % Also check if results file contains an ImportError (written by Python script)
+        if status ~= 0 && exist(results_file, 'file')
+            try
+                fid_check = fopen(results_file, 'r', 'n', 'UTF-8');
+                raw_check = fread(fid_check, '*char')';
+                fclose(fid_check);
+                results_check = jsondecode(raw_check);
+                if isfield(results_check, 'stderr') && ~isempty(strfind(results_check.stderr, 'ImportError'))
+                    is_module_error = true;
+                end
+            catch
+                % Ignore errors during preliminary check
+            end
+        end
 
         if status ~= 0 && is_module_error && ispc
             fprintf('[TOPOLOGY] Standard python failed. Trying fallback chain...\n');
@@ -1461,9 +1576,18 @@ function cb_compute_topology(~, ~)
         fclose(fid);
         results = jsondecode(raw);
 
+        % Check for API errors in results
+        if isfield(results, 'status') && strcmp(results.status, 'ERROR')
+            error('PyOpenMagnetics API error: %s', results.error);
+        end
+
         % STEP 8: Store and display results
         data.api_results = results;
-        fprintf('[TOPOLOGY] API returned %d results\n', length(results.data));
+        results_count = 0;
+        if isfield(results, 'data') && isnumeric(results.count)
+            results_count = results.count;
+        end
+        fprintf('[TOPOLOGY] API returned %d results\n', results_count);
 
         % STEP 9: Display results in GUI
         display_api_results(fig, results);
