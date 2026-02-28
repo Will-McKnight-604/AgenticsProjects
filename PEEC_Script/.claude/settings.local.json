@@ -70,7 +70,9 @@
       "Bash(/c/Users/Will/proximity_loss/Claude/PEEC_Script/test_conversion_fix.m:*)",
       "Bash(/c/Users/Will/proximity_loss/Claude/PEEC_Script/QUICK_FIX_REFERENCE.txt:*)",
       "Bash(\"c:\\\\Users\\\\Will\\\\proximity_loss\\\\Claude\\\\PEEC_Script\\\\QUICK_FIX_SUMMARY.txt\":*)",
-      "Bash(\"c:\\\\Users\\\\Will\\\\proximity_loss\\\\Claude\\\\PEEC_Script\\\\FIX_COMPLETE.md\":*)"
+      "Bash(\"c:\\\\Users\\\\Will\\\\proximity_loss\\\\Claude\\\\PEEC_Script\\\\FIX_COMPLETE.md\":*)",
+      "Bash(git clone https://github.com/OpenMagnetics/PyOpenMagnetics.git)",
+      "Bash(git status -u)"
     ]
   }
 }

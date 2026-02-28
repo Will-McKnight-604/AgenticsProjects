@@ -40,6 +40,10 @@
     },
     "operatingPoints": [
       {
+        "name": "Operating Point 1",
+        "conditions": {
+          "ambientTemperature": 25.0
+        },
         "excitationsPerWinding": [
           {
             "name": "Primary",

@@ -196,6 +196,10 @@ export const useTaskQueueStore = defineStore('taskQueue', {
             await mkf.ready;
 
             const result = await mkf.calculate_harmonics(JSON.stringify(waveform), frequency);
+            if (result.startsWith("Exception")) {
+                setTimeout(() => { this.harmonicsCalculated(false, result); }, this.task_standard_response_delay);
+                throw new Error(result);
+            }
             const harmonics = JSON.parse(result);
             setTimeout(() => { this.harmonicsCalculated(true, harmonics); }, this.task_standard_response_delay);
             return harmonics;
@@ -1082,6 +1086,12 @@ export const useTaskQueueStore = defineStore('taskQueue', {
                 throw new Error(result);
             }
             const inputs = JSON.parse(result);
+            console.log('🔍 [calculateLlcInputs] WASM returns:', {
+                turnsRatios: inputs.designRequirements?.turnsRatios,
+                turnsRatiosCount: inputs.designRequirements?.turnsRatios?.length,
+                excitationsCount: inputs.operatingPoints?.[0]?.excitationsPerWinding?.length,
+                excitationNames: inputs.operatingPoints?.[0]?.excitationsPerWinding?.map(e => e.name)
+            });
             setTimeout(() => { this.llcInputsCalculated(true, inputs); }, this.task_standard_response_delay);
             return inputs;
         },
@@ -1099,6 +1109,12 @@ export const useTaskQueueStore = defineStore('taskQueue', {
                 throw new Error(result);
             }
             const waveforms = JSON.parse(result);
+            console.log('🔍 [simulateLlcIdealWaveforms] WASM returns:', {
+                operatingPointsCount: waveforms.operatingPoints?.length,
+                excitationsCount: waveforms.operatingPoints?.[0]?.excitationsPerWinding?.length,
+                excitationNames: waveforms.operatingPoints?.[0]?.excitationsPerWinding?.map(e => e.name),
+                converterWaveformsCount: waveforms.converterWaveforms?.length
+            });
             setTimeout(() => { this.llcWaveformsSimulated(true, waveforms); }, this.task_standard_response_delay);
             return waveforms;
         },

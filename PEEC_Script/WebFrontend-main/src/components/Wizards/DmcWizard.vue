@@ -10,6 +10,11 @@ import { defaultDmcWizardInputs, defaultDesignRequirements, minimumMaximumScaleP
 </script>
 
 <script>
+// NOTE: This wizard does not yet use ConverterWizardBase layout.
+// TODO: Migrate to ConverterWizardBase for layout consistency.
+// Navigation methods (processAndReview/processAndAdvise) follow the standard pattern
+// and could use ConverterWizardBase.navigateToReview/navigateToAdvise once migrated.
+
 export default {
     props: {
         dataTestLabel: {
@@ -116,6 +121,7 @@ export default {
         },
         async process() {
             this.masStore.resetMas("filter")
+            this.$stateStore.closeCoilAdvancedInfo();
             
             try {
                 // Build DMC parameters for backend
@@ -165,6 +171,7 @@ export default {
             if (this.errorMessage != "") return;
 
             this.$stateStore.resetMagneticTool();
+            this.$stateStore.closeCoilAdvancedInfo();  // Ensure coil advanced info is disabled
             this.$stateStore.designLoaded();
             this.$stateStore.selectApplication(this.$stateStore.SupportedApplications.Filter);
             this.$stateStore.selectWorkflow("design");
@@ -179,6 +186,7 @@ export default {
             if (this.errorMessage != "") return;
 
             this.$stateStore.resetMagneticTool();
+            this.$stateStore.closeCoilAdvancedInfo();  // Ensure coil advanced info is disabled
             this.$stateStore.designLoaded();
             this.$stateStore.selectApplication(this.$stateStore.SupportedApplications.Filter);
             this.$stateStore.selectWorkflow("design");

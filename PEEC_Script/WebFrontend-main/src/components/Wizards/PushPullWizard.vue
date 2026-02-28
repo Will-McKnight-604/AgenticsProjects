@@ -22,7 +22,7 @@ export default {
         },
         dataTestLabel: {
             type: String,
-            default: 'CmcWizard',
+            default: 'PushPullWizard',
         },
         labelWidthProportionClass:{
             type: String,
@@ -72,47 +72,53 @@ export default {
         },
     },
     methods: {
-        async pruneHarmonicsForInputs(inputs) {
-            // Prune harmonics for all operating points and excitations
-            const currentThreshold = 0.1;
-            const voltageThreshold = 0.3;
-            
-            for (const op of inputs.operatingPoints) {
-                if (op.excitationsPerWinding) {
-                    for (const excitation of op.excitationsPerWinding) {
-                        // Prune current harmonics
-                        if (excitation.current?.harmonics?.amplitudes?.length > 1) {
-                            const mainIndexes = await this.taskQueueStore.getMainHarmonicIndexes(excitation.current.harmonics, currentThreshold, 1);
-                            const prunedHarmonics = {
-                                amplitudes: [excitation.current.harmonics.amplitudes[0]],
-                                frequencies: [excitation.current.harmonics.frequencies[0]]
-                            };
-                            for (let i = 0; i < mainIndexes.length; i++) {
-                                prunedHarmonics.amplitudes.push(excitation.current.harmonics.amplitudes[mainIndexes[i]]);
-                                prunedHarmonics.frequencies.push(excitation.current.harmonics.frequencies[mainIndexes[i]]);
-                            }
-                            excitation.current.harmonics = prunedHarmonics;
-                        }
-                        
-                        // Prune voltage harmonics
-                        if (excitation.voltage?.harmonics?.amplitudes?.length > 1) {
-                            const mainIndexes = await this.taskQueueStore.getMainHarmonicIndexes(excitation.voltage.harmonics, voltageThreshold, 1);
-                            const prunedHarmonics = {
-                                amplitudes: [excitation.voltage.harmonics.amplitudes[0]],
-                                frequencies: [excitation.voltage.harmonics.frequencies[0]]
-                            };
-                            for (let i = 0; i < mainIndexes.length; i++) {
-                                prunedHarmonics.amplitudes.push(excitation.voltage.harmonics.amplitudes[mainIndexes[i]]);
-                                prunedHarmonics.frequencies.push(excitation.voltage.harmonics.frequencies[mainIndexes[i]]);
-                            }
-                            excitation.voltage.harmonics = prunedHarmonics;
-                        }
-                    }
-                }
-            }
-            return inputs;
-        },
-        updateErrorMessage() {
+
+    // ===== WIZARD CONTRACT =====
+    buildParams(mode) {
+      const aux = {};
+      aux['inputVoltage'] = this.localData.inputVoltage;
+      aux['diodeVoltageDrop'] = this.localData.diodeVoltageDrop;
+      aux['efficiency'] = this.localData.efficiency;
+      if (this.localData.designLevel == 'I know the design I want') {
+        aux['desiredInductance'] = this.localData.inductance;
+        const auxDesiredDutyCycle = [];
+        if (this.localData.inputVoltage.minimum != null && this.localData.dutyCycle.minimum != null) auxDesiredDutyCycle.push(this.localData.dutyCycle.minimum);
+        if (this.localData.inputVoltage.nominal != null && this.localData.dutyCycle.nominal != null) auxDesiredDutyCycle.push(this.localData.dutyCycle.nominal);
+        if (this.localData.inputVoltage.maximum != null && this.localData.dutyCycle.maximum != null) auxDesiredDutyCycle.push(this.localData.dutyCycle.maximum);
+        aux['desiredDutyCycle'] = [auxDesiredDutyCycle];
+        aux['desiredTurnsRatios'] = this.localData.outputsParameters.map(e => e.turnsRatio);
+      } else {
+        aux['maximumDutyCycle'] = this.localData.maximumDutyCycle;
+        aux['currentRippleRatio'] = this.localData.currentRippleRatio;
+      }
+      const auxOp = { outputVoltages: [], outputCurrents: [] };
+      this.localData.outputsParameters.forEach(e => { auxOp.outputVoltages.push(e.voltage); auxOp.outputCurrents.push(e.current); });
+      auxOp['switchingFrequency'] = this.localData.switchingFrequency;
+      auxOp['ambientTemperature'] = this.localData.ambientTemperature;
+      aux['operatingPoints'] = [auxOp];
+      return aux;
+    },
+    getCalculateFn() {
+      if (this.localData.designLevel == 'I know the design I want') return (aux) => this.taskQueueStore.calculateAdvancedPushPullInputs(aux);
+      return (aux) => this.taskQueueStore.calculatePushPullInputs(aux);
+    },
+    getSimulateFn() { return (aux) => this.taskQueueStore.simulatePushPullIdealWaveforms(aux); },
+    getDefaultFrequency() { return this.localData.switchingFrequency; },
+    postProcessResults(result, mode) {
+      if (this.designRequirements) {
+        this.simulatedMagnetizingInductance = this.designRequirements.magnetizingInductance?.nominal || null;
+        this.simulatedTurnsRatios = this.designRequirements.turnsRatios?.map(tr => tr.nominal) || null;
+      }
+    },
+    getTopology() { return 'Push-Pull'; },
+    getIsolationSides() {
+      const sides = ['primary'];
+      for (let i = 0; i < this.localData.outputsParameters.length; i++) sides.push('secondary');
+      return sides;
+    },
+    getInsulationType() { return this.localData.insulationType; },
+
+            updateErrorMessage() {
             this.errorMessage = "";
         },
         updateNumberOutputs(newNumber) {
@@ -147,159 +153,26 @@ export default {
 
         async process() {
             this.masStore.resetMas("power");
-
+            this.$stateStore.closeCoilAdvancedInfo();
+            
             try {
-                const aux = {};
-                aux['inputVoltage'] = this.localData.inputVoltage;
-                aux['diodeVoltageDrop'] = this.localData.diodeVoltageDrop;
-                aux['efficiency'] = this.localData.efficiency;
-                if (this.localData.designLevel == 'I know the design I want') {
-                    aux['desiredInductance'] = this.localData.inductance;
-                    const auxDesiredDutyCycle = []
-                    // Use fixed user-provided duty cycle for all input voltages
-                    // Push-pull regulates output via turns ratio, not duty cycle modulation
-                    const dutyCycleValue = this.localData.dutyCycle || 0.45;
-                    if (this.localData.inputVoltage.minimum != null) {
-                        auxDesiredDutyCycle.push(dutyCycleValue);   
-                    }
-                    if (this.localData.inputVoltage.nominal != null) {
-                        auxDesiredDutyCycle.push(dutyCycleValue);   
-                    }
-                    if (this.localData.inputVoltage.maximum != null) {
-                        auxDesiredDutyCycle.push(dutyCycleValue);   
-                    }
-                    aux['desiredDutyCycle'] = auxDesiredDutyCycle;
-                    aux['desiredTurnsRatios'] = [];
+                const result = await this.$refs.base.processWizardData(this, this.taskQueueStore);
+                if (!result.success) {
+                    this.errorMessage = result.error;
+                    return;
                 }
-
-                aux['currentRippleRatio'] = this.localData.currentRippleRatio;
-                aux['maximumSwitchCurrent'] = this.localData.maximumSwitchCurrent;
-
-                const auxOperatingPoint = {};
-                auxOperatingPoint['outputVoltages'] = [];
-                auxOperatingPoint['outputCurrents'] = [];
-                this.localData.outputsParameters.forEach((elem) => {
-                    auxOperatingPoint['outputVoltages'].push(elem.voltage);
-                    auxOperatingPoint['outputCurrents'].push(elem.current);
-                    if (this.localData.designLevel == 'I know the design I want') {
-                        aux['desiredTurnsRatios'].push(elem.turnsRatio);
-                    }
-                })
-                auxOperatingPoint['switchingFrequency'] = this.localData.switchingFrequency;
-                auxOperatingPoint['ambientTemperature'] = this.localData.ambientTemperature;
-                aux['operatingPoints'] = [auxOperatingPoint];
-
-                var inputs;
-                if (this.localData.designLevel == 'I know the design I want') {
-                    inputs = await this.taskQueueStore.calculateAdvancedPushPullInputs(aux);
-                }
-                else {
-                    inputs = await this.taskQueueStore.calculatePushPullInputs(aux);
-                }
-
-                // Prune harmonics for better Fourier graph display
-                inputs = await this.pruneHarmonicsForInputs(inputs);
-
-                this.masStore.mas.inputs = inputs;
-
-                // If we have simulated operating points (from Simulate button), use those waveforms
-                // They contain more accurate waveform data from ngspice simulation
-                if (this.simulatedOperatingPoints && this.simulatedOperatingPoints.length > 0) {
-                    // Calculate harmonics and processed data from waveforms
-                    for (const op of this.simulatedOperatingPoints) {
-                        if (op.excitationsPerWinding) {
-                            for (const excitation of op.excitationsPerWinding) {
-                                const frequency = excitation.frequency;
-                                if (excitation.current && excitation.current.waveform) {
-                                    try {
-                                        if (!excitation.current.harmonics || excitation.current.harmonics.amplitudes?.length === 0) {
-                                            excitation.current.harmonics = await this.taskQueueStore.calculateHarmonics(excitation.current.waveform, frequency);
-                                            const currentThreshold = 0.1;
-                                            const mainIndexes = await this.taskQueueStore.getMainHarmonicIndexes(excitation.current.harmonics, currentThreshold, 1);
-                                            const prunedHarmonics = { amplitudes: [excitation.current.harmonics.amplitudes[0]], frequencies: [excitation.current.harmonics.frequencies[0]] };
-                                            for (let i = 0; i < mainIndexes.length; i++) {
-                                                prunedHarmonics.amplitudes.push(excitation.current.harmonics.amplitudes[mainIndexes[i]]);
-                                                prunedHarmonics.frequencies.push(excitation.current.harmonics.frequencies[mainIndexes[i]]);
-                                            }
-                                            excitation.current.harmonics = prunedHarmonics;
-                                        }
-                                        if (!excitation.current.processed || !excitation.current.processed.rms) {
-                                            const processed = await this.taskQueueStore.calculateProcessed(excitation.current.harmonics, excitation.current.waveform);
-                                            excitation.current.processed = { ...processed, label: "Custom" };
-                                        }
-                                    } catch (e) {
-                                        console.error("Error calculating current harmonics/processed:", e);
-                                        excitation.current.harmonics = { amplitudes: [0], frequencies: [frequency] };
-                                        excitation.current.processed = { label: "Custom", dutyCycle: 0.5, peakToPeak: 0, offset: 0, rms: 0 };
-                                    }
-                                }
-                                if (excitation.voltage && excitation.voltage.waveform) {
-                                    try {
-                                        if (!excitation.voltage.harmonics || excitation.voltage.harmonics.amplitudes?.length === 0) {
-                                            excitation.voltage.harmonics = await this.taskQueueStore.calculateHarmonics(excitation.voltage.waveform, frequency);
-                                            const voltageThreshold = 0.3;
-                                            const mainIndexes = await this.taskQueueStore.getMainHarmonicIndexes(excitation.voltage.harmonics, voltageThreshold, 1);
-                                            const prunedHarmonics = { amplitudes: [excitation.voltage.harmonics.amplitudes[0]], frequencies: [excitation.voltage.harmonics.frequencies[0]] };
-                                            for (let i = 0; i < mainIndexes.length; i++) {
-                                                prunedHarmonics.amplitudes.push(excitation.voltage.harmonics.amplitudes[mainIndexes[i]]);
-                                                prunedHarmonics.frequencies.push(excitation.voltage.harmonics.frequencies[mainIndexes[i]]);
-                                            }
-                                            excitation.voltage.harmonics = prunedHarmonics;
-                                        }
-                                        if (!excitation.voltage.processed || !excitation.voltage.processed.rms) {
-                                            const processed = await this.taskQueueStore.calculateProcessed(excitation.voltage.harmonics, excitation.voltage.waveform);
-                                            excitation.voltage.processed = { ...processed, label: "Custom" };
-                                        }
-                                    } catch (e) {
-                                        console.error("Error calculating voltage harmonics/processed:", e);
-                                        excitation.voltage.harmonics = { amplitudes: [0], frequencies: [frequency] };
-                                        excitation.voltage.processed = { label: "Custom", dutyCycle: 0.5, peakToPeak: 0, offset: 0, rms: 0 };
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    this.masStore.mas.inputs.operatingPoints = this.simulatedOperatingPoints;
-                }
-
-                if (this.localData.insulationType != 'No') {
-
-                    this.masStore.mas.inputs.designRequirements.insulation = defaultDesignRequirements.insulation;
-                    this.masStore.mas.inputs.designRequirements.insulation.insulationType = this.localData.insulationType;
-                }
-
-                this.masStore.mas.magnetic.coil.functionalDescription = []
-                this.masStore.mas.inputs.operatingPoints[0].excitationsPerWinding.forEach((elem, index) => {
-                    this.masStore.mas.magnetic.coil.functionalDescription.push({
-                            "name": elem.name,
-                            "numberTurns": 0,
-                            "numberParallels": 0,
-                            "isolationSide": this.masStore.mas.inputs.designRequirements.isolationSides[index],
-                            "wire": ""
-                        });
-                })
+                
+                this.designRequirements = result.designRequirements;
                 this.errorMessage = "";
-
             } catch (error) {
                 console.error(error);
-                this.errorMessage = error;
+                this.errorMessage = error.message || error;
             }
-
         },
         async processAndReview() {
             await this.process();
 
-            this.$stateStore.resetMagneticTool();
-            this.$stateStore.designLoaded();
-            this.$stateStore.selectApplication(this.$stateStore.SupportedApplications.Power);
-            this.$stateStore.selectWorkflow("design");
-            this.$stateStore.selectTool("agnosticTool");
-            this.$stateStore.setCurrentToolSubsectionStatus("designRequirements", true);
-            this.$stateStore.setCurrentToolSubsectionStatus("operatingPoints", true);
-            this.$stateStore.operatingPoints.modePerPoint = [];
-            this.masStore.mas.magnetic.coil.functionalDescription.forEach((_) => {
-                this.$stateStore.operatingPoints.modePerPoint.push(this.$stateStore.OperatingPointsMode.Manual);
-            })
+            await this.$refs.base.navigateToReview(this.$stateStore, this.masStore, "Power");
             if (this.errorMessage == "") {
                 await this.$nextTick();
                 await this.$router.push(`${import.meta.env.BASE_URL}magnetic_tool`);
@@ -310,15 +183,7 @@ export default {
         },
         async processAndAdvise() {
             await this.process();
-            this.$stateStore.resetMagneticTool();
-            this.$stateStore.designLoaded();
-            this.$stateStore.selectApplication(this.$stateStore.SupportedApplications.Power);
-            this.$stateStore.selectWorkflow("design");
-            this.$stateStore.selectTool("agnosticTool");
-            this.$stateStore.setCurrentToolSubsection("magneticBuilder");
-            this.$stateStore.setCurrentToolSubsectionStatus("designRequirements", true);
-            this.$stateStore.setCurrentToolSubsectionStatus("operatingPoints", true);
-            this.$stateStore.operatingPoints.modePerPoint = [this.$stateStore.OperatingPointsMode.Manual];
+            await this.$refs.base.navigateToAdvise(this.$stateStore, this.masStore, "Power");
             if (this.errorMessage == "") {
                 await this.$nextTick();
                 await this.$router.push(`${import.meta.env.BASE_URL}magnetic_tool`);
@@ -328,558 +193,11 @@ export default {
             }
         },
         async simulateIdealWaveforms() {
-            this.waveformSource = 'simulation';
-            this.simulatingWaveforms = true;
-            this.waveformError = "";
-            this.magneticWaveforms = [];
-            this.converterWaveforms = [];
-            
-            try {
-                // Build the converter parameters for simulation
-                const aux = {};
-                aux['inputVoltage'] = this.localData.inputVoltage;
-                aux['diodeVoltageDrop'] = this.localData.diodeVoltageDrop;
-                aux['efficiency'] = this.localData.efficiency;
-                
-                if (this.localData.designLevel == 'I know the design I want') {
-                    aux['desiredInductance'] = this.localData.inductance;
-                    const auxDesiredDutyCycle = [];
-                    // Use fixed user-provided duty cycle for all input voltages
-                    // Push-pull regulates output via turns ratio, not duty cycle modulation
-                    const dutyCycleValue = this.localData.dutyCycle || 0.45;
-                    if (this.localData.inputVoltage.minimum != null) {
-                        auxDesiredDutyCycle.push(dutyCycleValue);
-                    }
-                    if (this.localData.inputVoltage.nominal != null) {
-                        auxDesiredDutyCycle.push(dutyCycleValue);
-                    }
-                    if (this.localData.inputVoltage.maximum != null) {
-                        auxDesiredDutyCycle.push(dutyCycleValue);
-                    }
-                    aux['desiredDutyCycle'] = auxDesiredDutyCycle;
-                    aux['desiredTurnsRatios'] = [];
-                    this.localData.outputsParameters.forEach((elem) => {
-                        aux['desiredTurnsRatios'].push(elem.turnsRatio);
-                    });
-                    aux['currentRippleRatio'] = this.localData.currentRippleRatio;
-                    aux['maximumSwitchCurrent'] = this.localData.maximumSwitchCurrent;
-                } else {
-                    aux['currentRippleRatio'] = this.localData.currentRippleRatio;
-                    aux['maximumSwitchCurrent'] = this.localData.maximumSwitchCurrent;
-                }
-                
-                const auxOperatingPoint = {};
-                auxOperatingPoint['outputVoltages'] = [];
-                auxOperatingPoint['outputCurrents'] = [];
-                this.localData.outputsParameters.forEach((elem) => {
-                    auxOperatingPoint['outputVoltages'].push(elem.voltage);
-                    auxOperatingPoint['outputCurrents'].push(elem.current);
-                });
-                auxOperatingPoint['switchingFrequency'] = this.localData.switchingFrequency;
-                auxOperatingPoint['ambientTemperature'] = this.localData.ambientTemperature;
-                aux['operatingPoints'] = [auxOperatingPoint];
-                aux['numberOfPeriods'] = parseInt(this.numberOfPeriods, 10);
-                aux['numberOfSteadyStatePeriods'] = parseInt(this.numberOfSteadyStatePeriods, 10);
-                
-                // Call the WASM simulation
-                var result = await this.taskQueueStore.simulatePushPullIdealWaveforms(aux);
-                
-                this.simulatedOperatingPoints = result.inputs?.operatingPoints || result.operatingPoints || [];
-                this.designRequirements = result.inputs?.designRequirements || result.designRequirements || null;
-                this.simulatedMagnetizingInductance = result.magnetizingInductance || null;
-                this.simulatedTurnsRatios = result.turnsRatios || null;
-                // Build magnetic waveforms from operating points
-                this.magneticWaveforms = this.buildMagneticWaveformsFromInputs(this.simulatedOperatingPoints);
-                this.converterWaveforms = this.convertConverterWaveforms(result.converterWaveforms || []);
-                
-                this.$nextTick(() => {
-                    this.forceWaveformUpdate += 1;
-                    if (this.$refs.waveformSection) {
-                        this.$refs.waveformSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                });
-                
-            } catch (error) {
-                console.error("Error simulating waveforms:", error);
-                this.waveformError = error.message || "Failed to simulate waveforms";
-            }
-            
-            this.simulatingWaveforms = false;
-        },
+      await this.$refs.base.executeWaveformAction(this, 'simulation');
+    },
         async getAnalyticalWaveforms() {
-            this.waveformSource = 'analytical';
-            this.simulatingWaveforms = true;
-            this.waveformError = "";
-            this.magneticWaveforms = [];
-            this.converterWaveforms = [];
-            
-            try {
-                const aux = {};
-                aux['inputVoltage'] = this.localData.inputVoltage;
-                aux['diodeVoltageDrop'] = this.localData.diodeVoltageDrop;
-                aux['efficiency'] = this.localData.efficiency;
-                
-                if (this.localData.designLevel == 'I know the design I want') {
-                    aux['desiredInductance'] = this.localData.inductance;
-                    const auxDesiredDutyCycle = [];
-                    // Use fixed user-provided duty cycle for all input voltages
-                    // Push-pull regulates output via turns ratio, not duty cycle modulation
-                    const dutyCycleValue = this.localData.dutyCycle || 0.45;
-                    if (this.localData.inputVoltage.minimum != null) {
-                        auxDesiredDutyCycle.push(dutyCycleValue);
-                    }
-                    if (this.localData.inputVoltage.nominal != null) {
-                        auxDesiredDutyCycle.push(dutyCycleValue);
-                    }
-                    if (this.localData.inputVoltage.maximum != null) {
-                        auxDesiredDutyCycle.push(dutyCycleValue);
-                    }
-                    aux['desiredDutyCycle'] = auxDesiredDutyCycle;
-                    aux['desiredTurnsRatios'] = [];
-                    this.localData.outputsParameters.forEach((elem) => {
-                        aux['desiredTurnsRatios'].push(elem.turnsRatio);
-                    });
-                    aux['currentRippleRatio'] = this.localData.currentRippleRatio;
-                    aux['maximumSwitchCurrent'] = this.localData.maximumSwitchCurrent;
-                } else {
-                    aux['currentRippleRatio'] = this.localData.currentRippleRatio;
-                    aux['maximumSwitchCurrent'] = this.localData.maximumSwitchCurrent;
-                }
-                
-                const auxOperatingPoint = {};
-                auxOperatingPoint['outputVoltages'] = [];
-                auxOperatingPoint['outputCurrents'] = [];
-                this.localData.outputsParameters.forEach((elem) => {
-                    auxOperatingPoint['outputVoltages'].push(elem.voltage);
-                    auxOperatingPoint['outputCurrents'].push(elem.current);
-                });
-                auxOperatingPoint['switchingFrequency'] = this.localData.switchingFrequency;
-                auxOperatingPoint['ambientTemperature'] = this.localData.ambientTemperature;
-                aux['operatingPoints'] = [auxOperatingPoint];
-                aux['numberOfPeriods'] = parseInt(this.numberOfPeriods, 10);
-                aux['numberOfSteadyStatePeriods'] = parseInt(this.numberOfSteadyStatePeriods, 10);
-                
-                let result;
-                if (this.localData.designLevel == 'I know the design I want') {
-                    result = await this.taskQueueStore.calculateAdvancedPushPullInputs(aux);
-                } else {
-                    result = await this.taskQueueStore.calculatePushPullInputs(aux);
-                }
-                
-                this.designRequirements = result.designRequirements || null;
-                this.simulatedMagnetizingInductance = result.designRequirements?.magnetizingInductance?.nominal || null;
-                this.simulatedTurnsRatios = result.designRequirements?.turnsRatios?.map(tr => tr.nominal) || null;
-                
-                const operatingPoints = result.operatingPoints || [];
-                this.simulatedOperatingPoints = operatingPoints;
-                
-                this.magneticWaveforms = this.buildMagneticWaveformsFromInputs(operatingPoints);
-                this.converterWaveforms = [];
-                
-                this.$nextTick(() => {
-                    this.forceWaveformUpdate += 1;
-                    if (this.$refs.waveformSection) {
-                        this.$refs.waveformSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                });
-                
-            } catch (error) {
-                console.error("Error getting analytical waveforms:", error);
-                this.waveformError = error.message || "Failed to get analytical waveforms";
-            }
-            
-            this.simulatingWaveforms = false;
-        },
-        getMagnetizingInductanceDisplay() {
-            if (this.simulatedMagnetizingInductance != null) {
-                return (this.simulatedMagnetizingInductance * 1e6).toFixed(1) + 'µH';
-            }
-            if (this.designRequirements?.magnetizingInductance?.nominal != null) {
-                return (this.designRequirements.magnetizingInductance.nominal * 1e6).toFixed(1) + 'µH';
-            }
-            return 'N/A';
-        },
-        getTurnsRatioDisplay() {
-            let turnsRatios = null;
-            
-            if (this.simulatedTurnsRatios && this.simulatedTurnsRatios.length > 0) {
-                turnsRatios = this.simulatedTurnsRatios;
-            } else if (this.designRequirements?.turnsRatios?.length > 0) {
-                turnsRatios = this.designRequirements.turnsRatios.map(tr => tr.nominal);
-            }
-            
-            if (!turnsRatios || turnsRatios.length === 0) {
-                return 'N/A';
-            }
-            
-            const parts = ['1'];
-            for (const n of turnsRatios) {
-                const invN = 1 / n;
-                if (Math.abs(invN - Math.round(invN)) < 0.01) {
-                    parts.push(Math.round(invN).toString());
-                } else {
-                    parts.push((1/n).toFixed(2));
-                }
-            }
-            return parts.join(' : ');
-        },
-        buildMagneticWaveformsFromInputs(operatingPoints) {
-            const magneticWaveforms = [];
-
-            for (let opIdx = 0; opIdx < operatingPoints.length; opIdx++) {
-                const op = operatingPoints[opIdx];
-                const opWaveforms = {
-                    frequency: op.excitationsPerWinding?.[0]?.frequency || this.localData.switchingFrequency,
-                    operatingPointName: op.name || `Operating Point ${opIdx + 1}`,
-                    waveforms: []
-                };
-
-                const excitations = op.excitationsPerWinding || [];
-                for (let windingIdx = 0; windingIdx < excitations.length; windingIdx++) {
-                    const excitation = excitations[windingIdx];
-                    const windingLabel = windingIdx === 0 ? 'Primary' : `Secondary ${windingIdx}`;
-
-                    // Voltage waveform
-                    if (excitation.voltage?.waveform?.time && excitation.voltage?.waveform?.data) {
-                        opWaveforms.waveforms.push({
-                            label: `${windingLabel} Voltage`,
-                            x: excitation.voltage.waveform.time,
-                            y: excitation.voltage.waveform.data,
-                            type: 'voltage',
-                            unit: 'V'
-                        });
-                    }
-
-                    // Current waveform
-                    if (excitation.current?.waveform?.time && excitation.current?.waveform?.data) {
-                        opWaveforms.waveforms.push({
-                            label: `${windingLabel} Current`,
-                            x: excitation.current.waveform.time,
-                            y: excitation.current.waveform.data,
-                            type: 'current',
-                            unit: 'A'
-                        });
-                    }
-                }
-                
-                magneticWaveforms.push(opWaveforms);
-            }
-            
-            return magneticWaveforms;
-        },
-        convertConverterWaveforms(converterWaveforms) {
-            return converterWaveforms.map((cw, idx) => {
-                const opWaveforms = {
-                    frequency: cw.switchingFrequency || this.localData.switchingFrequency,
-                    operatingPointName: cw.operatingPointName || `Operating Point ${idx + 1}`,
-                    waveforms: []
-                };
-                
-                if (cw.inputVoltage?.time && cw.inputVoltage?.data) {
-                    opWaveforms.waveforms.push({
-                        label: 'Input Voltage', x: cw.inputVoltage.time, y: cw.inputVoltage.data,
-                        type: 'voltage', unit: 'V'
-                    });
-                }
-                
-                if (cw.inputCurrent?.time && cw.inputCurrent?.data) {
-                    opWaveforms.waveforms.push({
-                        label: 'Input Current', x: cw.inputCurrent.time, y: cw.inputCurrent.data,
-                        type: 'current', unit: 'A'
-                    });
-                }
-                
-                if (cw.outputVoltages) {
-                    cw.outputVoltages.forEach((outV, outIdx) => {
-                        if (outV.time && outV.data) {
-                            opWaveforms.waveforms.push({
-                                label: `Output ${outIdx + 1} Voltage`, x: outV.time, y: outV.data,
-                                type: 'voltage', unit: 'V'
-                            });
-                        }
-                    });
-                }
-                
-                if (cw.outputCurrents) {
-                    cw.outputCurrents.forEach((outI, outIdx) => {
-                        if (outI.time && outI.data) {
-                            opWaveforms.waveforms.push({
-                                label: `Output ${outIdx + 1} Current`, x: outI.time, y: outI.data,
-                                type: 'current', unit: 'A'
-                            });
-                        }
-                    });
-                }
-                
-                return opWaveforms;
-            });
-        },
-        repeatWaveformForPeriods(time, data, numberOfPeriods) {
-            if (!time || !data || time.length === 0 || numberOfPeriods <= 1) {
-                return { time, data };
-            }
-            
-            const period = time[time.length - 1] - time[0];
-            const newTime = [];
-            const newData = [];
-            
-            for (let p = 0; p < numberOfPeriods; p++) {
-                const offset = p * period;
-                for (let i = 0; i < time.length; i++) {
-                    if (p > 0 && i === 0) continue;
-                    newTime.push(time[i] + offset);
-                    newData.push(data[i]);
-                }
-            }
-            
-            return { time: newTime, data: newData };
-        },
-        repeatWaveformsForPeriods(waveformsData) {
-            if (this.numberOfPeriods <= 1 || !waveformsData || waveformsData.length === 0) {
-                return waveformsData;
-            }
-            
-            return waveformsData.map(op => {
-                if (!op.waveforms) return op;
-                
-                const repeatedWaveforms = op.waveforms.map(wf => {
-                    if (!wf.x || wf.x.length < 2) return wf;
-                    
-                    const period = wf.x[wf.x.length - 1] - wf.x[0];
-                    const repeatedX = [...wf.x];
-                    const repeatedY = [...wf.y];
-                    
-                    for (let p = 1; p < this.numberOfPeriods; p++) {
-                        const offset = period * p;
-                        wf.x.slice(1).forEach(x => repeatedX.push(x + offset));
-                        wf.y.slice(1).forEach(y => repeatedY.push(y));
-                    }
-                    
-                    return { ...wf, x: repeatedX, y: repeatedY };
-                });
-                
-                return { ...op, waveforms: repeatedWaveforms };
-            });
-        },
-        getWaveformsList(waveforms, operatingPointIndex) {
-            if (!waveforms || !waveforms[operatingPointIndex] || !waveforms[operatingPointIndex].waveforms) {
-                return [];
-            }
-            return waveforms[operatingPointIndex].waveforms;
-        },
-        getSingleWaveformDataForVisualizer(waveforms, operatingPointIndex, waveformIndex) {
-            if (!waveforms || !waveforms[operatingPointIndex] || !waveforms[operatingPointIndex].waveforms) {
-                return [];
-            }
-            
-            const wf = waveforms[operatingPointIndex].waveforms[waveformIndex];
-            if (!wf) return [];
-            
-            let yData = wf.y;
-            const isVoltageWaveform = wf.unit === 'V';
-            const isCurrentWaveform = wf.unit === 'A';
-            
-            if (isVoltageWaveform && yData && yData.length > 0) {
-                const sorted = [...yData].sort((a, b) => a - b);
-                const p5 = sorted[Math.floor(sorted.length * 0.05)];
-                const p95 = sorted[Math.floor(sorted.length * 0.95)];
-                
-                const range = p95 - p5;
-                const margin = range * 0.1;
-                const clipMin = p5 - margin;
-                const clipMax = p95 + margin;
-                
-                yData = yData.map(v => Math.max(clipMin, Math.min(clipMax, v)));
-            }
-            
-            let waveformColor = '#ffffff';
-            if (isVoltageWaveform) {
-                waveformColor = this.$styleStore.operatingPoints?.voltageGraph?.color || '#b18aea';
-            } else if (isCurrentWaveform) {
-                waveformColor = this.$styleStore.operatingPoints?.currentGraph?.color || '#4CAF50';
-            }
-            
-            return [{
-                label: wf.label,
-                data: {
-                    x: wf.x,
-                    y: yData,
-                },
-                colorLabel: waveformColor,
-                type: 'value',
-                position: 'left',
-                unit: wf.unit,
-                numberDecimals: 6,
-            }];
-        },
-        getTimeAxisOptions() {
-            return {
-                label: 'Time',
-                colorLabel: '#d4d4d4',
-                type: 'value',
-                unit: 's',
-            };
-        },
-        getPairedWaveformsList(waveforms, operatingPointIndex) {
-            if (!waveforms || !waveforms[operatingPointIndex] || !waveforms[operatingPointIndex].waveforms) {
-                return [];
-            }
-            const allWaveforms = waveforms[operatingPointIndex].waveforms;
-            const pairs = [];
-            const usedIndices = new Set();
-            
-            allWaveforms.forEach((wf, idx) => {
-                if (usedIndices.has(idx)) return;
-                
-                const isVoltage = wf.unit === 'V';
-                
-                if (isVoltage) {
-                    const baseName = wf.label.replace(/voltage/i, '').replace(/V$/i, '').trim();
-                    const currentIdx = allWaveforms.findIndex((cWf, cIdx) => {
-                        if (cIdx === idx || usedIndices.has(cIdx)) return false;
-                        if (cWf.unit !== 'A') return false;
-                        const currentBaseName = cWf.label.replace(/current/i, '').replace(/I$/i, '').trim();
-                        return baseName.toLowerCase() === currentBaseName.toLowerCase() || 
-                               wf.label.toLowerCase().includes(cWf.label.toLowerCase().replace('current', '').trim()) ||
-                               cWf.label.toLowerCase().includes(wf.label.toLowerCase().replace('voltage', '').trim());
-                    });
-                    
-                    if (currentIdx !== -1) {
-                        pairs.push({ voltage: { wf, idx }, current: { wf: allWaveforms[currentIdx], idx: currentIdx } });
-                        usedIndices.add(idx);
-                        usedIndices.add(currentIdx);
-                    } else {
-                        pairs.push({ voltage: { wf, idx }, current: null });
-                        usedIndices.add(idx);
-                    }
-                }
-            });
-            
-            allWaveforms.forEach((wf, idx) => {
-                if (usedIndices.has(idx)) return;
-                if (wf.unit === 'A') {
-                    pairs.push({ voltage: null, current: { wf, idx } });
-                    usedIndices.add(idx);
-                }
-            });
-            
-            return pairs;
-        },
-        getPairedWaveformDataForVisualizer(waveforms, operatingPointIndex, pairIndex) {
-            const pairs = this.getPairedWaveformsList(waveforms, operatingPointIndex);
-            if (!pairs[pairIndex]) return [];
-            
-            const pair = pairs[pairIndex];
-            const result = [];
-            
-            if (pair.voltage) {
-                const vWf = pair.voltage.wf;
-                let yData = vWf.y;
-                
-                if (yData && yData.length > 0) {
-                    const sorted = [...yData].sort((a, b) => a - b);
-                    const p5 = sorted[Math.floor(sorted.length * 0.05)];
-                    const p95 = sorted[Math.floor(sorted.length * 0.95)];
-                    const range = p95 - p5;
-                    const margin = range * 0.1;
-                    yData = yData.map(v => Math.max(p5 - margin, Math.min(p95 + margin, v)));
-                }
-                
-                result.push({
-                    label: vWf.label,
-                    data: { x: vWf.x, y: yData },
-                    colorLabel: this.$styleStore.operatingPoints?.voltageGraph?.color || '#b18aea',
-                    type: 'value',
-                    position: 'left',
-                    unit: 'V',
-                    numberDecimals: 6,
-                });
-            }
-            
-            if (pair.current) {
-                const iWf = pair.current.wf;
-                result.push({
-                    label: iWf.label,
-                    data: { x: iWf.x, y: iWf.y },
-                    colorLabel: this.$styleStore.operatingPoints?.currentGraph?.color || '#4CAF50',
-                    type: 'value',
-                    position: 'right',
-                    unit: 'A',
-                    numberDecimals: 6,
-                });
-            }
-            
-            return result;
-        },
-        getPairedWaveformAxisLimits(waveforms, operatingPointIndex, pairIndex) {
-            const pairs = this.getPairedWaveformsList(waveforms, operatingPointIndex);
-            if (!pairs[pairIndex]) return { min: [], max: [] };
-
-            const pair = pairs[pairIndex];
-            const min = [];
-            const max = [];
-
-            if (pair.voltage) {
-                const vWf = pair.voltage.wf;
-                let yData = vWf.y;
-                if (yData && yData.length > 0) {
-                    const sorted = [...yData].sort((a, b) => a - b);
-                    const p5 = sorted[Math.floor(sorted.length * 0.05)];
-                    const p95 = sorted[Math.floor(sorted.length * 0.95)];
-                    const range = p95 - p5;
-                    const margin = range * 0.1;
-                    min.push(p5 - margin);
-                    max.push(p95 + margin);
-                } else {
-                    min.push(null);
-                    max.push(null);
-                }
-            }
-
-            if (pair.current) {
-                const iWf = pair.current.wf;
-                let yData = iWf.y;
-                if (yData && yData.length > 0) {
-                    const sorted = [...yData].sort((a, b) => a - b);
-                    const p5 = sorted[Math.floor(sorted.length * 0.05)];
-                    const p95 = sorted[Math.floor(sorted.length * 0.95)];
-                    const range = p95 - p5;
-                    const margin = range * 0.1;
-                    min.push(p5 - margin);
-                    max.push(p95 + margin);
-                } else {
-                    min.push(null);
-                    max.push(null);
-                }
-            }
-
-            return { min, max };
-        },
-        getPairedWaveformTitle(waveforms, operatingPointIndex, pairIndex) {
-            const pairs = this.getPairedWaveformsList(waveforms, operatingPointIndex);
-            if (!pairs[pairIndex]) return '';
-
-            const pair = pairs[pairIndex];
-            if (pair.voltage && pair.current) {
-                let vLabel = pair.voltage.wf.label;
-                let baseName = vLabel
-                    .replace(/\s*\(Switch [Nn]ode\)/gi, '')
-                    .replace(/voltage/i, '')
-                    .replace(/V$/i, '')
-                    .trim();
-                return baseName || 'V & I';
-            } else if (pair.voltage) {
-                return pair.voltage.wf.label.replace(/\s*\(Switch [Nn]ode\)/gi, '');
-            } else if (pair.current) {
-                return pair.current.wf.label;
-            }
-            return '';
-        },
-        getOperatingPointLabel(waveforms, operatingPointIndex) {
-            if (!waveforms || !waveforms[operatingPointIndex]) return '';
-            const op = waveforms[operatingPointIndex];
-            return op.operatingPointName || `Operating Point ${operatingPointIndex + 1}`;
-        },
+      await this.$refs.base.executeWaveformAction(this, 'analytical');
+    },
     }
 }
 
@@ -887,6 +205,7 @@ export default {
 
 <template>
   <ConverterWizardBase
+    ref="base"
     title="Push-Pull Wizard"
     titleIcon="fa-arrows-left-right"
     subtitle="Center-Tapped Transformer Converter"
@@ -1054,21 +373,20 @@ export default {
       />
     </template>
 
-    <template #number-outputs>
-      <ElementFromList :name="'numberOutputs'" :replaceTitle="''"
-        :dataTestLabel="dataTestLabel + '-NumberOutputs'"
-        :options="Array.from({length: 10}, (_, i) => i + 1)"
-        :titleSameRow="true" v-model="localData"
-        :labelWidthProportionClass="'d-none'" :valueWidthProportionClass="'col-12'"
-        :valueFontSize="$styleStore.wizard.inputFontSize"
-        :labelFontSize="$styleStore.wizard.inputLabelFontSize"
-        :labelBgColor="'transparent'" :valueBgColor="$styleStore.wizard.inputValueBgColor"
-        :textColor="$styleStore.wizard.inputTextColor"
-        @update="updateNumberOutputs"
-      />
-    </template>
-
     <template #outputs>
+      <div class="mb-3">
+        <ElementFromList :name="'numberOutputs'" :replaceTitle="'Number of Outputs'"
+          :dataTestLabel="dataTestLabel + '-NumberOutputs'"
+          :options="Array.from({length: 10}, (_, i) => i + 1)"
+          :titleSameRow="true" v-model="localData"
+          :labelWidthProportionClass="'col-5'" :valueWidthProportionClass="'col-7'"
+          :valueFontSize="$styleStore.wizard.inputFontSize"
+          :labelFontSize="$styleStore.wizard.inputLabelFontSize"
+          :labelBgColor="'transparent'" :valueBgColor="$styleStore.wizard.inputValueBgColor"
+          :textColor="$styleStore.wizard.inputTextColor"
+          @update="updateNumberOutputs"
+        />
+      </div>
       <div v-for="(datum, index) in localData.outputsParameters" :key="'output-' + index" class="mb-2">
         <TripleOfDimensions v-if="localData.designLevel == 'I know the design I want'"
           :names="['voltage', 'current', 'turnsRatio']"

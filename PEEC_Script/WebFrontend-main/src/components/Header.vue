@@ -39,11 +39,7 @@ export default {
     },
     methods: {
         getWizardButtonStyle(wizardName, isNewWizard = false) {
-            const baseStyle = isNewWizard ? this.$styleStore.header.newWizardButton : this.$styleStore.header.wizardButton;
-            if (this.hoveredWizard === wizardName) {
-                return { ...baseStyle, color: 'var(--bs-secondary)' };
-            }
-            return baseStyle;
+            return this.$styleStore.header.wizardButton;
         },
         onShowModal() {
             this.showModal = true
@@ -123,6 +119,9 @@ export default {
                         this.masStore.resetMas();
                         this.masStore.mas = response;
                         this.masStore.importedMas();
+                        
+                        // Reset coil view to Basic mode when loading a new MAS file
+                        this.$stateStore.closeCoilAdvancedInfo();
 
                         this.$stateStore.selectWorkflow("design");
                         this.$stateStore.selectApplication(this.$stateStore.SupportedApplications.Power);
@@ -340,6 +339,7 @@ export default {
                         <li>
                             <button
                                 :style="getWizardButtonStyle('CommonModeChoke')"
+                                :disabled="true"
                                 data-cy="Wizard-CommonModeChoke-link"
                                 :class="headerTogglerIsVisible? 'w-100' : 'mx-0' "
                                 class="dropdown-item btn btn-block nav-link px-2"
@@ -353,6 +353,7 @@ export default {
                         <li>
                             <button
                                 :style="getWizardButtonStyle('DifferentialModeChoke')"
+                                :disabled="true"
                                 data-cy="Wizard-DifferentialModeChoke-link"
                                 :class="headerTogglerIsVisible? 'w-100' : 'mx-0' "
                                 class="dropdown-item btn btn-block nav-link px-2"
@@ -457,6 +458,7 @@ export default {
                         <li>
                             <button
                                 :style="getWizardButtonStyle('DAB', true)"
+                                :disabled="true"
                                 data-cy="Dab-link"
                                 :class="headerTogglerIsVisible? 'w-100' : 'mx-0' "
                                 class="dropdown-item btn btn-block nav-link px-2"
@@ -483,6 +485,7 @@ export default {
                         <li>
                             <button
                                 :style="getWizardButtonStyle('CLLC', true)"
+                                :disabled="true"
                                 data-cy="Cllc-link"
                                 :class="headerTogglerIsVisible? 'w-100' : 'mx-0' "
                                 class="dropdown-item btn btn-block nav-link px-2"
@@ -496,6 +499,7 @@ export default {
                         <li>
                             <button
                                 :style="getWizardButtonStyle('PSFB', true)"
+                                :disabled="true"
                                 data-cy="Psfb-link"
                                 :class="headerTogglerIsVisible? 'w-100' : 'mx-0' "
                                 class="dropdown-item btn btn-block nav-link px-2"
@@ -736,9 +740,22 @@ export default {
         color: inherit !important;
     }
 
-    /* Wizard dropdown button hover - change text color to secondary */
-    .dropdown-menu .dropdown-item.nav-link:hover {
-        color: var(--bs-secondary) !important;
-        background-color: inherit !important;
+    /* Override Bootstrap dropdown-item hover - KEEP PRIMARY COLOR */
+    .dropdown-menu .dropdown-item:hover,
+    .dropdown-menu .dropdown-item:focus,
+    .dropdown-menu.show .dropdown-item.btn.nav-link:hover,
+    .dropdown-menu.show .dropdown-item.btn.nav-link:focus,
+    ul.dropdown-menu li button.dropdown-item.btn.nav-link:hover,
+    ul.dropdown-menu li button.dropdown-item.btn.nav-link:focus,
+    button.dropdown-item:hover,
+    button.dropdown-item:focus {
+        color: #539796 !important;
+        background-color: transparent !important;
+    }
+
+    /* Override Bootstrap CSS variable for dropdown hover color */
+    .dropdown-menu {
+        --bs-dropdown-link-hover-color: #539796 !important;
+        --bs-dropdown-link-hover-bg: transparent !important;
     }
 </style>

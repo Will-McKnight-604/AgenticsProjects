@@ -51,10 +51,12 @@ export default {
             magneticWaveforms: [],
             converterWaveforms: [],
             waveformViewMode: 'magnetic', // 'magnetic' or 'converter'
+            waveformSource: 'analytical', // 'analytical' or 'simulation'
             forceWaveformUpdate: 0,
             numberOfPeriods: 2,
             numberOfSteadyStatePeriods: 10,
-            converterName: 'Power Factor Correction (PFC)'
+            converterName: 'Power Factor Correction (PFC)',
+            detectedMode: null
         }
     },
     computed: {
@@ -63,16 +65,74 @@ export default {
         }
     },
     watch: {
+        'localData.inductance': {
+            handler(newVal) {
+                if (this.localData.designLevel === 'I know the design I want' && newVal > 0) {
+                    this.detectActualMode();
+                }
+            },
+            immediate: true
+        },
+        'localData.designLevel'(newVal) {
+            if (newVal === 'I know the design I want' && this.localData.inductance > 0) {
+                this.detectActualMode();
+            } else {
+                this.detectedMode = null;
+            }
+        },
         waveformViewMode() {
             this.$nextTick(() => {
                 this.forceWaveformUpdate += 1;
             });
         },
     },
+    mounted() {
+        // Run detection on mount if already in "I know the design I want" mode
+        if (this.localData.designLevel === 'I know the design I want' && this.localData.inductance > 0) {
+            this.detectActualMode();
+        }
+    },
     methods: {
+
+    // ===== WIZARD CONTRACT =====
+    buildParams(mode) {
+      const aux = {
+        inputVoltage: this.localData.inputVoltage, outputVoltage: this.localData.outputVoltage,
+        outputPower: this.localData.outputPower, switchingFrequency: this.localData.switchingFrequency,
+        lineFrequency: this.localData.lineFrequency, currentRippleRatio: this.localData.currentRippleRatio,
+        efficiency: this.localData.efficiency, mode: this.localData.mode,
+        diodeVoltageDrop: this.localData.diodeVoltageDrop, ambientTemperature: this.localData.ambientTemperature,
+      };
+      if (this.localData.designLevel == 'I know the design I want') aux.inductance = this.localData.inductance;
+      return aux;
+    },
+    getCalculateFn() {
+      return async (aux) => {
+        const Module = await waitForMkf(); await Module.ready;
+        const result = JSON.parse(await Module.calculate_pfc_inputs(JSON.stringify(aux)));
+        if (result.error) throw new Error(result.error);
+        return result;
+      };
+    },
+    getSimulateFn() {
+      return async (aux) => {
+        const Module = await waitForMkf(); await Module.ready;
+        const result = JSON.parse(await Module.simulate_pfc_waveforms(JSON.stringify(aux)));
+        if (result.error) throw new Error(result.error);
+        return result;
+      };
+    },
+    getDefaultFrequency() { return this.localData.switchingFrequency; },
+    postProcessResults(result, mode) {
+      if (result.inductance) this.simulatedInductance = result.inductance;
+    },
+    getTopology() { return 'PFC'; },
+    getIsolationSides() { return ['primary']; },
+    getInsulationType() { return null; },
+
         updateErrorMessage() {
             this.errorMessage = "";
-            
+
             // Validation checks
             if (this.localData.outputVoltage <= 0) {
                 this.errorMessage = "Output voltage must be positive";
@@ -82,7 +142,7 @@ export default {
                 this.errorMessage = "Output power must be positive";
                 return;
             }
-            
+
             // Check that output voltage > peak input voltage
             const vinMax = this.localData.inputVoltage.maximum || this.localData.inputVoltage.nominal;
             const vinPeakMax = vinMax * Math.sqrt(2);
@@ -91,258 +151,48 @@ export default {
                 return;
             }
         },
+
+        async detectActualMode() {
+            if (this.localData.designLevel !== 'I know the design I want' || this.localData.inductance <= 0) {
+                this.detectedMode = null;
+                return;
+            }
+
+            try {
+                const Module = await waitForMkf();
+                await Module.ready;
+
+                const params = {
+                    inputVoltage: this.localData.inputVoltage,
+                    outputVoltage: this.localData.outputVoltage,
+                    outputPower: this.localData.outputPower,
+                    switchingFrequency: this.localData.switchingFrequency,
+                    efficiency: this.localData.efficiency,
+                    diodeVoltageDrop: this.localData.diodeVoltageDrop
+                };
+
+                const result = JSON.parse(await Module.determine_pfc_mode(JSON.stringify(params), this.localData.inductance));
+
+                if (!result.error) {
+                    this.detectedMode = result.actualMode;
+                }
+            } catch (error) {
+                console.error('Error detecting PFC mode:', error);
+            }
+        },
         
         async getAnalyticalWaveforms() {
-            this.simulatingWaveforms = true;
-            this.waveformError = "";
-            this.waveformSource = "analytical";
-            
-            try {
-                const Module = await waitForMkf();
-                await Module.ready;
-                
-                const aux = {
-                    inputVoltage: this.localData.inputVoltage,
-                    outputVoltage: this.localData.outputVoltage,
-                    outputPower: this.localData.outputPower,
-                    switchingFrequency: this.localData.switchingFrequency,
-                    lineFrequency: this.localData.lineFrequency,
-                    currentRippleRatio: this.localData.currentRippleRatio,
-                    efficiency: this.localData.efficiency,
-                    mode: this.localData.mode,
-                    diodeVoltageDrop: this.localData.diodeVoltageDrop,
-                    ambientTemperature: this.localData.ambientTemperature,
-                    numberOfPeriods: parseInt(this.numberOfPeriods, 10),
-                    numberOfSteadyStatePeriods: parseInt(this.numberOfSteadyStatePeriods, 10)
-                };
-                
-                if (this.localData.designLevel == 'I know the design I want') {
-                    aux['inductance'] = this.localData.inductance;
-                }
-                
-                const result = JSON.parse(await Module.calculate_pfc_inputs(JSON.stringify(aux)));
-                
-                if (result.error) {
-                    this.waveformError = result.error;
-                    return;
-                }
-                
-                // Build magnetic waveforms from operating points
-                this.simulatedOperatingPoints = result.inputs?.operatingPoints || result.operatingPoints || [];
-                this.magneticWaveforms = this.buildMagneticWaveformsFromInputs(this.simulatedOperatingPoints);
-                this.converterWaveforms = this.convertConverterWaveforms(result.converterWaveforms || []);
-                
-                this.simulatedInductance = result.inductance;
-                this.designRequirements = result.inputs?.designRequirements || result.designRequirements || null;
-                
-            } catch (error) {
-                console.error('Error getting analytical waveforms:', error);
-                this.waveformError = error.message || String(error);
-            } finally {
-                this.simulatingWaveforms = false;
-            }
-        },
+      await this.$refs.base.executeWaveformAction(this, 'analytical');
+    },
         
         async getSimulatedWaveforms() {
-            this.simulatingWaveforms = true;
-            this.waveformError = "";
-            this.waveformSource = "simulation";
-            
-            try {
-                const Module = await waitForMkf();
-                await Module.ready;
-                
-                const aux = {
-                    inputVoltage: this.localData.inputVoltage,
-                    outputVoltage: this.localData.outputVoltage,
-                    outputPower: this.localData.outputPower,
-                    switchingFrequency: this.localData.switchingFrequency,
-                    lineFrequency: this.localData.lineFrequency,
-                    currentRippleRatio: this.localData.currentRippleRatio,
-                    efficiency: this.localData.efficiency,
-                    mode: this.localData.mode,
-                    diodeVoltageDrop: this.localData.diodeVoltageDrop,
-                    ambientTemperature: this.localData.ambientTemperature,
-                    numberOfPeriods: parseInt(this.numberOfPeriods, 10),
-                    numberOfSteadyStatePeriods: parseInt(this.numberOfSteadyStatePeriods, 10)
-                };
-                
-                if (this.localData.designLevel == 'I know the design I want') {
-                    aux['inductance'] = this.localData.inductance;
-                }
-                
-                const result = JSON.parse(await Module.simulate_pfc_waveforms(JSON.stringify(aux)));
-
-                if (result.error) {
-                    this.waveformError = result.error;
-                    return;
-                }
-
-                // PFC simulation returns magneticWaveforms and converterWaveforms directly (different format from other converters)
-                this.magneticWaveforms = result.magneticWaveforms || [];
-                this.converterWaveforms = result.converterWaveforms || [];
-
-                this.simulatedInductance = result.inductance;
-                
-            } catch (error) {
-                console.error('Error simulating waveforms:', error);
-                this.waveformError = error.message || String(error);
-            } finally {
-                this.simulatingWaveforms = false;
-            }
-        },
+      await this.$refs.base.executeWaveformAction(this, 'simulation');
+    },
         
-        buildMagneticWaveformsFromInputs(operatingPoints) {
-            const magneticWaveforms = [];
             
-            for (let opIdx = 0; opIdx < operatingPoints.length; opIdx++) {
-                const op = operatingPoints[opIdx];
-                const opWaveforms = {
-                    frequency: op.excitationsPerWinding?.[0]?.frequency || this.localData.switchingFrequency,
-                    operatingPointName: op.name || `Operating Point ${opIdx + 1}`,
-                    waveforms: []
-                };
-                
-                // Extract waveforms from each winding excitation
-                const excitations = op.excitationsPerWinding || [];
-                for (let windingIdx = 0; windingIdx < excitations.length; windingIdx++) {
-                    const excitation = excitations[windingIdx];
-                    const windingLabel = windingIdx === 0 ? 'Primary' : `Secondary ${windingIdx}`;
-                    
-                    // Voltage waveform
-                    if (excitation.voltage?.waveform?.time && excitation.voltage?.waveform?.data) {
-                        opWaveforms.waveforms.push({
-                            label: `${windingLabel} Voltage`,
-                            x: excitation.voltage.waveform.time,
-                            y: excitation.voltage.waveform.data,
-                            type: 'voltage',
-                            unit: 'V'
-                        });
-                    }
-                    
-                    // Current waveform
-                    if (excitation.current?.waveform?.time && excitation.current?.waveform?.data) {
-                        opWaveforms.waveforms.push({
-                            label: `${windingLabel} Current`,
-                            x: excitation.current.waveform.time,
-                            y: excitation.current.waveform.data,
-                            type: 'current',
-                            unit: 'A'
-                        });
-                    }
-                }
-                
-                magneticWaveforms.push(opWaveforms);
-            }
             
-            return magneticWaveforms;
-        },
-        
-        convertConverterWaveforms(converterWaveforms) {
-            return converterWaveforms.map((cw, idx) => {
-                const opWaveforms = {
-                    frequency: cw.switchingFrequency || this.localData.switchingFrequency,
-                    operatingPointName: cw.operatingPointName || `Operating Point ${idx + 1}`,
-                    waveforms: []
-                };
-                
-                if (cw.inputVoltage?.time && cw.inputVoltage?.data) {
-                    opWaveforms.waveforms.push({
-                        label: 'Input Voltage', x: cw.inputVoltage.time, y: cw.inputVoltage.data,
-                        type: 'voltage', unit: 'V'
-                    });
-                }
-                
-                if (cw.inputCurrent?.time && cw.inputCurrent?.data) {
-                    opWaveforms.waveforms.push({
-                        label: 'Input Current', x: cw.inputCurrent.time, y: cw.inputCurrent.data,
-                        type: 'current', unit: 'A'
-                    });
-                }
-                
-                if (cw.outputVoltages) {
-                    cw.outputVoltages.forEach((outV, outIdx) => {
-                        if (outV.time && outV.data) {
-                            opWaveforms.waveforms.push({
-                                label: `Output ${outIdx + 1} Voltage`, x: outV.time, y: outV.data,
-                                type: 'voltage', unit: 'V'
-                            });
-                        }
-                    });
-                }
-                
-                if (cw.outputCurrents) {
-                    cw.outputCurrents.forEach((outI, outIdx) => {
-                        if (outI.time && outI.data) {
-                            opWaveforms.waveforms.push({
-                                label: `Output ${outIdx + 1} Current`, x: outI.time, y: outI.data,
-                                type: 'current', unit: 'A'
-                            });
-                        }
-                    });
-                }
-                
-                return opWaveforms;
-            });
-        },
-        
-        repeatWaveformForPeriods(time, data, numberOfPeriods) {
-            // Repeat a single-period waveform for the specified number of periods
-            if (!time || !data || time.length === 0 || numberOfPeriods <= 1) {
-                return { time, data };
-            }
             
-            const period = time[time.length - 1] - time[0];
-            const newTime = [];
-            const newData = [];
             
-            for (let p = 0; p < numberOfPeriods; p++) {
-                const offset = p * period;
-                for (let i = 0; i < time.length; i++) {
-                    // Skip first point in subsequent periods ONLY if it doesn't create duplicate time
-                    if (p > 0 && i === 0) {
-                        // Check if this point would create a duplicate time value
-                        const newTimeValue = time[i] + offset;
-                        if (newTime.length > 0 && Math.abs(newTime[newTime.length - 1] - newTimeValue) < 1e-12) {
-                            continue; // Skip to avoid duplicate
-                        }
-                    }
-                    newTime.push(time[i] + offset);
-                    newData.push(data[i]);
-                }
-            }
-            
-            return { time: newTime, data: newData };
-        },
-        
-        repeatWaveformsForPeriods(waveformsData) {
-            if (this.numberOfPeriods <= 1 || !waveformsData || waveformsData.length === 0) {
-                return waveformsData;
-            }
-            
-            return waveformsData.map(op => {
-                if (!op.waveforms) return op;
-                
-                const repeatedWaveforms = op.waveforms.map(wf => {
-                    if (!wf.x || wf.x.length < 2) return wf;
-                    
-                    const period = wf.x[wf.x.length - 1] - wf.x[0];
-                    const repeatedX = [...wf.x];
-                    const repeatedY = [...wf.y];
-                    
-                    for (let p = 1; p < this.numberOfPeriods; p++) {
-                        const offset = period * p;
-                        wf.x.slice(1).forEach(x => repeatedX.push(x + offset));
-                        wf.y.slice(1).forEach(y => repeatedY.push(y));
-                    }
-                    
-                    return { ...wf, x: repeatedX, y: repeatedY };
-                });
-                
-                return { ...op, waveforms: repeatedWaveforms };
-            });
-        },
-        
         getWaveformsForView() {
             return this.waveformViewMode === 'magnetic' ? this.magneticWaveforms : this.converterWaveforms;
         },
@@ -354,48 +204,8 @@ export default {
             return waveforms[operatingPointIndex].waveforms;
         },
         
-        getTimeAxisOptions() {
-            return {
-                label: 'Time',
-                colorLabel: '#d4d4d4',
-                type: 'value',
-                unit: 's',
-            };
-        },
-        
-        getSingleWaveformDataForVisualizer(waveforms, operatingPointIndex, waveformIndex) {
-            if (!waveforms || !waveforms[operatingPointIndex] || !waveforms[operatingPointIndex].waveforms) {
-                return [];
-            }
             
-            const wf = waveforms[operatingPointIndex].waveforms[waveformIndex];
-            
-            if (!wf || !wf.x || !wf.y) return [];
-            
-            let yData = [...wf.y]; // Clone to avoid mutating original
-            const isVoltageWaveform = wf.unit === 'V';
-            
-            // Note: Removed voltage clipping for PFC as it can distort the rectified sine waveform
-            
-            const lineColor = isVoltageWaveform ? 
-                (this.$styleStore?.operatingPoints?.voltageGraph?.color || '#b18aea') : 
-                (this.$styleStore?.operatingPoints?.currentGraph?.color || '#4CAF50');
-            
-            return [{
-                label: wf.label,
-                data: {
-                    x: wf.x,
-                    y: yData,
-                },
-                colorLabel: lineColor,
-                type: 'value',
-                position: 'left',
-                unit: wf.unit,
-                numberDecimals: 3,
-            }];
-        },
-
-        getSingleWaveformAxisLimits(waveforms, operatingPointIndex, waveformIndex) {
+            getSingleWaveformAxisLimits(waveforms, operatingPointIndex, waveformIndex) {
             if (!waveforms || !waveforms[operatingPointIndex] || !waveforms[operatingPointIndex].waveforms) {
                 return { min: null, max: null };
             }
@@ -417,37 +227,74 @@ export default {
             this.updateErrorMessage();
             if (this.errorMessage) return;
             
+            this.masStore.resetMas("power");
+            this.$stateStore.closeCoilAdvancedInfo();
+            
             try {
-                const Module = await waitForMkf();
-                await Module.ready;
+                // Check if we have stored operating points with waveforms (from Analytical or Simulated)
+                const hasStoredData = this.simulatedOperatingPoints && this.simulatedOperatingPoints.length > 0;
                 
-                const aux = {
-                    inputVoltage: this.localData.inputVoltage,
-                    outputVoltage: this.localData.outputVoltage,
-                    outputPower: this.localData.outputPower,
-                    switchingFrequency: this.localData.switchingFrequency,
-                    lineFrequency: this.localData.lineFrequency,
-                    currentRippleRatio: this.localData.currentRippleRatio,
-                    efficiency: this.localData.efficiency,
-                    mode: this.localData.mode,
-                    diodeVoltageDrop: this.localData.diodeVoltageDrop,
-                    ambientTemperature: this.localData.ambientTemperature
-                };
+                let masInputs;
                 
-                if (this.localData.designLevel == 'I know the design I want') {
-                    aux['inductance'] = this.localData.inductance;
+                if (hasStoredData) {
+                    // Use stored data - extract single period from waveforms
+                    const freq = this.getDefaultFrequency();
+                    const ops = this.$refs.base.extractSinglePeriodFromOperatingPoints(this.simulatedOperatingPoints, freq);
+                    
+                    // Calculate harmonics and processed data if missing
+                    const opsWithHarmonics = await this.$refs.base.processSimulatedOperatingPoints(ops, this.taskQueueStore);
+                    
+                    // Get designRequirements from stored data or compute basic ones
+                    const dr = this.designRequirements || {
+                        topology: 'PFC',
+                        magnetizingInductance: this.simulatedInductance ? { nominal: this.simulatedInductance } : null
+                    };
+                    
+                    // Setup masStore
+                    await this.$refs.base.setupMasStore({
+                        designRequirements: dr,
+                        operatingPoints: opsWithHarmonics,
+                        topology: this.getTopology(),
+                        isolationSides: this.getIsolationSides(),
+                        insulationType: this.getInsulationType(),
+                        wizardInstance: this
+                    });
+                    
+                    this.errorMessage = "";
+                    return this.masStore.mas.inputs;
+                } else {
+                    // Fallback: run analytical calculation via MKF
+                    const Module = await waitForMkf();
+                    await Module.ready;
+                    
+                    const aux = {
+                        inputVoltage: this.localData.inputVoltage,
+                        outputVoltage: this.localData.outputVoltage,
+                        outputPower: this.localData.outputPower,
+                        switchingFrequency: this.localData.switchingFrequency,
+                        lineFrequency: this.localData.lineFrequency,
+                        currentRippleRatio: this.localData.currentRippleRatio,
+                        efficiency: this.localData.efficiency,
+                        mode: this.localData.mode,
+                        diodeVoltageDrop: this.localData.diodeVoltageDrop,
+                        ambientTemperature: this.localData.ambientTemperature
+                    };
+                    
+                    if (this.localData.designLevel == 'I know the design I want') {
+                        aux['inductance'] = this.localData.inductance;
+                    }
+                    
+                    const result = JSON.parse(await Module.calculate_pfc_inputs(JSON.stringify(aux)));
+                    
+                    if (result.error) {
+                        this.errorMessage = result.error;
+                        return null;
+                    }
+                    
+                    this.masStore.mas.inputs = result.masInputs;
+                    this.errorMessage = "";
+                    return result.masInputs;
                 }
-                
-                const result = JSON.parse(await Module.calculate_pfc_inputs(JSON.stringify(aux)));
-                
-                if (result.error) {
-                    this.errorMessage = result.error;
-                    return null;
-                }
-                
-                this.errorMessage = "";
-                return result.masInputs;
-                
             } catch (error) {
                 console.error('Error processing design:', error);
                 this.errorMessage = error.message || String(error);
@@ -458,74 +305,22 @@ export default {
         async processAndReview() {
             console.log('[PFC] processAndReview started');
             const masInputs = await this.process();
-            
+
             if (this.errorMessage || !masInputs) {
                 console.log('[PFC] processAndReview aborted - error or no masInputs');
                 return;
             }
-            
+
             console.log('[PFC] masInputs received:', JSON.stringify(masInputs, null, 2));
-            
+
             console.log('[PFC] Calling resetMagneticTool...');
-            this.$stateStore.resetMagneticTool();
-            console.log('[PFC] resetMagneticTool done');
-            
-            console.log('[PFC] Calling designLoaded...');
-            this.$stateStore.designLoaded();
-            console.log('[PFC] designLoaded done');
-            
-            console.log('[PFC] Calling selectApplication...');
-            this.$stateStore.selectApplication(this.$stateStore.SupportedApplications.Power);
-            console.log('[PFC] selectApplication done');
-            
-            console.log('[PFC] Calling selectWorkflow...');
-            this.$stateStore.selectWorkflow("design");
-            console.log('[PFC] selectWorkflow done');
-            
-            console.log('[PFC] Calling selectTool...');
-            this.$stateStore.selectTool("agnosticTool");
-            console.log('[PFC] selectTool done');
-            
-            console.log('[PFC] Calling setCurrentToolSubsectionStatus...');
-            this.$stateStore.setCurrentToolSubsectionStatus("designRequirements", true);
-            this.$stateStore.setCurrentToolSubsectionStatus("operatingPoints", true);
-            console.log('[PFC] setCurrentToolSubsectionStatus done');
-            
-            console.log('[PFC] Setting MAS data...');
-            console.log('[PFC] masInputs:', masInputs);
-            
-            // The backend returns designRequirements fields directly in masInputs, not nested
-            // Set MAS data after reset - assign the entire masInputs to inputs
-            console.log('[PFC] Setting masStore.mas.inputs...');
-            Object.assign(this.masStore.mas.inputs, masInputs);
-            console.log('[PFC] Set masInputs done');
-            
-            // Set up coil functional description
-            console.log('[PFC] Setting up coil functionalDescription...');
-            this.masStore.mas.magnetic.coil.functionalDescription = [];
-            if (masInputs.operatingPoints && masInputs.operatingPoints.length > 0) {
-                masInputs.operatingPoints[0].excitationsPerWinding.forEach((elem, index) => {
-                    this.masStore.mas.magnetic.coil.functionalDescription.push({
-                        "name": elem.name || "Winding " + (index + 1),
-                        "numberTurns": 0,
-                        "numberParallels": 0,
-                        "isolationSide": masInputs.isolationSides?.[index] || "primary",
-                        "wire": ""
-                    });
-                });
-            }
+            await this.$refs.base.navigateToReview(this.$stateStore, this.masStore, "Power");
             console.log('[PFC] coil.functionalDescription:', this.masStore.mas.magnetic.coil.functionalDescription);
-            
-            this.$stateStore.operatingPoints.modePerPoint = [];
-            this.masStore.mas.magnetic.coil.functionalDescription.forEach((_) => {
-                this.$stateStore.operatingPoints.modePerPoint.push(this.$stateStore.OperatingPointsMode.Manual);
-            });
-            console.log('[PFC] modePerPoint set');
-            
+
             console.log('[PFC] Calling $nextTick...');
             await this.$nextTick();
             console.log('[PFC] $nextTick done');
-            
+
             console.log('[PFC] Navigating to magnetic_tool...');
             await this.$router.push(`${import.meta.env.BASE_URL}magnetic_tool`);
             console.log('[PFC] Navigation done');
@@ -533,37 +328,11 @@ export default {
         
         async processAndAdvise() {
             const masInputs = await this.process();
-            
+
             if (this.errorMessage || !masInputs) return;
-            
-            this.$stateStore.resetMagneticTool();
-            this.$stateStore.designLoaded();
-            this.$stateStore.selectApplication(this.$stateStore.SupportedApplications.Power);
-            this.$stateStore.selectWorkflow("design");
-            this.$stateStore.selectTool("agnosticTool");
-            this.$stateStore.setCurrentToolSubsection("magneticBuilder");
-            this.$stateStore.setCurrentToolSubsectionStatus("designRequirements", true);
-            this.$stateStore.setCurrentToolSubsectionStatus("operatingPoints", true);
-            
-            // Set MAS data after reset - assign the entire masInputs to inputs
-            Object.assign(this.masStore.mas.inputs, masInputs);
-            
-            // Set up coil functional description
-            this.masStore.mas.magnetic.coil.functionalDescription = [];
-            if (masInputs.operatingPoints && masInputs.operatingPoints.length > 0) {
-                masInputs.operatingPoints[0].excitationsPerWinding.forEach((elem, index) => {
-                    this.masStore.mas.magnetic.coil.functionalDescription.push({
-                        "name": elem.name || "Winding " + (index + 1),
-                        "numberTurns": 0,
-                        "numberParallels": 0,
-                        "isolationSide": masInputs.isolationSides?.[index] || "primary",
-                        "wire": ""
-                    });
-                });
-            }
-            
-            this.$stateStore.operatingPoints.modePerPoint = [this.$stateStore.OperatingPointsMode.Manual];
-            
+
+            await this.$refs.base.navigateToAdvise(this.$stateStore, this.masStore, "Power");
+
             await this.$nextTick();
             await this.$router.push(`${import.meta.env.BASE_URL}magnetic_tool`);
         }
@@ -574,6 +343,7 @@ export default {
 
 <template>
   <ConverterWizardBase
+    ref="base"
     title="PFC Wizard"
     titleIcon="fa-leaf"
     subtitle="Power Factor Correction Rectifier"
@@ -628,6 +398,10 @@ export default {
           :textColor="$styleStore.wizard.inputTextColor"
           @update="updateErrorMessage"
         />
+        <div v-if="detectedMode" class="mt-2 p-2 rounded" :class="$styleStore.wizard.inputValueBgColor">
+          <small class="text-muted">Detected Mode:</small><br>
+          <strong :style="{ color: $styleStore.wizard.inputTextColor }">{{ detectedMode }}</strong>
+        </div>
       </div>
       <div v-else>
         <ElementFromListRadio
