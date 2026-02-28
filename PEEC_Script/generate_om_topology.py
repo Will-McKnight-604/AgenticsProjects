@@ -421,7 +421,11 @@ class TwoSwitchForwardCalc(TopologyCalculator):
                 exc.append(self._make_rectangular_excitation(
                     name, freq, i_sec_pp, i_sec_offset, v_sec_pp, v_sec_offset, d))
 
-            op_list.append({"excitationsPerWinding": exc})
+            op_list.append({
+                "name": op.get("name", f"Operating Point {len(op_list)+1}"),
+                "conditions": {"ambientTemperature": as_float(op.get("ambientTemperature", 25.0))},
+                "excitationsPerWinding": exc,
+            })
 
         return op_list
 
@@ -611,7 +615,11 @@ class SingleSwitchForwardCalc(TopologyCalculator):
             exc.append(self._make_rectangular_excitation(
                 "Demagnetization", freq, i_mag_pp, i_mag_pp / 2, vin, vin * (1 - d) / 2, 1 - d))
 
-            op_list.append({"excitationsPerWinding": exc})
+            op_list.append({
+                "name": op.get("name", f"Operating Point {len(op_list)+1}"),
+                "conditions": {"ambientTemperature": as_float(op.get("ambientTemperature", 25.0))},
+                "excitationsPerWinding": exc,
+            })
 
         return op_list
 
@@ -788,7 +796,11 @@ class ActiveClampForwardCalc(TopologyCalculator):
                 name = "Secondary" if j == 0 else f"Secondary {j + 1}"
                 exc.append(self._make_rectangular_excitation(
                     name, freq, iout_j * 0.3, iout_j, vout_j, vout_j * d / 2, d))
-            op_list.append({"excitationsPerWinding": exc})
+            op_list.append({
+                "name": op.get("name", f"Operating Point {len(op_list)+1}"),
+                "conditions": {"ambientTemperature": as_float(op.get("ambientTemperature", 25.0))},
+                "excitationsPerWinding": exc,
+            })
         return op_list
 
     def build_waveform_preview(self, design_reqs, operating_point, fsw):
@@ -937,7 +949,11 @@ class FlybackCalc(TopologyCalculator):
                     "name": f"Secondary {j + 1}" if j > 0 else "Secondary",
                     "frequency": as_float(op.get("switchingFrequency", 200e3))
                 })
-            op_list.append({"excitationsPerWinding": exc_per_winding})
+            op_list.append({
+                "name": op.get("name", f"Operating Point {len(op_list)+1}"),
+                "conditions": {"ambientTemperature": as_float(op.get("ambientTemperature", 25.0))},
+                "excitationsPerWinding": exc_per_winding,
+            })
         return op_list
 
     def build_operating_points(self, converter, design_reqs):
@@ -978,7 +994,11 @@ class FlybackCalc(TopologyCalculator):
                 exc.append(self._make_triangular_excitation(
                     name, freq, i_sec_pp, i_sec_offset, v_sec_pp, v_sec_offset, 1 - d))
 
-            op_list.append({"excitationsPerWinding": exc})
+            op_list.append({
+                "name": op.get("name", f"Operating Point {len(op_list)+1}"),
+                "conditions": {"ambientTemperature": as_float(op.get("ambientTemperature", 25.0))},
+                "excitationsPerWinding": exc,
+            })
 
         return op_list
 
@@ -1146,7 +1166,11 @@ class PushPullCalc(TopologyCalculator):
                 name = "Secondary" if j == 0 else f"Secondary {j + 1}"
                 exc.append(self._make_rectangular_excitation(
                     name, freq, iout_j * 0.3, iout_j, vout_j, vout_j * d / 2, d))
-            op_list.append({"excitationsPerWinding": exc})
+            op_list.append({
+                "name": op.get("name", f"Operating Point {len(op_list)+1}"),
+                "conditions": {"ambientTemperature": as_float(op.get("ambientTemperature", 25.0))},
+                "excitationsPerWinding": exc,
+            })
         return op_list
 
     def build_waveform_preview(self, design_reqs, operating_point, fsw):
@@ -1280,7 +1304,11 @@ class BuckCalc(TopologyCalculator):
             v_pp = vin - vout
             exc = [self._make_triangular_excitation(
                 "Inductor", freq, i_ripple, iout, v_pp, (vin - vout) * d / 2, d)]
-            op_list.append({"excitationsPerWinding": exc})
+            op_list.append({
+                "name": op.get("name", f"Operating Point {len(op_list)+1}"),
+                "conditions": {"ambientTemperature": as_float(op.get("ambientTemperature", 25.0))},
+                "excitationsPerWinding": exc,
+            })
         return op_list
 
     def build_waveform_preview(self, design_reqs, operating_point, fsw):
@@ -1393,7 +1421,11 @@ class BoostCalc(TopologyCalculator):
             # Boost inductor current ripple around average input current
             exc = [self._make_triangular_excitation(
                 "Inductor", freq, i_ripple, iin, vin, vin * d / 2, d)]
-            op_list.append({"excitationsPerWinding": exc})
+            op_list.append({
+                "name": op.get("name", f"Operating Point {len(op_list)+1}"),
+                "conditions": {"ambientTemperature": as_float(op.get("ambientTemperature", 25.0))},
+                "excitationsPerWinding": exc,
+            })
         return op_list
 
     def build_waveform_preview(self, design_reqs, operating_point, fsw):
@@ -1554,7 +1586,11 @@ class IsolatedBuckCalc(TopologyCalculator):
                 i_sec_ripple = iout_j * 0.3
                 exc.append(self._make_triangular_excitation(
                     name, freq, i_sec_ripple, iout_j, vout_j, vout_j * d / 2, d))
-            op_list.append({"excitationsPerWinding": exc})
+            op_list.append({
+                "name": op.get("name", f"Operating Point {len(op_list)+1}"),
+                "conditions": {"ambientTemperature": as_float(op.get("ambientTemperature", 25.0))},
+                "excitationsPerWinding": exc,
+            })
         return op_list
 
     def build_waveform_preview(self, design_reqs, operating_point, fsw):
@@ -1729,7 +1765,11 @@ class IsolatedBuckBoostCalc(TopologyCalculator):
                 i_sec_offset = iout_j
                 exc.append(self._make_triangular_excitation(
                     name, freq, i_sec_pp, i_sec_offset, vout_j, vout_j * (1 - d) / 2, 1 - d))
-            op_list.append({"excitationsPerWinding": exc})
+            op_list.append({
+                "name": op.get("name", f"Operating Point {len(op_list)+1}"),
+                "conditions": {"ambientTemperature": as_float(op.get("ambientTemperature", 25.0))},
+                "excitationsPerWinding": exc,
+            })
         return op_list
 
     def build_waveform_preview(self, design_reqs, operating_point, fsw):

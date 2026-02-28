@@ -365,9 +365,31 @@ def build_mas_inputs(config):
             if topology_key in TOPOLOGY_MAP:
                 design_req["topology"] = TOPOLOGY_MAP[topology_key]
 
+        # MATLAB jsonencode converts single-element arrays to dicts — normalize
+        # all MAS fields that must be arrays per the schema
+        tr = design_req.get("turnsRatios")
+        if isinstance(tr, dict):
+            design_req["turnsRatios"] = [tr]
+        ops_mas = config["operating_points_mas"]
+        if isinstance(ops_mas, dict):
+            ops_mas = [ops_mas]
+        # Normalize each operating point: fix single-element arrays and inject
+        # required MAS fields that the topology calculator omits
+        for i, op in enumerate(ops_mas):
+            if isinstance(op, dict):
+                # excitationsPerWinding must be array
+                epw = op.get("excitationsPerWinding")
+                if isinstance(epw, dict):
+                    op["excitationsPerWinding"] = [epw]
+                # process_inputs() requires 'name' and 'conditions' on each OP
+                if "name" not in op:
+                    op["name"] = f"Operating Point {i+1}"
+                if "conditions" not in op:
+                    op["conditions"] = {"ambientTemperature": 25.0}
+
         return {
             "designRequirements": design_req,
-            "operatingPoints": config["operating_points_mas"],
+            "operatingPoints": ops_mas,
         }
 
     dr = config.get("design_requirements", {})

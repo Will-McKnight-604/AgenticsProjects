@@ -317,6 +317,10 @@ def call_pyopenmagnetics_adviser(mas_inputs, max_results=5, core_mode='STANDARD_
         # Check if MAS operating points already have waveform excitation data
         # (produced by generate_om_topology.py's build_operating_points())
         mas_op_points = mas_inputs['inputs']['operatingPoints']
+        # MATLAB jsonencode converts single-element arrays to dicts — normalize to list
+        if isinstance(mas_op_points, dict):
+            mas_op_points = [mas_op_points]
+            mas_inputs['inputs']['operatingPoints'] = mas_op_points
         has_excitations = (
             isinstance(mas_op_points, list) and
             len(mas_op_points) > 0 and
