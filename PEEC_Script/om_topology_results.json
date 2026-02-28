@@ -1,0 +1,162 @@
+{
+  "status": "OK",
+  "topology": "two_switch_forward",
+  "topology_display": "Two-Switch Forward Converter",
+  "design_mode": "auto",
+  "computed": {
+    "Lm_uH": 3552.631578947368,
+    "Lout_uH": 12.719298245614036,
+    "turns_ratios": [
+      7.894736842105263
+    ],
+    "ns_np": 0.12666666666666668,
+    "np_ns": 7.894736842105263,
+    "n_windings": 2,
+    "duty_nom": 0.3103448275862069,
+    "duty_min_vin": 0.44999999999999996,
+    "duty_max_vin": 0.23684210526315788,
+    "i_pri_rms": 0.35282114253639857,
+    "i_sec_rms": [
+      2.785430072655778
+    ],
+    "i_mag_peak": 0.03166666666666667,
+    "i_mag_pp": 0.06333333333333334,
+    "pin_nom": 27.77777777777778,
+    "pout_nom": 25,
+    "vin_nom": 145.0,
+    "fsw_hz": 200000.0
+  },
+  "mas_inputs": {
+    "designRequirements": {
+      "topology": "two-switch-forward",
+      "magnetizingInductance": {
+        "nominal": 0.0035526315789473676
+      },
+      "turnsRatios": [
+        {
+          "nominal": 7.894736842105263
+        }
+      ]
+    },
+    "operatingPoints": [
+      {
+        "excitationsPerWinding": [
+          {
+            "name": "Primary",
+            "frequency": 200000.0,
+            "current": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 0.6966666666666668,
+                "offset": 0.3483333333333334,
+                "dutyCycle": 0.3103448275862069
+              }
+            },
+            "voltage": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 145.0,
+                "offset": 22.5,
+                "dutyCycle": 0.3103448275862069
+              }
+            }
+          },
+          {
+            "name": "Secondary",
+            "frequency": 200000.0,
+            "current": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 1.5,
+                "offset": 5.0,
+                "dutyCycle": 0.3103448275862069
+              }
+            },
+            "voltage": {
+              "processed": {
+                "label": "Rectangular",
+                "peakToPeak": 5.0,
+                "offset": 0.7758620689655172,
+                "dutyCycle": 0.3103448275862069
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "waveforms_preview": [
+    [
+      {
+        "winding_name": "Primary",
+        "voltage": {
+          "time": [
+            0.0,
+            1.5517241379310346e-06,
+            1.5517241379310346e-06,
+            5e-06
+          ],
+          "data": [
+            95.0,
+            95.0,
+            -50.0,
+            -50.0
+          ],
+          "label": "RECTANGULAR",
+          "unit": "V"
+        },
+        "current": {
+          "time": [
+            0.0,
+            1.5517241379310346e-06,
+            1.5517241379310346e-06,
+            5e-06
+          ],
+          "data": [
+            0.6966666666666668,
+            0.6966666666666668,
+            0.0,
+            0.0
+          ],
+          "label": "RECTANGULAR",
+          "unit": "A"
+        }
+      },
+      {
+        "winding_name": "Secondary",
+        "voltage": {
+          "time": [
+            0.0,
+            1.5517241379310346e-06,
+            1.5517241379310346e-06,
+            5e-06
+          ],
+          "data": [
+            3.2758620689655173,
+            3.2758620689655173,
+            -1.7241379310344827,
+            -1.7241379310344827
+          ],
+          "label": "SECONDARY_RECTANGULAR",
+          "unit": "V"
+        },
+        "current": {
+          "time": [
+            0.0,
+            1.5517241379310346e-06,
+            1.5517241379310346e-06,
+            5e-06
+          ],
+          "data": [
+            5.75,
+            5.75,
+            4.25,
+            4.25
+          ],
+          "label": "RECTANGULAR",
+          "unit": "A"
+        }
+      }
+    ]
+  ]
+}

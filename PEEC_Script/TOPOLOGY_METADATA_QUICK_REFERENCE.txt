@@ -1,0 +1,303 @@
+================================================================================
+TOPOLOGY METADATA SYSTEM - QUICK REFERENCE
+================================================================================
+
+FUNCTION REFERENCE
+==================
+
+1. topology_metadata()
+   Purpose: Load all topology and field definitions
+   Returns: struct with TOPOLOGY_DEFINITIONS and FIELD_METADATA
+   Caching: Persistent - initialized once per session
+
+   Example:
+     defs = topology_metadata();
+     all_topos = fieldnames(defs.TOPOLOGY_DEFINITIONS);
+     all_fields = fieldnames(defs.FIELD_METADATA);
+
+2. get_topology_metadata(topology_key)
+   Purpose: Get complete metadata for a topology
+   Input:  topology_key - string like 'two_switch_forward'
+   Returns: struct with .display_name, .mas_filename, .output_type,
+            .required_fields, .optional_fields
+
+   Example:
+     topo = get_topology_metadata('flyback');
+     fprintf('%s uses %s\n', topo.display_name, topo.mas_filename);
+
+3. get_field_metadata(field_name)
+   Purpose: Get metadata for a specific field
+   Input:  field_name - string like 'diodeVoltageDrop'
+   Returns: struct with .label, .unit, .default, .min, .max, .mas_path,
+            .optional, .tooltip
+
+   Example:
+     meta = get_field_metadata('switchingFrequency');
+     fprintf('%s [%s]: default=%g, range=[%g, %g]\n', ...
+         meta.label, meta.unit, meta.default, meta.min, meta.max);
+
+4. is_field_required(topology_key, field_name)
+   Purpose: Check if field is required for topology
+   Input:  topology_key, field_name - strings
+   Returns: boolean - true if required, false if optional
+
+   Example:
+     if is_field_required('buck', 'efficiency')
+         disp('Efficiency is required');
+     else
+         disp('Efficiency is optional');
+     end
+
+5. get_visible_fields_for_topology(topology_key)
+   Purpose: Get all fields for a topology (required + optional)
+   Input:  topology_key - string
+   Returns: [required_fields, optional_fields] - cell arrays
+
+   Example:
+     [req, opt] = get_visible_fields_for_topology('two_switch_forward');
+     disp(req);  % Lists all required fields
+
+6. get_topology_output_type(topology_key)
+   Purpose: Check if topology supports single or multi output
+   Input:  topology_key - string
+   Returns: 'single' or 'multi'
+
+   Example:
+     if strcmp(get_topology_output_type('buck'), 'single')
+         disp('Buck supports only single output');
+     end
+
+================================================================================
+TOPOLOGY DEFINITIONS
+================================================================================
+
+Single-Output Topologies:
+  - buck
+  - boost
+
+Multi-Output Topologies:
+  - two_switch_forward
+  - single_switch_forward
+  - active_clamp_forward
+  - flyback
+  - push_pull
+  - isolated_buck
+  - isolated_buck_boost
+
+================================================================================
+FIELD NAMING CONVENTIONS
+================================================================================
+
+Pattern 1: Nested Structures
+  inputVoltage_minimum   → inputs.designRequirements.inputVoltage.minimum
+  inputVoltage_maximum   → inputs.designRequirements.inputVoltage.maximum
+  inputVoltage_nominal   → inputs.designRequirements.inputVoltage.nominal
+
+Pattern 2: Direct Fields
+  diodeVoltageDrop       → inputs.designRequirements.diodeVoltageDrop
+  currentRippleRatio     → inputs.designRequirements.currentRippleRatio
+  efficiency             → inputs.designRequirements.efficiency
+
+Pattern 3: Indexed Multi-Output Fields
+  outputVoltages_0       → inputs.operatingPoints(1).outputVoltages(1)
+  outputVoltages_1       → inputs.operatingPoints(1).outputVoltages(2)
+  outputCurrents_0       → inputs.operatingPoints(1).outputCurrents(1)
+  outputCurrents_1       → inputs.operatingPoints(1).outputCurrents(2)
+
+Pattern 4: Operating Point Fields
+  switchingFrequency     → inputs.operatingPoints(1).switchingFrequency
+
+Pattern 5: Single Output Fields (Buck/Boost only)
+  outputVoltage          → inputs.designRequirements.outputVoltage
+  outputCurrent          → inputs.designRequirements.outputCurrent
+
+================================================================================
+REQUIRED FIELDS BY TOPOLOGY
+================================================================================
+
+Two-Switch Forward:
+  inputVoltage_minimum, inputVoltage_maximum, outputVoltages_0,
+  outputCurrents_0, switchingFrequency, diodeVoltageDrop, currentRippleRatio
+
+Single-Switch Forward:
+  inputVoltage_minimum, inputVoltage_maximum, outputVoltages_0,
+  outputCurrents_0, switchingFrequency, diodeVoltageDrop, currentRippleRatio
+
+Active Clamp Forward:
+  inputVoltage_minimum, inputVoltage_maximum, outputVoltages_0,
+  outputCurrents_0, switchingFrequency, diodeVoltageDrop, currentRippleRatio
+
+Flyback (NOTE: efficiency is REQUIRED):
+  inputVoltage_minimum, inputVoltage_maximum, outputVoltages_0,
+  outputCurrents_0, switchingFrequency, diodeVoltageDrop, currentRippleRatio,
+  efficiency
+
+Push-Pull:
+  inputVoltage_minimum, inputVoltage_maximum, outputVoltages_0,
+  outputCurrents_0, switchingFrequency, diodeVoltageDrop, currentRippleRatio
+
+Buck:
+  inputVoltage_minimum, inputVoltage_maximum, outputVoltage, outputCurrent,
+  switchingFrequency, diodeVoltageDrop
+
+Boost:
+  inputVoltage_minimum, inputVoltage_maximum, outputVoltage, outputCurrent,
+  switchingFrequency, diodeVoltageDrop
+
+Isolated Buck:
+  inputVoltage_minimum, inputVoltage_maximum, outputVoltages_0,
+  outputCurrents_0, switchingFrequency, diodeVoltageDrop
+
+Isolated Buck-Boost:
+  inputVoltage_minimum, inputVoltage_maximum, outputVoltages_0,
+  outputCurrents_0, switchingFrequency, diodeVoltageDrop
+
+================================================================================
+OPTIONAL FIELDS BY TOPOLOGY
+================================================================================
+
+All Forward Topologies (Two-Switch, Single-Switch, Active Clamp):
+  inputVoltage_nominal, efficiency, maximumSwitchCurrent, maximumDutyCycle
+
+Flyback:
+  inputVoltage_nominal, maximumDutyCycle, maximumDrainSourceVoltage,
+  maximumSwitchCurrent
+
+Push-Pull:
+  inputVoltage_nominal, efficiency, dutyCycle, maximumSwitchCurrent,
+  maximumDrainSourceVoltage
+
+Buck:
+  currentRippleRatio, maximumSwitchCurrent, efficiency, inputVoltage_nominal
+
+Boost:
+  currentRippleRatio, maximumSwitchCurrent, efficiency, inputVoltage_nominal
+
+Isolated Buck:
+  currentRippleRatio, maximumSwitchCurrent, efficiency, inputVoltage_nominal
+
+Isolated Buck-Boost:
+  currentRippleRatio, maximumSwitchCurrent, efficiency, inputVoltage_nominal
+
+================================================================================
+FIELD DEFAULTS
+================================================================================
+
+Input Voltage:
+  inputVoltage_minimum:    100 V
+  inputVoltage_maximum:    190 V
+  inputVoltage_nominal:    [] (empty, optional)
+
+Output (Multi-output):
+  outputVoltages_0:        5 V
+  outputVoltages_1/2/3:    5 V (optional)
+  outputCurrents_0:        5 A
+  outputCurrents_1/2/3:    5 A (optional)
+
+Output (Single-output):
+  outputVoltage:           5 V
+  outputCurrent:           5 A
+
+Control:
+  switchingFrequency:      200 kHz
+  diodeVoltageDrop:        0.7 V
+  currentRippleRatio:      30 %
+  dutyCycle:               [] (empty, optional)
+  maximumDutyCycle:        [] (empty, optional)
+
+Constraints:
+  efficiency:              90 % (optional)
+  maximumSwitchCurrent:    [] (empty, optional)
+  maximumDrainSourceVoltage: [] (empty, optional)
+
+================================================================================
+COMMON USAGE PATTERNS
+================================================================================
+
+Pattern 1: Build GUI Form
+  topo = get_topology_metadata(selected_topology);
+  [req, opt] = get_visible_fields_for_topology(selected_topology);
+  for i=1:length(req)
+      field_name = req{i};
+      meta = get_field_metadata(field_name);
+      % Create UI control: meta.label, meta.unit, meta.default, meta.min, meta.max
+  end
+
+Pattern 2: Validate User Input
+  topology = 'two_switch_forward';
+  [req, opt] = get_visible_fields_for_topology(topology);
+  for i=1:length(req)
+      field = req{i};
+      if ~isfield(user_data, field)
+          error('Missing required field: %s', field);
+      end
+  end
+
+Pattern 3: Get MAS Path for Field
+  meta = get_field_metadata('diodeVoltageDrop');
+  mas_path = meta.mas_path;
+  % Use mas_path to set value in MAS structure
+
+Pattern 4: Check Multi vs Single Output
+  output_type = get_topology_output_type(topology);
+  if strcmp(output_type, 'multi')
+      max_outputs = 4;
+  else
+      max_outputs = 1;
+  end
+
+Pattern 5: Handle Optional Fields
+  meta = get_field_metadata('efficiency');
+  if meta.optional && isempty(user_value)
+      % Skip this field in output
+  else
+      % Include this field in output
+  end
+
+================================================================================
+FIELD CONSTRAINTS
+================================================================================
+
+All numeric fields have min/max ranges:
+  inputVoltage:      5-1000 V
+  outputVoltages:    0.1-1000 V
+  outputCurrents:    0.1-1000 A
+  switchingFrequency: 10-10000 kHz
+  diodeVoltageDrop:  0.3-1.5 V
+  currentRippleRatio: 5-100 %
+  efficiency:        50-99 %
+  maximumSwitchCurrent: 0.1-1000 A
+  maximumDutyCycle:  1-99 %
+  dutyCycle:         1-99 %
+  maximumDrainSourceVoltage: 1-10000 V
+
+================================================================================
+ERROR HANDLING
+================================================================================
+
+Invalid topology:
+  try
+      topo = get_topology_metadata('invalid');
+  catch ME
+      % Error: Unknown topology "invalid". Valid options: two_switch_forward, ...
+  end
+
+Invalid field:
+  try
+      meta = get_field_metadata('invalid');
+  catch ME
+      % Error: Unknown field "invalid". Valid options: inputVoltage_minimum, ...
+  end
+
+================================================================================
+PERFORMANCE NOTES
+================================================================================
+
+- All functions use persistent caching
+- First call initializes cache from topology_metadata()
+- Subsequent calls are O(1) lookups
+- Memory overhead: ~30KB for all topology and field definitions
+- No file I/O after initialization
+- Thread-safe within single MATLAB session
+
+================================================================================

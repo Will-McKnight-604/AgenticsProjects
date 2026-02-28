@@ -1,0 +1,412 @@
+================================================================================
+TOPOLOGY METADATA SYSTEM - FILE INDEX
+================================================================================
+
+OVERVIEW
+========
+
+The topology metadata system provides a centralized registry for all 9 converter
+topologies and their associated field requirements, constraints, and display
+properties.
+
+This system is used by the GUI (topology_wizard.m) to:
+  - Define topology-specific field requirements
+  - Manage field visibility and constraints
+  - Generate GUI controls dynamically
+  - Map fields to MAS JSON structure
+  - Validate user inputs
+
+QUICK LINKS
+===========
+
+Start Here:
+  1. Read TOPOLOGY_METADATA_QUICK_REFERENCE.txt (11 KB)
+     -> Quick API reference, patterns, field definitions
+
+  2. Run test_topology_metadata.m
+     -> Verify installation and see examples
+
+  3. Copy code from TOPOLOGY_METADATA_EXAMPLES.m
+     -> Real-world usage patterns
+
+Complete Reference:
+  1. TOPOLOGY_METADATA_README.md (13 KB)
+     -> Complete guide with all details
+
+Integration Guide:
+  1. TOPOLOGY_METADATA_IMPLEMENTATION_SUMMARY.txt
+     -> Project overview, integration checklist
+
+================================================================================
+CORE FUNCTIONS (6 FILES - 7 KB TOTAL)
+================================================================================
+
+File: topology_metadata.m (14 KB, 387 lines)
+Purpose: Central registry of all topology and field definitions
+Key Content:
+  - TOPOLOGY_DEFINITIONS struct with all 9 topologies
+  - FIELD_METADATA struct with all 27 fields
+  - Persistent caching for O(1) performance
+Usage: Internal - called by getter functions via persistent cache
+
+File: get_topology_metadata.m (1.6 KB, 50 lines)
+Purpose: Get complete metadata for a specific topology
+Signature: topo_meta = get_topology_metadata(topology_key)
+Input: topology_key - string like 'two_switch_forward'
+Returns: struct with:
+  - display_name: 'Two-Switch Forward'
+  - mas_filename: 'forward.json'
+  - output_type: 'multi' or 'single'
+  - required_fields: cell array
+  - optional_fields: cell array
+Example:
+  topo = get_topology_metadata('flyback');
+  disp(topo.display_name);  % 'Flyback'
+
+File: get_field_metadata.m (1.4 KB, 51 lines)
+Purpose: Get metadata for a specific field
+Signature: field_meta = get_field_metadata(field_name)
+Input: field_name - string like 'switchingFrequency'
+Returns: struct with:
+  - label: 'Switching Frequency'
+  - unit: 'kHz'
+  - data_type: 'number'
+  - default: 200
+  - min: 10
+  - max: 10000
+  - tooltip: Help text
+  - mas_path: 'inputs.operatingPoints(1).switchingFrequency'
+  - optional: false
+Example:
+  meta = get_field_metadata('diodeVoltageDrop');
+  fprintf('Range: [%g, %g] %s\n', meta.min, meta.max, meta.unit);
+
+File: is_field_required.m (1.4 KB, 50 lines)
+Purpose: Check if a field is required for a given topology
+Signature: required = is_field_required(topology_key, field_name)
+Input: topology_key, field_name - strings
+Returns: boolean - true if required, false if optional
+Example:
+  if is_field_required('flyback', 'efficiency')
+      disp('Efficiency is REQUIRED for flyback');
+  end
+
+File: get_visible_fields_for_topology.m (1.5 KB, 48 lines)
+Purpose: Get all fields (required + optional) for a topology
+Signature: [req, opt] = get_visible_fields_for_topology(topology_key)
+Input: topology_key - string
+Returns:
+  - req: cell array of required field names
+  - opt: cell array of optional field names
+Example:
+  [req, opt] = get_visible_fields_for_topology('two_switch_forward');
+  disp(req);  % Lists all required fields
+
+File: get_topology_output_type.m (1.4 KB, 45 lines)
+Purpose: Check if topology supports single or multi output
+Signature: output_type = get_topology_output_type(topology_key)
+Input: topology_key - string
+Returns: 'single' or 'multi'
+Example:
+  if strcmp(get_topology_output_type('buck'), 'single')
+      disp('Buck supports only single output');
+  end
+
+================================================================================
+TESTING (1 FILE - 6.3 KB)
+================================================================================
+
+File: test_topology_metadata.m (200+ lines, 6.3 KB)
+Purpose: Comprehensive test suite
+Test Categories:
+  1. Test get_topology_metadata() - All 9 topologies
+  2. Test get_field_metadata() - Sample fields
+  3. Test is_field_required() - Multiple test cases
+  4. Test get_visible_fields_for_topology() - Multiple topologies
+  5. Test get_topology_output_type() - All topologies
+  6. Test error handling - Invalid inputs
+  7. Test field metadata completeness - All 27 fields
+  8. Test topology metadata completeness - All 9 topologies
+
+Run Tests:
+  >> test_topology_metadata()
+
+Expected Output:
+  - PASS for all valid operations
+  - Caught expected errors for invalid inputs
+  - All metadata fields present
+  - All topologies defined
+
+================================================================================
+DOCUMENTATION (4 FILES - 42 KB TOTAL)
+================================================================================
+
+File: TOPOLOGY_METADATA_README.md (13 KB)
+Content:
+  - Complete overview and usage guide
+  - File structure and API reference
+  - All 9 topology definitions with field lists
+  - All 27 field definitions with constraints
+  - MAS path mapping reference
+  - Performance notes
+  - Integration guide for GUI
+  - Extension points for future development
+
+Read This For:
+  - Understanding the system architecture
+  - Complete reference of all topologies and fields
+  - How to integrate with GUI
+  - MAS JSON path mappings
+  - Performance characteristics
+
+File: TOPOLOGY_METADATA_QUICK_REFERENCE.txt (11 KB)
+Content:
+  - Quick function reference card
+  - Field naming conventions (5 patterns)
+  - Required/optional fields by each topology
+  - Field defaults and constraints
+  - Common usage patterns (5 patterns)
+  - Error handling examples
+  - Performance notes
+
+Read This For:
+  - Quick API reference
+  - Field naming patterns
+  - Topology field requirements
+  - Common usage patterns
+  - Error handling
+
+File: TOPOLOGY_METADATA_EXAMPLES.m (8.5 KB, 260+ lines)
+Content:
+  - 8 real-world code examples:
+    1. List all topologies
+    2. Show fields for topology
+    3. Check field requirements
+    4. Build design data from user input
+    5. Detect output capability
+    6. Create MAS structure from metadata
+    7. Generate GUI controls dynamically
+    8. Helper functions
+
+Use This For:
+  - Copy-paste ready code
+  - Understanding integration patterns
+  - Building similar functionality
+  - Testing before integration
+
+File: TOPOLOGY_METADATA_IMPLEMENTATION_SUMMARY.txt
+Content:
+  - Project overview and status
+  - Complete deliverables list
+  - Feature highlights
+  - Usage patterns
+  - MAS path mapping overview
+  - Field naming conventions
+  - Integration checklist
+  - Code statistics
+  - Quick start guide
+
+Use This For:
+  - Project overview
+  - Integration planning
+  - Understanding deliverables
+  - Verification checklist
+
+================================================================================
+TOPOLOGY REFERENCE
+================================================================================
+
+Single-Output Topologies (2):
+  [1] buck
+      - MAS: buck.json
+      - Output Type: single
+      - Required Fields: 6
+      - Optional Fields: 4
+
+  [2] boost
+      - MAS: boost.json
+      - Output Type: single
+      - Required Fields: 6
+      - Optional Fields: 4
+
+Multi-Output Topologies (7):
+  [3] two_switch_forward
+      - MAS: forward.json
+      - Output Type: multi
+      - Required Fields: 7
+      - Optional Fields: 4
+
+  [4] single_switch_forward
+      - MAS: forward.json
+      - Output Type: multi
+      - Required Fields: 7
+      - Optional Fields: 4
+
+  [5] active_clamp_forward
+      - MAS: forward.json
+      - Output Type: multi
+      - Required Fields: 7
+      - Optional Fields: 4
+
+  [6] flyback
+      - MAS: flyback.json
+      - Output Type: multi
+      - Required Fields: 8 (includes efficiency)
+      - Optional Fields: 4
+
+  [7] push_pull
+      - MAS: pushPull.json
+      - Output Type: multi
+      - Required Fields: 7
+      - Optional Fields: 5
+
+  [8] isolated_buck
+      - MAS: isolatedBuck.json
+      - Output Type: multi
+      - Required Fields: 6
+      - Optional Fields: 4
+
+  [9] isolated_buck_boost
+      - MAS: isolatedBuckBoost.json
+      - Output Type: multi
+      - Required Fields: 6
+      - Optional Fields: 4
+
+================================================================================
+FIELD REFERENCE
+================================================================================
+
+Input Voltage (3 fields):
+  - inputVoltage_minimum: [5-1000 V], default=100
+  - inputVoltage_maximum: [5-1000 V], default=190
+  - inputVoltage_nominal: [5-1000 V], default=[], optional
+
+Output Voltage/Current (10 fields):
+  Multi-output (indexed):
+    - outputVoltages_0: [0.1-1000 V], default=5
+    - outputVoltages_1: [0.1-1000 V], default=5, optional
+    - outputVoltages_2: [0.1-1000 V], default=5, optional
+    - outputVoltages_3: [0.1-1000 V], default=5, optional
+    - outputCurrents_0: [0.1-1000 A], default=5
+    - outputCurrents_1: [0.1-1000 A], default=5, optional
+    - outputCurrents_2: [0.1-1000 A], default=5, optional
+    - outputCurrents_3: [0.1-1000 A], default=5, optional
+  Single-output:
+    - outputVoltage: [0.1-1000 V], default=5
+    - outputCurrent: [0.1-1000 A], default=5
+
+Control Parameters (5 fields):
+  - switchingFrequency: [10-10000 kHz], default=200
+  - diodeVoltageDrop: [0.3-1.5 V], default=0.7
+  - currentRippleRatio: [5-100 %], default=30
+  - dutyCycle: [1-99 %], default=[], optional
+  - maximumDutyCycle: [1-99 %], default=[], optional
+
+Constraints (4 fields):
+  - efficiency: [50-99 %], default=90, optional
+  - maximumSwitchCurrent: [0.1-1000 A], default=[], optional
+  - maximumDrainSourceVoltage: [1-10000 V], default=[], optional
+
+See TOPOLOGY_METADATA_QUICK_REFERENCE.txt for detailed field properties.
+
+================================================================================
+QUICK START
+================================================================================
+
+1. ADD TO PATH
+   Copy all .m files to your MATLAB path
+
+2. RUN TESTS
+   >> test_topology_metadata()
+
+3. READ QUICK REFERENCE
+   Edit -> TOPOLOGY_METADATA_QUICK_REFERENCE.txt
+
+4. COPY EXAMPLES
+   Edit -> TOPOLOGY_METADATA_EXAMPLES.m
+   Select example and adapt for your use
+
+5. INTEGRATE
+   Use patterns from examples to integrate with topology_wizard.m
+
+================================================================================
+COMMON TASKS
+================================================================================
+
+Task: Get all fields for a topology
+  [req, opt] = get_visible_fields_for_topology('two_switch_forward');
+
+Task: Check if field is required
+  required = is_field_required('flyback', 'efficiency');
+
+Task: Get field properties for UI
+  meta = get_field_metadata('switchingFrequency');
+  % Use: meta.label, meta.unit, meta.default, meta.min, meta.max
+
+Task: Check output capability
+  type = get_topology_output_type('buck');  % 'single'
+
+Task: Get MAS path for serialization
+  meta = get_field_metadata('diodeVoltageDrop');
+  mas_path = meta.mas_path;
+
+================================================================================
+FILE LOCATIONS
+================================================================================
+
+All files created in:
+  c:\Users\Will\proximity_loss\Claude\PEEC_Script\
+
+Core Functions:
+  - topology_metadata.m
+  - get_topology_metadata.m
+  - get_field_metadata.m
+  - is_field_required.m
+  - get_visible_fields_for_topology.m
+  - get_topology_output_type.m
+
+Testing:
+  - test_topology_metadata.m
+
+Documentation:
+  - TOPOLOGY_METADATA_README.md
+  - TOPOLOGY_METADATA_QUICK_REFERENCE.txt
+  - TOPOLOGY_METADATA_EXAMPLES.m
+  - TOPOLOGY_METADATA_IMPLEMENTATION_SUMMARY.txt
+  - TOPOLOGY_METADATA_INDEX.txt (this file)
+
+================================================================================
+SUPPORT & HELP
+================================================================================
+
+For Quick Answers:
+  1. TOPOLOGY_METADATA_QUICK_REFERENCE.txt
+  2. Run test_topology_metadata()
+
+For Detailed Information:
+  1. TOPOLOGY_METADATA_README.md
+  2. TOPOLOGY_METADATA_EXAMPLES.m
+
+For Integration Help:
+  1. TOPOLOGY_METADATA_IMPLEMENTATION_SUMMARY.txt
+  2. Copy code from TOPOLOGY_METADATA_EXAMPLES.m
+
+For Error Troubleshooting:
+  1. Check TOPOLOGY_METADATA_QUICK_REFERENCE.txt (error handling)
+  2. Run test_topology_metadata() to verify
+  3. Review function inputs match documented signatures
+
+================================================================================
+VERSION INFORMATION
+================================================================================
+
+Created: 2026-02-27
+Status: COMPLETE
+Total Files: 11
+Total Size: ~65 KB
+MATLAB Version: Compatible with Octave 10.3+
+Dependencies: None (self-contained)
+
+================================================================================
+END OF INDEX
+================================================================================

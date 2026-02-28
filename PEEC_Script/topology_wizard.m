@@ -1404,7 +1404,13 @@ function cb_compute_topology(~, ~)
     fig = gcbf();
     data = guidata(fig);
 
-    % Validate required fields
+    % Re-entrancy guard: drawnow() inside callbacks can cause pending events to fire,
+    % re-triggering this callback before the previous run completes. Return early if busy.
+    if isfield(data, 'computing') && data.computing
+        return;
+    end
+
+    % Validate required fields BEFORE setting computing=true so early returns don't block future runs
     c = data.converter;
     if c.vin_min <= 0 || c.vin_max <= 0 || c.vout <= 0 || c.iout <= 0 || c.fsw_khz <= 0
         errordlg('Please fill in all required converter specifications.', 'Missing Data');
@@ -1414,6 +1420,9 @@ function cb_compute_topology(~, ~)
         errordlg('Input voltage min must be less than max.', 'Invalid Data');
         return;
     end
+
+    data.computing = true;
+    guidata(fig, data);
 
     set(data.btn_compute, 'String', 'Computing...', 'Enable', 'off');
     drawnow();
@@ -1476,6 +1485,13 @@ function cb_compute_topology(~, ~)
                 end
             end
         end
+        % Merge topology-computed operating points (with waveform excitation data)
+        % These are produced by generate_om_topology.py's build_operating_points()
+        if isfield(data, 'mas_inputs') && isstruct(data.mas_inputs) && ...
+                isfield(data.mas_inputs, 'operatingPoints') && ~isempty(data.mas_inputs.operatingPoints)
+            mas_struct.inputs.operatingPoints = data.mas_inputs.operatingPoints;
+            fprintf('  - Added operatingPoints from topology (with waveform excitations)\n');
+        end
 
         % STEP 4: Write MAS JSON to config file
         script_dir = pwd();
@@ -1493,11 +1509,16 @@ function cb_compute_topology(~, ~)
         fprintf('[TOPOLOGY] Calling PyOpenMagnetics API...\n');
         py_script = 'call_pyopenmagnetics_api.py';
 
-        % Find Python - fallback chain
-        python_cmd = 'python';
-        venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
-        if exist(venv_python, 'file')
-            python_cmd = ['"' strrep(venv_python, '\', '/') '"'];
+        % Reuse the Python found during topology computation (already confirmed to have PyOpenMagnetics)
+        if isfield(data, 'found_python') && ~isempty(data.found_python)
+            python_cmd = data.found_python;
+            fprintf('[TOPOLOGY] Reusing confirmed Python: %s\n', python_cmd);
+        else
+            python_cmd = 'python';
+            venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
+            if exist(venv_python, 'file')
+                python_cmd = ['"' strrep(venv_python, '\', '/') '"'];
+            end
         end
 
         cmd = sprintf('%s "%s" "%s" "%s" 2>&1', python_cmd, py_script, config_file, results_file);
@@ -1505,29 +1526,9 @@ function cb_compute_topology(~, ~)
         [status, output] = system(cmd);
         fprintf('[TOPOLOGY] Python exit status: %d\n', status);
 
-        % Check for module import errors and try fallback
-        is_module_error = ~isempty(strfind(output, 'ModuleNotFoundError')) || ...
-                         ~isempty(strfind(output, 'ImportError')) || ...
-                         ~isempty(strfind(output, 'No module named')) || ...
-                         ~isempty(strfind(output, 'No module named'));
-
-        % Also check if results file contains an ImportError (written by Python script)
-        if status ~= 0 && exist(results_file, 'file')
-            try
-                fid_check = fopen(results_file, 'r', 'n', 'UTF-8');
-                raw_check = fread(fid_check, '*char')';
-                fclose(fid_check);
-                results_check = jsondecode(raw_check);
-                if isfield(results_check, 'stderr') && ~isempty(strfind(results_check.stderr, 'ImportError'))
-                    is_module_error = true;
-                end
-            catch
-                % Ignore errors during preliminary check
-            end
-        end
-
-        if status ~= 0 && is_module_error && ispc
-            fprintf('[TOPOLOGY] Standard python failed. Trying fallback chain...\n');
+        % Fallback chain if the confirmed Python still fails for any reason
+        if status ~= 0 && ispc
+            fprintf('[TOPOLOGY] API call failed. Trying fallback chain...\n');
 
             % Fallback 1: py launcher
             cmd_fb = sprintf('py "%s" "%s" "%s" 2>&1', py_script, config_file, results_file);
@@ -1598,10 +1599,25 @@ function cb_compute_topology(~, ~)
 
     catch err
         fprintf('[TOPOLOGY] ERROR: %s\n', err.message);
+        if isfield(err, 'stack') && ~isempty(err.stack)
+            for si = 1:length(err.stack)
+                fprintf('[TOPOLOGY]   at %s() line %d in %s\n', ...
+                    err.stack(si).name, err.stack(si).line, err.stack(si).file);
+            end
+        end
+        data.computing = false;
+        if ishandle(data.btn_compute)
+            set(data.btn_compute, 'String', 'Compute Requirements', 'Enable', 'on');
+        end
+        guidata(fig, data);
         errordlg(sprintf('Computation failed:\n\n%s', err.message), 'Error');
+        return;
     end
 
-    set(data.btn_compute, 'String', 'Compute Requirements', 'Enable', 'on');
+    data.computing = false;
+    if ishandle(data.btn_compute)
+        set(data.btn_compute, 'String', 'Compute Requirements', 'Enable', 'on');
+    end
     guidata(fig, data);
 end
 
@@ -1627,6 +1643,31 @@ function data = request_topology_compute(data)
     config.converter.fsw_hz = data.converter.fsw_khz * 1e3;
     config.output_file = strrep(output_path, '\', '/');
 
+    % Add a nominal operating point so generate_om_topology.py can build waveform excitations.
+    % Without operatingPoints, build_operating_points() returns [] and waveforms are blank.
+    nom_op = struct();
+    nom_op.switchingFrequency = data.converter.fsw_khz * 1e3;
+    if isfield(data, 'thermal') && isfield(data.thermal, 'ambient_temp')
+        nom_op.ambientTemperature = data.thermal.ambient_temp;
+    else
+        nom_op.ambientTemperature = 25;
+    end
+    if isfield(data.converter, 'output_voltages') && ~isempty(data.converter.output_voltages)
+        nom_op.outputVoltages = data.converter.output_voltages;
+    elseif isfield(data.converter, 'vout') && ~isempty(data.converter.vout)
+        nom_op.outputVoltages = [data.converter.vout];
+    else
+        nom_op.outputVoltages = [5.0];
+    end
+    if isfield(data.converter, 'output_currents') && ~isempty(data.converter.output_currents)
+        nom_op.outputCurrents = data.converter.output_currents;
+    elseif isfield(data.converter, 'iout') && ~isempty(data.converter.iout)
+        nom_op.outputCurrents = [data.converter.iout];
+    else
+        nom_op.outputCurrents = [1.0];
+    end
+    config.converter.operatingPoints = {nom_op};
+
     % Optional advanced params
     config.advanced = struct();
     config.advanced.max_duty = data.converter.max_duty;
@@ -1648,6 +1689,7 @@ function data = request_topology_compute(data)
     if exist(venv_python, 'file')
         python_cmd = ['"' strrep(venv_python, '\', '/') '"'];
     end
+    found_python = python_cmd;  % Track which Python ends up working
 
     cmd = sprintf('%s "%s" "%s" 2>&1', python_cmd, py_script, config_file);
     fprintf('[TOPOLOGY] Running: %s\n', cmd);
@@ -1668,6 +1710,7 @@ function data = request_topology_compute(data)
         if status_fb == 0
             status = status_fb;
             output = output_fb;
+            found_python = 'py';
             fprintf('[TOPOLOGY] Success using ''py'' launcher.\n');
         end
     end
@@ -1692,6 +1735,7 @@ function data = request_topology_compute(data)
             if status_alt == 0
                 status = status_alt;
                 output = output_alt;
+                found_python = ['"' p '"'];
                 fprintf('[TOPOLOGY] Success using alternative python.\n');
                 break;
             end
@@ -1702,19 +1746,27 @@ function data = request_topology_compute(data)
         error('Python script failed: %s', output);
     end
 
+    % Store the working Python path so the API call can reuse it (avoids re-discovery)
+    data.found_python = found_python;
+    fprintf('[TOPOLOGY] Python confirmed: %s\n', found_python);
+
     % Load results
+    fprintf('[DEBUG] Loading results from %s\n', output_path);
     fid = fopen(output_path, 'r', 'n', 'UTF-8');
     raw = fread(fid, '*char')';
     fclose(fid);
     results = jsondecode(raw);
+    fprintf('[DEBUG] jsondecode done, results class=%s, isstruct=%d\n', class(results), isstruct(results));
 
     if isfield(results, 'status') && ~strcmp(results.status, 'OK')
         error('Topology computation failed: %s', results.error);
     end
+    fprintf('[DEBUG] Status check passed\n');
 
     % Extract computed requirements
     if isfield(results, 'computed')
         comp = results.computed;
+        fprintf('[DEBUG] comp class=%s, isstruct=%d\n', class(comp), isstruct(comp));
         % Update requirements from computed values
         if isfield(comp, 'Lm_uH')
             data.requirements.Lm_uH = comp.Lm_uH;
@@ -1740,19 +1792,59 @@ function data = request_topology_compute(data)
         if isfield(comp, 'pout_nom')
             data.requirements.pout_nom = comp.pout_nom;
         end
+        % Waveform-related fields needed by build_recommendation_config()
+        if isfield(comp, 'i_mag_pp')
+            data.requirements.i_mag_pp = comp.i_mag_pp;
+        end
+        if isfield(comp, 'i_mag_pp_worst')
+            data.requirements.i_mag_pp_worst = comp.i_mag_pp_worst;
+        end
+        if isfield(comp, 'i_pri_rms')
+            data.requirements.i_pri_rms = comp.i_pri_rms;
+        end
+        if isfield(comp, 'i_pri_rms_worst')
+            data.requirements.i_pri_rms_worst = comp.i_pri_rms_worst;
+        end
+        if isfield(comp, 'i_sec_rms')
+            data.requirements.i_sec_rms = comp.i_sec_rms;
+        end
+        if isfield(comp, 'vin_nom')
+            data.requirements.vin_nom = comp.vin_nom;
+        end
+        if isfield(comp, 'fsw_hz')
+            data.requirements.fsw_hz = comp.fsw_hz;
+        end
+        % turns_ratios is an array in JSON; use first element as turns_ratio scalar
+        if ~isfield(comp, 'turns_ratio') && isfield(comp, 'turns_ratios')
+            tr = comp.turns_ratios;
+            if isnumeric(tr) && ~isempty(tr)
+                data.requirements.turns_ratio = tr(1);
+            end
+        end
+        fprintf('[DEBUG] Computed fields extracted OK\n');
     end
 
     % Store MAS inputs from Python for later use in recommendations
+    fprintf('[DEBUG] Checking mas_inputs...\n');
     if isfield(results, 'mas_inputs')
+        fprintf('[DEBUG] mas_inputs class=%s, isstruct=%d\n', class(results.mas_inputs), isstruct(results.mas_inputs));
         data.mas_inputs = results.mas_inputs;
+        fprintf('[DEBUG] mas_inputs stored OK\n');
     end
 
     % Update display
+    fprintf('[DEBUG] Calling update_topology_requirements_display...\n');
     data = update_topology_requirements_display(data, results);
+    fprintf('[DEBUG] update_topology_requirements_display done\n');
 
     % Plot waveforms if available
-    if isfield(data, 'ax_waveforms') && ~isempty(data.ax_waveforms)
-        if isfield(results, 'waveforms_preview')
+    fprintf('[DEBUG] Checking waveforms...\n');
+    has_ax = isfield(data, 'ax_waveforms') && ~isempty(data.ax_waveforms) && ishandle(data.ax_waveforms);
+    has_wf = isfield(results, 'waveforms_preview') && ~isempty(results.waveforms_preview);
+    fprintf('[DEBUG] has_ax=%d, has_wf=%d\n', has_ax, has_wf);
+    if has_ax
+        if has_wf
+            fprintf('[DEBUG] waveforms_preview class=%s, size=[%s]\n', class(results.waveforms_preview), num2str(size(results.waveforms_preview)));
             plot_topology_waveforms(data.ax_waveforms, ...
                                    results.waveforms_preview, ...
                                    data.topology_display);
@@ -2202,9 +2294,12 @@ end
 
 function data = update_topology_requirements_display(data, results)
     % Update requirements display from computed topology values
+    fprintf('[DEBUG] update_topology_requirements_display entered\n');
 
     fig = gcbf();
+    fprintf('[DEBUG] gcbf() returned class=%s, ishandle=%d\n', class(fig), ishandle(fig));
     r = data.requirements;
+    fprintf('[DEBUG] r class=%s, isstruct=%d\n', class(r), isstruct(r));
     c = data.converter;
 
     % Build display text
@@ -2212,6 +2307,7 @@ function data = update_topology_requirements_display(data, results)
     lines{end+1} = sprintf('--- %s Design ---', data.topology_display);
     lines{end+1} = '';
 
+    fprintf('[DEBUG] About to call isfield(results, topology_display), results class=%s, isstruct=%d\n', class(results), isstruct(results));
     if isfield(results, 'topology_display')
         lines{end+1} = sprintf('Topology: %s', results.topology_display);
         lines{end+1} = '';
@@ -2257,10 +2353,12 @@ function data = update_topology_requirements_display(data, results)
     end
     lines{end+1} = sprintf('Frequency = %g kHz', c.fsw_khz);
 
+    fprintf('[DEBUG] findobj for display text...\n');
     txt = findobj(fig, 'Style', 'text', '-regexp', 'String', '(computing|---.*Design)');
     if ~isempty(txt)
         set(txt(1), 'String', strjoin(lines, char(10)));
     end
+    fprintf('[DEBUG] update_topology_requirements_display done\n');
 end
 
 
@@ -3226,23 +3324,8 @@ end
 % ===============================================================
 
 function plot_topology_waveforms(ax, waveforms_preview, topology_name)
-    % Plot topology waveforms from waveforms_preview data (generated by Python)
-    %
-    % Args:
-    %   ax: axes handle to plot into
-    %   waveforms_preview: cell or struct array of winding data from Python
-    %   topology_name: display name of topology (e.g., 'Flyback Converter')
-    %
-    % Expected structure (from generate_om_topology.py):
-    %   waveforms_preview[i].winding_name = "Primary"
-    %   waveforms_preview[i].voltage.time = [t1, t2, ...] (in seconds)
-    %   waveforms_preview[i].voltage.data = [v1, v2, ...]
-    %   waveforms_preview[i].voltage.label = "RECTANGULAR" or "TRIANGULAR"
-    %   waveforms_preview[i].voltage.unit = "V"
-    %   waveforms_preview[i].current.time = [...]
-    %   waveforms_preview[i].current.data = [...]
-    %   waveforms_preview[i].current.label = "RECTANGULAR" or "TRIANGULAR"
-    %   waveforms_preview[i].current.unit = "A"
+    fprintf('[DEBUG] plot_topology_waveforms entered, class=%s, iscell=%d, isstruct=%d, size=[%s]\n', ...
+        class(waveforms_preview), iscell(waveforms_preview), isstruct(waveforms_preview), num2str(size(waveforms_preview)));
 
     if isempty(waveforms_preview)
         cla(ax);
@@ -3256,12 +3339,43 @@ function plot_topology_waveforms(ax, waveforms_preview, topology_name)
         return;
     end
 
-    % Convert to cell array if struct
+    % Unwrap nested JSON structure: Python generates [[w1, w2, ...]] (outer = op-points, inner = windings).
+    % jsondecode produces {[1×N struct]} — a 1-element cell containing a struct array.
+    % We only display one operating point, so extract the struct array and convert to cell array.
+    if iscell(waveforms_preview) && ~isempty(waveforms_preview)
+        first_op = waveforms_preview{1};
+        if isstruct(first_op)
+            % Convert 1×N struct array → 1×N cell array so each winding is accessible as {k}
+            n = numel(first_op);
+            tmp = cell(1, n);
+            for k = 1:n
+                tmp{k} = first_op(k);
+            end
+            waveforms_preview = tmp;
+        elseif iscell(first_op)
+            waveforms_preview = first_op;
+        end
+    end
+
+    % Convert struct array to cell array of individual structs
     if isstruct(waveforms_preview)
-        waveforms_preview = {waveforms_preview};
+        if numel(waveforms_preview) > 1
+            n = numel(waveforms_preview);
+            tmp = cell(1, n);
+            for k = 1:n
+                tmp{k} = waveforms_preview(k);
+            end
+            waveforms_preview = tmp;
+        else
+            waveforms_preview = {waveforms_preview};
+        end
     end
 
     n_windings = length(waveforms_preview);
+    fprintf('[DEBUG] After unwrap: n_windings=%d, iscell=%d\n', n_windings, iscell(waveforms_preview));
+    for dbg_k = 1:min(n_windings, 4)
+        fprintf('[DEBUG]   winding{%d} class=%s, isstruct=%d\n', dbg_k, class(waveforms_preview{dbg_k}), isstruct(waveforms_preview{dbg_k}));
+    end
     if n_windings == 0
         cla(ax);
         text(0.5, 0.5, 'No winding data available', ...
@@ -3281,7 +3395,32 @@ function plot_topology_waveforms(ax, waveforms_preview, topology_name)
     colors_v = [0.2 0.4 0.8; 0.8 0.2 0.2; 0.2 0.8 0.2; 0.8 0.8 0.2];  % voltage colors
     colors_i = [0.2 0.6 1.0; 1.0 0.2 0.2; 0.2 1.0 0.2; 1.0 1.0 0.2];  % current colors
 
-    % Plot each winding's voltage and current
+    % Determine period T from the first winding's voltage or current time array.
+    % The Python generator outputs one full period; we repeat for n_cycles.
+    n_cycles = 3;
+    T = 0;
+    for w = 1:n_windings
+        winding = waveforms_preview{w};
+        if isfield(winding, 'voltage') && isfield(winding.voltage, 'time')
+            t_arr = ensure_array(winding.voltage.time);
+            if ~isempty(t_arr) && max(t_arr) > 0
+                T = max(t_arr);
+                break;
+            end
+        end
+        if isfield(winding, 'current') && isfield(winding.current, 'time')
+            t_arr = ensure_array(winding.current.time);
+            if ~isempty(t_arr) && max(t_arr) > 0
+                T = max(t_arr);
+                break;
+            end
+        end
+    end
+    if T <= 0
+        T = 5e-6;  % fallback 5 us period
+    end
+
+    % Plot each winding's voltage and current for n_cycles cycles
     legend_handles = [];
     legend_labels = {};
 
@@ -3294,36 +3433,46 @@ function plot_topology_waveforms(ax, waveforms_preview, topology_name)
             winding_name = winding.winding_name;
         end
 
-        % Extract voltage data
+        % Extract voltage data and tile for n_cycles cycles
         if isfield(winding, 'voltage') && isfield(winding.voltage, 'time') && isfield(winding.voltage, 'data')
-            v_time = winding.voltage.time;
-            v_data = winding.voltage.data;
+            v_time = ensure_array(winding.voltage.time);
+            v_data = ensure_array(winding.voltage.data);
 
-            % Convert time and data to arrays if needed (jsondecode may return different types)
-            if ~isempty(v_time) && ~isempty(v_data)
-                v_time = ensure_array(v_time);
-                v_data = ensure_array(v_data);
+            if ~isempty(v_time) && ~isempty(v_data) && length(v_time) == length(v_data)
+                % Repeat waveform for n_cycles cycles by offsetting time
+                v_time_rep = [];
+                v_data_rep = [];
+                for c = 0:(n_cycles - 1)
+                    v_time_rep = [v_time_rep; v_time + c * T];
+                    v_data_rep = [v_data_rep; v_data];
+                end
 
                 hold(ax, 'on');
-                h_v = plot(ax, v_time, v_data, '-', 'Color', colors_v(min(w, size(colors_v, 1)), :), ...
+                h_v = plot(ax, v_time_rep * 1e6, v_data_rep, '-', ...
+                           'Color', colors_v(min(w, size(colors_v, 1)), :), ...
                            'LineWidth', 1.5, 'DisplayName', sprintf('%s Voltage', winding_name));
                 legend_handles = [legend_handles, h_v];
                 legend_labels = [legend_labels, {sprintf('%s Voltage', winding_name)}];
             end
         end
 
-        % Extract current data
+        % Extract current data and tile for n_cycles cycles
         if isfield(winding, 'current') && isfield(winding.current, 'time') && isfield(winding.current, 'data')
-            i_time = winding.current.time;
-            i_data = winding.current.data;
+            i_time = ensure_array(winding.current.time);
+            i_data = ensure_array(winding.current.data);
 
-            % Convert time and data to arrays if needed
-            if ~isempty(i_time) && ~isempty(i_data)
-                i_time = ensure_array(i_time);
-                i_data = ensure_array(i_data);
+            if ~isempty(i_time) && ~isempty(i_data) && length(i_time) == length(i_data)
+                % Repeat waveform for n_cycles cycles by offsetting time
+                i_time_rep = [];
+                i_data_rep = [];
+                for c = 0:(n_cycles - 1)
+                    i_time_rep = [i_time_rep; i_time + c * T];
+                    i_data_rep = [i_data_rep; i_data];
+                end
 
                 hold(ax, 'on');
-                h_i = plot(ax, i_time, i_data, '--', 'Color', colors_i(min(w, size(colors_i, 1)), :), ...
+                h_i = plot(ax, i_time_rep * 1e6, i_data_rep, '--', ...
+                           'Color', colors_i(min(w, size(colors_i, 1)), :), ...
                            'LineWidth', 1.5, 'DisplayName', sprintf('%s Current', winding_name));
                 legend_handles = [legend_handles, h_i];
                 legend_labels = [legend_labels, {sprintf('%s Current', winding_name)}];
@@ -3333,9 +3482,10 @@ function plot_topology_waveforms(ax, waveforms_preview, topology_name)
 
     % Format axes
     hold(ax, 'off');
-    xlabel(ax, 'Time (s)', 'FontSize', 9);
+    xlabel(ax, 'Time (\mus)', 'FontSize', 9);
     ylabel(ax, 'Voltage (V) / Current (A)', 'FontSize', 9);
-    title(ax, sprintf('%s - Waveforms', topology_name), 'FontSize', 10, 'FontWeight', 'bold');
+    title(ax, sprintf('%s - Waveforms (%d cycles)', topology_name, n_cycles), ...
+          'FontSize', 10, 'FontWeight', 'bold');
     grid(ax, 'on');
     grid(ax, 'minor');
     set(ax, 'XGrid', 'on', 'YGrid', 'on');

@@ -1,0 +1,36 @@
+{
+  "core_shape": "E 42/21/15",
+  "material": "N87",
+  "gapping": [
+    {
+      "type": "subtractive",
+      "length": 0.002
+    }
+  ],
+  "windings": [
+    {
+      "name": "Primary",
+      "wire_name": "Round 0.5 - Grade 1",
+      "wire_insulation": "tiw",
+      "num_turns": 15,
+      "num_parallels": 1,
+      "isolation_side": "primary"
+    },
+    {
+      "name": "Secondary",
+      "wire_name": "Round 0.5 - Grade 1",
+      "wire_insulation": "standard",
+      "num_turns": 10,
+      "num_parallels": 1,
+      "isolation_side": "secondary"
+    }
+  ],
+  "output_svg": "test_tiw_visualization.svg",
+  "plot_type": "magnetic",
+  "insulation_standard": "IEC 60664-1",
+  "insulation_class": "basic",
+  "allow_insulated_wire": true,
+  "allow_margin_tape": true,
+  "tape_thickness": 0.05e-3,
+  "tape_kv_per_mm": 1.8
+}

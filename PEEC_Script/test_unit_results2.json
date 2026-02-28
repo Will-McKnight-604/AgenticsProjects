@@ -1,0 +1,5 @@
+{
+  "status": "ERROR",
+  "error": "calculate_advised_magnetics(): incompatible function arguments. The following argument types are supported:\n    1. (inputs_json: json, max_results: typing.SupportsInt | typing.SupportsIndex, core_mode_json: json) -> json\n\nInvoked with: {'data': \"Exception: [json.exception.out_of_range.403] key 'designRequirements' not found\"}; kwargs: max_results=3, core_mode='STANDARD_CORES'",
+  "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\Will\\proximity_loss\\Claude\\PEEC_Script\\call_pyopenmagnetics_api.py\", line 129, in call_pyopenmagnetics_adviser\n    advised = pm.calculate_advised_magnetics(\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nTypeError: calculate_advised_magnetics(): incompatible function arguments. The following argument types are supported:\n    1. (inputs_json: json, max_results: typing.SupportsInt | typing.SupportsIndex, core_mode_json: json) -> json\n\nInvoked with: {'data': \"Exception: [json.exception.out_of_range.403] key 'designRequirements' not found\"}; kwargs: max_results=3, core_mode='STANDARD_CORES'\n"
+}

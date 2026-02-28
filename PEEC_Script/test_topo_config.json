@@ -1,0 +1,1 @@
+{"mode": "compute_topology", "topology": "two_switch_forward", "design_mode": "auto", "n_outputs": 1, "converter": {"vin_min": 100.0, "vin_max": 190.0, "vin_nom": 145.0, "vout": 5.0, "iout": 5.0, "fsw_hz": 200000.0, "fsw_khz": 200.0, "vd": 0.7, "efficiency": 0.92, "max_ripple": 30.0}}

@@ -146,6 +146,18 @@ function mas_struct = build_mas_structure(gui_data, topology_key)
     % Operating points is an array of structures
     mas_struct.inputs.operatingPoints = {operating_point};
 
+    % ===== STEP 7b: Operating Temperature =====
+    if isfield(gui_data, 'thermal') && isstruct(gui_data.thermal)
+        if isfield(gui_data.thermal, 'ambient_temp')
+            if isfield(gui_data.thermal, 'max_rise')
+                max_op_temp = gui_data.thermal.ambient_temp + gui_data.thermal.max_rise;
+            else
+                max_op_temp = gui_data.thermal.ambient_temp + 40;  % Default +40°C rise
+            end
+            mas_struct.inputs.designRequirements.operatingTemperature = struct('maximum', max_op_temp);
+        end
+    end
+
     % ===== STEP 8: Insulation Block (optional) =====
     if isfield(gui_data, 'insulation') && isstruct(gui_data.insulation)
         insulation = struct();
@@ -181,6 +193,18 @@ function mas_struct = build_mas_structure(gui_data, topology_key)
             insulation.altitude.minimum = 0;
             insulation.altitude.maximum = gui_data.insulation.altitude_max;
         end
+
+        % mainSupplyVoltage is required by PyOpenMagnetics insulation calculations
+        % (creepage/clearance rules depend on the mains voltage seen by primary insulation)
+        if isfield(gui_data.converter, 'vin_nom') && ~isempty(gui_data.converter.vin_nom) && gui_data.converter.vin_nom > 0
+            vin_nom_val = gui_data.converter.vin_nom;
+        else
+            vin_nom_val = (gui_data.converter.vin_min + gui_data.converter.vin_max) / 2;
+        end
+        insulation.mainSupplyVoltage = struct( ...
+            'nominal', vin_nom_val, ...
+            'minimum', gui_data.converter.vin_min, ...
+            'maximum', gui_data.converter.vin_max);
 
         insulation.wiringTechnology = 'Wound';
 

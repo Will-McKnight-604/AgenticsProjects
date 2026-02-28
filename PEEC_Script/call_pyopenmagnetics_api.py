@@ -141,6 +141,124 @@ def transform_mas_operating_points(mas_op_points):
     return transformed
 
 
+def _to_windows_path(path):
+    """
+    Convert an MSYS2 Unix-style path to a native Windows path.
+
+    MSYS2 bash mounts Windows drive letters as /<letter>/ (e.g. /c/Users/).
+    Native Windows Python processes do not understand these paths.
+    This function converts them to <Letter>:\\ form.
+
+    Examples:
+      /c/Users/Will/script.py  ->  C:\\Users\\Will\\script.py
+      /d/Projects/foo          ->  D:\\Projects\\foo
+      C:\\already\\windows     ->  C:\\already\\windows  (unchanged)
+      /usr/bin/python          ->  /usr/bin/python       (unchanged, not a drive path)
+    """
+    import re
+    if not isinstance(path, str):
+        return path
+    # Match MSYS2 drive-letter mount: /X/... where X is a single letter
+    m = re.match(r'^/([a-zA-Z])(/.*)$', path)
+    if m:
+        drive = m.group(1).upper()
+        rest = m.group(2).replace('/', '\\')
+        return f'{drive}:{rest}'
+    # Already a Windows path or a true Unix path — return as-is after normpath
+    return os.path.normpath(path)
+
+
+def _find_python_with_pyopenmagnetics(default_executable):
+    """
+    Find a Python executable that has PyOpenMagnetics installed.
+
+    On Windows with Octave's MSYS2 shell, sys.executable may be the MSYS2
+    Python 3.12 which lacks PyOpenMagnetics.  This function searches for a
+    native Windows Python 3.11 installation that has PyOpenMagnetics.
+
+    Strategy:
+      1. Check if default_executable itself has PyOpenMagnetics (quick import test).
+      2. On Windows, try 'where python' to find all Python executables and test each.
+      3. Try the Windows Python Launcher ('py -3.11') if available.
+      4. Fall back to default_executable if nothing better is found.
+
+    Returns the path to the best Python executable found.
+    """
+    import subprocess as _sp
+
+    def _has_pyopenmagnetics(py_path):
+        """Return True if py_path can import PyOpenMagnetics."""
+        try:
+            r = _sp.run(
+                [py_path, '-c', 'import PyOpenMagnetics; print("OK")'],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                env=os.environ.copy()  # Inherit full Windows env so DLLs can load
+            )
+            return r.returncode == 0 and 'OK' in r.stdout
+        except Exception:
+            return False
+
+    # 1. Try current executable first (fast path - avoids shell calls)
+    if _has_pyopenmagnetics(default_executable):
+        print(f"[API] Using sys.executable (has PyOpenMagnetics): {default_executable}",
+              file=sys.stderr)
+        return default_executable
+
+    print(f"[API] sys.executable lacks PyOpenMagnetics, searching for alternative...",
+          file=sys.stderr)
+
+    candidates = []
+
+    # 2. Windows / MSYS2: search for native Windows Python executables.
+    # MSYS2 Python has sys.platform='msys' and os.name='posix', but we are
+    # still running on Windows and can call native Windows tools via subprocess.
+    is_windows_host = (sys.platform in ('win32', 'msys', 'cygwin') or os.name == 'nt')
+    if is_windows_host:
+        # Use Windows 'where' command (available in cmd and MSYS2 bash) to find Python.
+        try:
+            r = _sp.run(['where', 'python'], capture_output=True, text=True, timeout=10)
+            if r.returncode == 0:
+                for line in r.stdout.splitlines():
+                    p = line.strip()
+                    # Convert MSYS2 path if needed
+                    p = _to_windows_path(p)
+                    if p and os.path.exists(p):
+                        # Skip MSYS2 / Octave bundled Python (usually in usr/bin or octave dir)
+                        p_lower = p.lower()
+                        if 'octave' in p_lower or ('usr' in p_lower and 'bin' in p_lower):
+                            continue
+                        if p not in candidates:
+                            candidates.append(p)
+        except Exception as exc:
+            print(f"[API] 'where python' failed: {exc}", file=sys.stderr)
+
+        # 3. Try Windows Python Launcher for Python 3.11 specifically
+        for py_ver in ('3.11', '3.10', '3.9'):
+            try:
+                r = _sp.run(['py', f'-{py_ver}', '-c', 'import sys; print(sys.executable)'],
+                            capture_output=True, text=True, timeout=10)
+                if r.returncode == 0:
+                    p = _to_windows_path(r.stdout.strip())
+                    if p and os.path.exists(p) and p not in candidates:
+                        candidates.insert(0, p)  # prefer specific version
+            except Exception:
+                pass
+
+    # Test candidates in order
+    for p in candidates:
+        if _has_pyopenmagnetics(p):
+            print(f"[API] Found Python with PyOpenMagnetics: {p}", file=sys.stderr)
+            return p
+        else:
+            print(f"[API] Skipping (no PyOpenMagnetics): {p}", file=sys.stderr)
+
+    # 4. Fall back to default
+    print(f"[API] No better Python found, using default: {default_executable}", file=sys.stderr)
+    return default_executable
+
+
 def call_pyopenmagnetics_adviser(mas_inputs, max_results=5, core_mode='STANDARD_CORES'):
     """
     Call PyOpenMagnetics adviser APIs via the generate_om_recommendations.py pipeline.
@@ -164,66 +282,98 @@ def call_pyopenmagnetics_adviser(mas_inputs, max_results=5, core_mode='STANDARD_
         dict with structure {status, data: [...], count}
     """
     import subprocess
-    import tempfile
 
     try:
         # Create a temporary config file for generate_om_recommendations.py
         print("[API] Delegating to generate_om_recommendations.py pipeline...", file=sys.stderr)
 
-        # Create temporary files first to get their paths
-        config_fh = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
-        config_path = config_fh.name
-        config_fh.close()
+        # Determine script directory using Windows-normalised path.
+        # __file__ may be an MSYS2 Unix path (e.g. /c/Users/...) when called via
+        # Octave's MSYS2 bash shell.  os.path.abspath() on MSYS2 Python returns the
+        # same Unix path, but subprocess children that are Windows Python binaries
+        # need genuine Windows paths.  We convert MSYS2 paths (/c/foo) to Windows
+        # paths (C:\foo) before passing them to subprocess.
+        raw_dir = os.path.dirname(os.path.abspath(__file__))
+        script_dir = _to_windows_path(raw_dir)
+        # Use forward slashes for path joining to keep paths consistent across
+        # MSYS2 Python (posixpath) and native Windows Python (ntpath).
+        gen_script = script_dir.rstrip('/\\') + '/' + 'generate_om_recommendations.py'
 
-        result_fh = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
-        result_path = result_fh.name
-        result_fh.close()
+        if not os.path.exists(gen_script):
+            return {
+                "status": "ERROR",
+                "error": f"generate_om_recommendations.py not found at {gen_script}",
+                "suggestion": "Ensure generate_om_recommendations.py is in the same directory"
+            }
 
-        # Transform MAS operating points to the format generate_om_recommendations.py expects
-        transformed_op_points = transform_mas_operating_points(mas_inputs['inputs']['operatingPoints'])
+        # Place temp files in script_dir (a Windows-accessible path) rather than the
+        # MSYS2 /tmp directory.  /tmp files are inaccessible to native Windows Python
+        # processes spawned as subprocesses.
+        import uuid
+        uid = uuid.uuid4().hex[:8]
+        config_path = script_dir.rstrip('/\\') + '/' + f'_api_config_{uid}.json'
+        result_path = script_dir.rstrip('/\\') + '/' + f'_api_result_{uid}.json'
+
+        # Check if MAS operating points already have waveform excitation data
+        # (produced by generate_om_topology.py's build_operating_points())
+        mas_op_points = mas_inputs['inputs']['operatingPoints']
+        has_excitations = (
+            isinstance(mas_op_points, list) and
+            len(mas_op_points) > 0 and
+            isinstance(mas_op_points[0], dict) and
+            'excitationsPerWinding' in mas_op_points[0]
+        )
 
         # Build config dict that generate_om_recommendations.py expects
         config = {
             "mode": "recommend",
             "design_requirements": mas_inputs['inputs']['designRequirements'],
-            "operating_points": transformed_op_points,
             "max_results": max_results,
             "weights": {"COST": 1.0, "LOSSES": 1.0, "DIMENSIONS": 1.0},
             "cores_in_stock": False,
             "output_file": result_path
         }
 
+        if has_excitations:
+            # Pass pre-built MAS operating points directly (waveform data from topology calculator)
+            print("[API] Using pre-built MAS operating points with waveform excitation data", file=sys.stderr)
+            config["operating_points_mas"] = mas_op_points
+        else:
+            # Transform MAS operating points (adds placeholder waveforms when none present)
+            print("[API] No waveform data in operating points; using placeholder excitations", file=sys.stderr)
+            config["operating_points"] = transform_mas_operating_points(mas_op_points)
+
         # Write config to temp file
         with open(config_path, 'w') as config_fh:
             json.dump(config, config_fh)
 
         try:
-            # Determine script directory and path to generate_om_recommendations.py
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            gen_script = os.path.join(script_dir, 'generate_om_recommendations.py')
+            # Find the best Python executable that has PyOpenMagnetics.
+            # Priority: (1) sys.executable if it has PyOpenMagnetics,
+            #           (2) Windows Python finder via 'where python' / 'py' launcher,
+            #           (3) sys.executable as last resort.
+            py_exec = _find_python_with_pyopenmagnetics(sys.executable)
 
-            if not os.path.exists(gen_script):
-                return {
-                    "status": "ERROR",
-                    "error": f"generate_om_recommendations.py not found at {gen_script}",
-                    "suggestion": "Ensure generate_om_recommendations.py is in the same directory"
-                }
-
-            # Run generate_om_recommendations.py
-            print(f"[API] Running: python {gen_script} {config_path}", file=sys.stderr)
+            print(f"[API] Running: {py_exec} {gen_script} {config_path}", file=sys.stderr)
             result = subprocess.run(
-                [sys.executable, gen_script, config_path],
+                [py_exec, gen_script, config_path],
                 capture_output=True,
                 text=True,
                 timeout=300  # 5 minute timeout
             )
 
             if result.returncode != 0:
+                # Forward subprocess output so MATLAB can see the actual error
+                print(f"[API] generate_om_recommendations.py failed (exit {result.returncode}):", file=sys.stderr)
+                if result.stderr:
+                    print(f"[API] stderr: {result.stderr[:1000]}", file=sys.stderr)
+                if result.stdout:
+                    print(f"[API] stdout: {result.stdout[:500]}", file=sys.stderr)
                 return {
                     "status": "ERROR",
                     "error": f"generate_om_recommendations.py failed with exit code {result.returncode}",
                     "stdout": result.stdout[:500],
-                    "stderr": result.stderr[:500]
+                    "stderr": result.stderr[:1000]
                 }
 
             # Load the results from the output file that generate_om_recommendations.py created

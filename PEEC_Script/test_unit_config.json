@@ -1,0 +1,29 @@
+{
+  "inputs": {
+    "designRequirements": {
+      "topology": "two-switch-forward",
+      "inputVoltage": {
+        "minimum": 100,
+        "nominal": 145,
+        "maximum": 190
+      },
+      "diodeVoltageDrop": 0.7,
+      "currentRippleRatio": 0.3,
+      "efficiency": 0.9
+    },
+    "operatingPoints": [
+      {
+        "switchingFrequency": 200000,
+        "ambientTemperature": 25,
+        "outputVoltages": [
+          5.0
+        ],
+        "outputCurrents": [
+          5.0
+        ]
+      }
+    ]
+  },
+  "magnetic": {},
+  "outputs": {}
+}

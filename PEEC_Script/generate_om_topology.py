@@ -158,6 +158,105 @@ class TopologyCalculator:
             },
         }
 
+    def _create_rectangular_waveform(self, peak_to_peak, frequency, duty_cycle, offset):
+        """Create rectangular waveform time/data arrays.
+
+        Normalized time: [0, duty_cycle, duty_cycle, 1.0]
+        Data:            [peak, peak, 0, 0]
+        Physical time is computed from frequency.
+        """
+        if frequency <= 0:
+            frequency = 200e3
+        period = 1.0 / frequency
+
+        # Normalized time points
+        t_norm = [0.0, duty_cycle, duty_cycle, 1.0]
+
+        # Voltage data: high during on-time, low during off-time
+        data = [
+            offset + peak_to_peak / 2,  # high at t=0
+            offset + peak_to_peak / 2,  # high at t=D
+            offset - peak_to_peak / 2,  # low at t=D+
+            offset - peak_to_peak / 2,  # low at t=1
+        ]
+
+        # Convert to physical time
+        time = [t * period for t in t_norm]
+
+        return {"time": time, "data": data}
+
+    def _create_triangular_waveform(self, peak_to_peak, frequency, duty_cycle, offset):
+        """Create triangular waveform time/data arrays (symmetric ramp).
+
+        Normalized time: [0, duty_cycle, 1.0]
+        Data:            [min, max, min]
+        """
+        if frequency <= 0:
+            frequency = 200e3
+        period = 1.0 / frequency
+
+        # Normalized time points
+        t_norm = [0.0, duty_cycle, 1.0]
+
+        # Triangular current: ramps from min to max during on-time, back to min during off-time
+        data = [
+            offset - peak_to_peak / 2,  # minimum
+            offset + peak_to_peak / 2,  # maximum at end of on-time
+            offset - peak_to_peak / 2,  # back to minimum at end of cycle
+        ]
+
+        # Convert to physical time
+        time = [t * period for t in t_norm]
+
+        return {"time": time, "data": data}
+
+    def _create_flyback_primary_waveform(self, peak_to_peak, frequency, duty_cycle, offset):
+        """Create flyback primary current waveform: ramps on, jumps down.
+
+        During on-time (0 to D*T): current ramps linearly from low to high
+        At turn-off (D*T): current jumps down discontinuously (ZVS transition)
+        During off-time (D*T to T): freewheels at low level
+        """
+        if frequency <= 0:
+            frequency = 200e3
+        period = 1.0 / frequency
+
+        # Normalized time points: include transition at end of on-time
+        t_norm = [0.0, duty_cycle, duty_cycle, 1.0]
+
+        # Current waveform
+        data = [
+            offset - peak_to_peak / 2,  # start at minimum (t=0)
+            offset + peak_to_peak / 2,  # ramp to maximum (t=D)
+            offset - peak_to_peak / 2,  # jump down at turn-off (t=D+)
+            offset - peak_to_peak / 2,  # stay at minimum during off-time
+        ]
+
+        # Convert to physical time
+        time = [t * period for t in t_norm]
+
+        return {"time": time, "data": data}
+
+    def _create_custom_waveform(self, time, data):
+        """Pass-through for custom waveforms (used for IsolatedBuck secondaries)."""
+        return {"time": time, "data": data}
+
+    def build_waveform_preview(self, design_reqs, operating_point, fsw):
+        """
+        Build waveform preview time/data arrays for visualization.
+
+        Override in subclasses to provide topology-specific waveforms.
+
+        Args:
+            design_reqs: dict from compute_design_requirements()
+            operating_point: single operating point dict
+            fsw: switching frequency in Hz
+
+        Returns:
+            list of dicts: [{"winding_name": str, "voltage": {...}, "current": {...}}, ...]
+        """
+        raise NotImplementedError(f"{self.__class__.__name__}.build_waveform_preview")
+
     def build_operating_points(self, converter, design_reqs):
         """
         Build MAS operatingPoints[] array from converter specs.
@@ -326,6 +425,47 @@ class TwoSwitchForwardCalc(TopologyCalculator):
 
         return op_list
 
+    def build_waveform_preview(self, design_reqs, operating_point, fsw):
+        """Build waveform previews for two-switch forward.
+
+        Primary: rectangular voltage and current with magnetizing ripple
+        Secondaries: rectangular voltage and current during on-time only
+        """
+        windings = []
+        d = design_reqs.get("duty_nom", 0.45)
+        i_mag_pp = design_reqs.get("i_mag_pp", 0.1)
+        iout_list = design_reqs.get("iout_list", [1.0])
+        vout_list = design_reqs.get("vout_list", [5.0])
+        vin = design_reqs.get("vin_nom", 100.0)
+        ns_np = design_reqs.get("ns_np", 0.05)
+
+        # Primary winding
+        i_pri_pp = i_mag_pp + (iout_list[0] if iout_list else 1.0) * ns_np
+        i_pri_offset = i_pri_pp / 2
+        v_pri_pp = vin
+        v_pri_offset = vin * d / 2
+
+        windings.append({
+            "winding_name": "Primary",
+            "voltage": {**self._create_rectangular_waveform(v_pri_pp, fsw, d, v_pri_offset), "label": "RECTANGULAR", "unit": "V"},
+            "current": {**self._create_rectangular_waveform(i_pri_pp, fsw, d, i_pri_offset), "label": "RECTANGULAR", "unit": "A"},
+        })
+
+        # Secondary windings
+        for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+            i_sec_pp = iout_j * 0.3
+            i_sec_offset = iout_j
+            v_sec_pp = vout_j
+            v_sec_offset = vout_j * d / 2
+
+            windings.append({
+                "winding_name": "Secondary" if j == 0 else f"Secondary {j + 1}",
+                "voltage": {**self._create_rectangular_waveform(v_sec_pp, fsw, d, v_sec_offset), "label": "SECONDARY_RECTANGULAR", "unit": "V"},
+                "current": {**self._create_rectangular_waveform(i_sec_pp, fsw, d, i_sec_offset), "label": "RECTANGULAR", "unit": "A"},
+            })
+
+        return windings
+
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
@@ -475,6 +615,55 @@ class SingleSwitchForwardCalc(TopologyCalculator):
 
         return op_list
 
+    def build_waveform_preview(self, design_reqs, operating_point, fsw):
+        """Build waveform previews for single-switch forward.
+
+        Primary: rectangular voltage and current during on-time
+        Secondaries: rectangular voltage and current during on-time
+        Demagnetization: rectangular during off-time (reset current)
+        """
+        windings = []
+        d = design_reqs.get("duty_nom", 0.45)
+        i_mag_pp = design_reqs.get("i_mag_pp", 0.1)
+        iout_list = design_reqs.get("iout_list", [1.0])
+        vout_list = design_reqs.get("vout_list", [5.0])
+        vin = design_reqs.get("vin_nom", 100.0)
+        ns_np = design_reqs.get("ns_np", 0.05)
+
+        # Primary winding
+        i_pri_pp = i_mag_pp + (iout_list[0] if iout_list else 1.0) * ns_np
+        i_pri_offset = i_pri_pp / 2
+        v_pri_pp = vin
+        v_pri_offset = vin * d / 2
+
+        windings.append({
+            "winding_name": "Primary",
+            "voltage": {**self._create_rectangular_waveform(v_pri_pp, fsw, d, v_pri_offset), "label": "RECTANGULAR", "unit": "V"},
+            "current": {**self._create_rectangular_waveform(i_pri_pp, fsw, d, i_pri_offset), "label": "RECTANGULAR", "unit": "A"},
+        })
+
+        # Secondary windings
+        for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+            i_sec_pp = iout_j * 0.3
+            i_sec_offset = iout_j
+            v_sec_pp = vout_j
+            v_sec_offset = vout_j * d / 2
+
+            windings.append({
+                "winding_name": "Secondary" if j == 0 else f"Secondary {j + 1}",
+                "voltage": {**self._create_rectangular_waveform(v_sec_pp, fsw, d, v_sec_offset), "label": "SECONDARY_RECTANGULAR", "unit": "V"},
+                "current": {**self._create_rectangular_waveform(i_sec_pp, fsw, d, i_sec_offset), "label": "RECTANGULAR", "unit": "A"},
+            })
+
+        # Demagnetization winding (conducts during off-time)
+        windings.append({
+            "winding_name": "Demagnetization",
+            "voltage": {**self._create_rectangular_waveform(vin, fsw, 1 - d, vin * (1 - d) / 2), "label": "RECTANGULAR", "unit": "V"},
+            "current": {**self._create_rectangular_waveform(i_mag_pp, fsw, 1 - d, i_mag_pp / 2), "label": "RECTANGULAR", "unit": "A"},
+        })
+
+        return windings
+
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
@@ -601,6 +790,46 @@ class ActiveClampForwardCalc(TopologyCalculator):
                     name, freq, iout_j * 0.3, iout_j, vout_j, vout_j * d / 2, d))
             op_list.append({"excitationsPerWinding": exc})
         return op_list
+
+    def build_waveform_preview(self, design_reqs, operating_point, fsw):
+        """Build waveform previews for active clamp forward.
+
+        Same structure as two-switch forward: rectangular primary and secondaries.
+        """
+        windings = []
+        d = design_reqs.get("duty_nom", 0.45)
+        i_mag_pp = design_reqs.get("i_mag_pp", 0.1)
+        iout_list = design_reqs.get("iout_list", [1.0])
+        vout_list = design_reqs.get("vout_list", [5.0])
+        vin = design_reqs.get("vin_nom", 100.0)
+        ns_np = design_reqs.get("ns_np", 0.05)
+
+        # Primary winding
+        i_pri_pp = i_mag_pp + (iout_list[0] if iout_list else 1.0) * ns_np
+        i_pri_offset = i_pri_pp / 2
+        v_pri_pp = vin
+        v_pri_offset = vin * d / 2
+
+        windings.append({
+            "winding_name": "Primary",
+            "voltage": {**self._create_rectangular_waveform(v_pri_pp, fsw, d, v_pri_offset), "label": "RECTANGULAR", "unit": "V"},
+            "current": {**self._create_rectangular_waveform(i_pri_pp, fsw, d, i_pri_offset), "label": "RECTANGULAR", "unit": "A"},
+        })
+
+        # Secondary windings
+        for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+            i_sec_pp = iout_j * 0.3
+            i_sec_offset = iout_j
+            v_sec_pp = vout_j
+            v_sec_offset = vout_j * d / 2
+
+            windings.append({
+                "winding_name": "Secondary" if j == 0 else f"Secondary {j + 1}",
+                "voltage": {**self._create_rectangular_waveform(v_sec_pp, fsw, d, v_sec_offset), "label": "SECONDARY_RECTANGULAR", "unit": "V"},
+                "current": {**self._create_rectangular_waveform(i_sec_pp, fsw, d, i_sec_offset), "label": "RECTANGULAR", "unit": "A"},
+            })
+
+        return windings
 
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
@@ -753,6 +982,47 @@ class FlybackCalc(TopologyCalculator):
 
         return op_list
 
+    def build_waveform_preview(self, design_reqs, operating_point, fsw):
+        """Build waveform previews for flyback.
+
+        Primary: rectangular voltage, triangular rising current during on-time
+        Secondaries: rectangular voltage, triangular falling current during off-time
+        """
+        windings = []
+        d = design_reqs.get("duty_nom", 0.45)
+        i_mag_pp = design_reqs.get("i_mag_pp", 1.0)
+        i_mag_peak = design_reqs.get("i_mag_peak", i_mag_pp)
+        iout_list = design_reqs.get("iout_list", [1.0])
+        vout_list = design_reqs.get("vout_list", [5.0])
+        vin = design_reqs.get("vin_nom", 100.0)
+        ns_np = design_reqs.get("ns_np", 0.05)
+
+        # Primary winding: triangular rising current during on-time
+        i_pri_offset = i_mag_peak - i_mag_pp / 2
+        v_pri_pp = vin
+        v_pri_offset = vin * d / 2
+
+        windings.append({
+            "winding_name": "Primary",
+            "voltage": {**self._create_rectangular_waveform(v_pri_pp, fsw, d, v_pri_offset), "label": "RECTANGULAR", "unit": "V"},
+            "current": {**self._create_triangular_waveform(i_mag_pp, fsw, d, i_pri_offset), "label": "FLYBACK_PRIMARY", "unit": "A"},
+        })
+
+        # Secondary windings: triangular falling current during off-time
+        for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+            i_sec_pp = i_mag_pp / ns_np
+            i_sec_offset = iout_j
+            v_sec_pp = vout_j
+            v_sec_offset = vout_j * (1 - d) / 2
+
+            windings.append({
+                "winding_name": "Secondary" if j == 0 else f"Secondary {j + 1}",
+                "voltage": {**self._create_rectangular_waveform(v_sec_pp, fsw, 1 - d, v_sec_offset), "label": "SECONDARY_RECTANGULAR", "unit": "V"},
+                "current": {**self._create_triangular_waveform(i_sec_pp, fsw, 1 - d, i_sec_offset), "label": "FLYBACK_SECONDARY", "unit": "A"},
+            })
+
+        return windings
+
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
@@ -879,6 +1149,47 @@ class PushPullCalc(TopologyCalculator):
             op_list.append({"excitationsPerWinding": exc})
         return op_list
 
+    def build_waveform_preview(self, design_reqs, operating_point, fsw):
+        """Build waveform previews for push-pull.
+
+        Primary: rectangular voltage (2x Vin effective), rectangular current
+        Secondaries: rectangular voltage and current
+        """
+        windings = []
+        d = design_reqs.get("duty_nom", 0.45)
+        i_mag_pp = design_reqs.get("i_mag_pp", 0.1)
+        iout_list = design_reqs.get("iout_list", [1.0])
+        vout_list = design_reqs.get("vout_list", [5.0])
+        vin = design_reqs.get("vin_nom", 100.0)
+        ns_np = design_reqs.get("ns_np", 0.05)
+
+        # Primary winding: sees 2x Vin effective across center tap
+        i_pri_pp = i_mag_pp + (iout_list[0] if iout_list else 1.0) * ns_np
+        i_pri_offset = i_pri_pp / 2
+        v_pri_pp = 2 * vin
+        v_pri_offset = vin * d
+
+        windings.append({
+            "winding_name": "Primary",
+            "voltage": {**self._create_rectangular_waveform(v_pri_pp, fsw, d, v_pri_offset), "label": "RECTANGULAR", "unit": "V"},
+            "current": {**self._create_rectangular_waveform(i_pri_pp, fsw, d, i_pri_offset), "label": "RECTANGULAR", "unit": "A"},
+        })
+
+        # Secondary windings
+        for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+            i_sec_pp = iout_j * 0.3
+            i_sec_offset = iout_j
+            v_sec_pp = vout_j
+            v_sec_offset = vout_j * d / 2
+
+            windings.append({
+                "winding_name": "Secondary" if j == 0 else f"Secondary {j + 1}",
+                "voltage": {**self._create_rectangular_waveform(v_sec_pp, fsw, d, v_sec_offset), "label": "SECONDARY_RECTANGULAR", "unit": "V"},
+                "current": {**self._create_rectangular_waveform(i_sec_pp, fsw, d, i_sec_offset), "label": "RECTANGULAR", "unit": "A"},
+            })
+
+        return windings
+
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
@@ -972,6 +1283,28 @@ class BuckCalc(TopologyCalculator):
             op_list.append({"excitationsPerWinding": exc})
         return op_list
 
+    def build_waveform_preview(self, design_reqs, operating_point, fsw):
+        """Build waveform previews for buck (non-isolated).
+
+        Single inductor winding with triangular current ripple.
+        """
+        d = design_reqs.get("duty_nom", 0.5)
+        l_uh = design_reqs.get("L_uH", 10.0)
+        vin = design_reqs.get("vin_nom", 100.0)
+        vout = design_reqs.get("vout", 5.0)
+        pout = design_reqs.get("pout_nom", 25.0)
+        iout = pout / max(vout, 0.1)
+
+        l = l_uh * 1e-6
+        i_ripple = (vin - vout) * d / (l * fsw) if l > 0 and fsw > 0 else iout * 0.3
+        v_pp = vin - vout
+
+        return [{
+            "winding_name": "Inductor",
+            "voltage": {**self._create_rectangular_waveform(v_pp, fsw, d, (vin - vout) * d / 2), "label": "RECTANGULAR", "unit": "V"},
+            "current": {**self._create_triangular_waveform(i_ripple, fsw, d, iout), "label": "TRIANGULAR", "unit": "A"},
+        }]
+
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements (no transformer, minimal MAS)."""
         return {
@@ -1062,6 +1395,27 @@ class BoostCalc(TopologyCalculator):
                 "Inductor", freq, i_ripple, iin, vin, vin * d / 2, d)]
             op_list.append({"excitationsPerWinding": exc})
         return op_list
+
+    def build_waveform_preview(self, design_reqs, operating_point, fsw):
+        """Build waveform previews for boost (non-isolated).
+
+        Single inductor winding with triangular current ripple.
+        """
+        d = design_reqs.get("duty_nom", 0.5)
+        l_uh = design_reqs.get("L_uH", 10.0)
+        vin = design_reqs.get("vin_nom", 100.0)
+        vout = design_reqs.get("vout", 150.0)
+        pout = design_reqs.get("pout_nom", 100.0)
+        iin = pout / max(vin, 0.1)
+
+        l = l_uh * 1e-6
+        i_ripple = vin * d / (l * fsw) if l > 0 and fsw > 0 else iin * 0.3
+
+        return [{
+            "winding_name": "Inductor",
+            "voltage": {**self._create_rectangular_waveform(vin, fsw, d, vin * d / 2), "label": "RECTANGULAR", "unit": "V"},
+            "current": {**self._create_triangular_waveform(i_ripple, fsw, d, iin), "label": "TRIANGULAR", "unit": "A"},
+        }]
 
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements (no transformer)."""
@@ -1203,6 +1557,42 @@ class IsolatedBuckCalc(TopologyCalculator):
             op_list.append({"excitationsPerWinding": exc})
         return op_list
 
+    def build_waveform_preview(self, design_reqs, operating_point, fsw):
+        """Build waveform previews for isolated buck.
+
+        Primary: rectangular voltage, triangular current during on-time
+        Secondaries: rectangular voltage, triangular filtered current
+        """
+        windings = []
+        d = design_reqs.get("duty_nom", 0.5)
+        i_mag_pp = design_reqs.get("i_mag_pp", 0.1)
+        i_mag_peak = design_reqs.get("i_mag_peak", i_mag_pp)
+        iout_list = design_reqs.get("iout_list", [1.0])
+        vout_list = design_reqs.get("vout_list", [5.0])
+        vin = design_reqs.get("vin_nom", 100.0)
+
+        # Primary winding: triangular current during on-time
+        i_pri_offset = i_mag_peak - i_mag_pp / 2
+        v_pri_pp = vin
+
+        windings.append({
+            "winding_name": "Primary",
+            "voltage": {**self._create_rectangular_waveform(v_pri_pp, fsw, d, vin * d / 2), "label": "RECTANGULAR", "unit": "V"},
+            "current": {**self._create_triangular_waveform(i_mag_pp, fsw, d, i_pri_offset), "label": "TRIANGULAR", "unit": "A"},
+        })
+
+        # Secondary windings: triangular filtered current
+        for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+            i_sec_ripple = iout_j * 0.3
+
+            windings.append({
+                "winding_name": "Secondary" if j == 0 else f"Secondary {j + 1}",
+                "voltage": {**self._create_rectangular_waveform(vout_j, fsw, d, vout_j * d / 2), "label": "RECTANGULAR", "unit": "V"},
+                "current": {**self._create_triangular_waveform(i_sec_ripple, fsw, d, iout_j), "label": "TRIANGULAR", "unit": "A"},
+            })
+
+        return windings
+
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
@@ -1342,6 +1732,43 @@ class IsolatedBuckBoostCalc(TopologyCalculator):
             op_list.append({"excitationsPerWinding": exc})
         return op_list
 
+    def build_waveform_preview(self, design_reqs, operating_point, fsw):
+        """Build waveform previews for isolated buck-boost.
+
+        Primary: rectangular voltage, triangular current during on-time (energy storage)
+        Secondaries: rectangular voltage, triangular current during off-time (energy transfer)
+        """
+        windings = []
+        d = design_reqs.get("duty_nom", 0.5)
+        i_mag_pp = design_reqs.get("i_mag_pp", 1.0)
+        i_mag_peak = design_reqs.get("i_mag_peak", i_mag_pp)
+        iout_list = design_reqs.get("iout_list", [1.0])
+        vout_list = design_reqs.get("vout_list", [5.0])
+        vin = design_reqs.get("vin_nom", 100.0)
+        ns_np = design_reqs.get("ns_np", 0.05)
+
+        # Primary winding: triangular rising current during on-time (energy storage)
+        i_pri_offset = i_mag_peak - i_mag_pp / 2
+
+        windings.append({
+            "winding_name": "Primary",
+            "voltage": {**self._create_rectangular_waveform(vin, fsw, d, vin * d / 2), "label": "RECTANGULAR", "unit": "V"},
+            "current": {**self._create_triangular_waveform(i_mag_pp, fsw, d, i_pri_offset), "label": "TRIANGULAR", "unit": "A"},
+        })
+
+        # Secondary windings: triangular falling current during off-time (energy transfer)
+        for j, (iout_j, vout_j) in enumerate(zip(as_list(iout_list), as_list(vout_list))):
+            i_sec_pp = i_mag_pp / ns_np
+            i_sec_offset = iout_j
+
+            windings.append({
+                "winding_name": "Secondary" if j == 0 else f"Secondary {j + 1}",
+                "voltage": {**self._create_rectangular_waveform(vout_j, fsw, 1 - d, vout_j * (1 - d) / 2), "label": "RECTANGULAR", "unit": "V"},
+                "current": {**self._create_triangular_waveform(i_sec_pp, fsw, 1 - d, i_sec_offset), "label": "TRIANGULAR", "unit": "A"},
+            })
+
+        return windings
+
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
@@ -1405,6 +1832,13 @@ def compute_topology(config):
         mas_design_requirements = calc.build_mas_design_requirements(converter, design_reqs)
         mas_operating_points = calc.build_operating_points(converter, design_reqs)
 
+        # Build waveform previews for each operating point
+        waveforms_preview = []
+        fsw = design_reqs.get("fsw_hz", 200e3)
+        for op in converter.get("operatingPoints", []):
+            op_fsw = as_float(op.get("switchingFrequency", fsw))
+            waveforms_preview.append(calc.build_waveform_preview(design_reqs, op, op_fsw))
+
         # Build result dict
         result = {
             "status": "OK",
@@ -1419,6 +1853,7 @@ def compute_topology(config):
                 "designRequirements": mas_design_requirements,
                 "operatingPoints": mas_operating_points,
             },
+            "waveforms_preview": waveforms_preview,
         }
 
         return result
