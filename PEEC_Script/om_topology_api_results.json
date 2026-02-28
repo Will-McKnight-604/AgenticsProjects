@@ -1,6 +1,4 @@
 {
   "status": "ERROR",
-  "error": "generate_om_recommendations.py failed with exit code 1",
-  "stdout": "",
-  "stderr": "Loaded databases: 1301 core shapes available\n[ADVISOR] Inputs: Lm={'nominal': 0.0035526315789473676}, turnsRatios=[{'nominal': 7.894736842105263}], freq=200000Hz, weights={'COST': 1.0, 'EFFICIENCY': 1.0, 'DIMENSIONS': 1.0}, ops=1, pri_current=Rectangular, insulation=True, maxDims=False, opTemp={'maximum': 65}\n[ADVISOR] Set useOnlyCoresInStock=False\nERROR: Could not parse advisor results: Exception: Missing altitude in insulation requirements\n"
+  "error": "generate_om_recommendations.py timed out after 5 minutes"
 }

@@ -45,15 +45,15 @@ def get_pm_runtime_version():
 
 # Topology key mapping for multi-topology support
 TOPOLOGY_MAP = {
-    "two_switch_forward": "two-switch-forward",
-    "single_switch_forward": "single-switch-forward",
-    "active_clamp_forward": "active-clamp-forward",
-    "flyback": "flyback",
-    "push_pull": "push-pull",
-    "buck": "buck",
-    "boost": "boost",
-    "isolated_buck": "isolated-buck",
-    "isolated_buck_boost": "isolated-buck-boost",
+    "two_switch_forward": "Two Switch Forward Converter",
+    "single_switch_forward": "Single Switch Forward Converter",
+    "active_clamp_forward": "Active Clamp Forward Converter",
+    "flyback": "Flyback Converter",
+    "push_pull": "Push Pull Converter",
+    "buck": "Buck Converter",
+    "boost": "Boost Converter",
+    "isolated_buck": "Isolated Buck Converter",
+    "isolated_buck_boost": "Isolated Buck Boost Converter",
 }
 
 
@@ -459,28 +459,21 @@ def build_mas_inputs(config):
     if isinstance(mag_ind, (int, float)):
         mag_ind = {"nominal": float(mag_ind)}
 
-    # --- Map topology names using TOPOLOGY_MAP and fallback for full names ---
+    # --- Map topology names to formal PyOpenMagnetics format ---
+    # PyOpenMagnetics C++ requires exact formal names like "Two Switch Forward Converter"
     raw_topo = dr.get("topology", "Two Switch Forward Converter")
 
-    # First try to normalize using TOPOLOGY_MAP (converts underscored keys to hyphenated MAS keys)
+    # Normalize to snake_case key, then look up formal name via TOPOLOGY_MAP
     topo_key = raw_topo.lower().replace("-", "_").replace(" ", "_")
+    # Strip trailing "_converter" for matching
+    topo_key_stripped = topo_key.replace("_converter", "")
     if topo_key in TOPOLOGY_MAP:
         topology = TOPOLOGY_MAP[topo_key]
+    elif topo_key_stripped in TOPOLOGY_MAP:
+        topology = TOPOLOGY_MAP[topo_key_stripped]
     else:
-        # Fallback to human-readable format for backward compatibility
-        topology_name_map = {
-            "two_switch_forward": "Two Switch Forward Converter",
-            "2_switch_forward": "Two Switch Forward Converter",
-            "2-switch forward": "Two Switch Forward Converter",
-            "forward": "Two Switch Forward Converter",
-            "flyback": "Flyback Converter",
-            "buck": "Buck Converter",
-            "boost": "Boost Converter",
-            "push_pull": "Push-Pull Converter",
-            "half_bridge": "Half-Bridge Converter",
-            "full_bridge": "Full-Bridge Converter",
-        }
-        topology = topology_name_map.get(topo_key, raw_topo)
+        # If already a formal name (e.g., "Two Switch Forward Converter"), pass through
+        topology = raw_topo
 
     # --- Assemble MAS inputs ---
     design_req = {
@@ -676,9 +669,24 @@ def run_recommendations(config):
           f"insulation={has_insulation}, maxDims={has_max_dims}, "
           f"opTemp={op_temp}", file=sys.stderr)
 
+    # --- DEBUG: dump inputs before process_inputs() ---
+    debug_dir = os.path.dirname(os.path.abspath(__file__))
+    try:
+        debug_inputs_path = os.path.join(debug_dir, "_debug_inputs_before_process.json")
+        with open(debug_inputs_path, "w") as _dbg:
+            json.dump(inputs, _dbg, indent=2, default=str)
+        print(f"[DEBUG] Dumped pre-process_inputs data to {debug_inputs_path}", file=sys.stderr)
+    except Exception as _dbg_exc:
+        print(f"[DEBUG] Could not dump inputs: {_dbg_exc}", file=sys.stderr)
+    sys.stderr.flush()
+
     # Process inputs through PyOpenMagnetics
     try:
+        print("[DEBUG] Calling pm.process_inputs()...", file=sys.stderr)
+        sys.stderr.flush()
         processed = pm.process_inputs(inputs)
+        print("[DEBUG] pm.process_inputs() returned OK", file=sys.stderr)
+        sys.stderr.flush()
     except Exception as exc:
         return {
             "status": "ERROR",
@@ -728,8 +736,56 @@ def run_recommendations(config):
     # Request a moderately larger pool so we get some core family diversity
     # after compatibility filtering.  Keep it small to avoid MKF crashes
     # (each result requires full winding computation which can segfault).
-    pool_size = max(max_results * 2, 10)
+    # Multi-winding designs (3+ windings) are much slower per candidate,
+    # so keep pool_size small to stay within the 5-minute subprocess timeout.
+    n_windings = 0
+    if isinstance(processed, dict):
+        p_ops = processed.get("operatingPoints", [])
+        if p_ops and isinstance(p_ops[0], dict):
+            n_windings = len(p_ops[0].get("excitationsPerWinding", []))
+    if n_windings >= 3:
+        pool_size = max_results  # 3+ windings: no over-request
+    else:
+        pool_size = max(max_results * 2, 10)
     maximum_number_results = pool_size
+
+    # --- Workaround: strip insulation from processed data before adviser ---
+    # The MKF C++ adviser segfaults (ACCESS_VIOLATION) when insulation data
+    # is present for multi-winding (3+) topologies.  We remove it before
+    # the call and restore it afterward so the results still carry context.
+    saved_insulation = None
+    if isinstance(processed, dict):
+        p_dr = processed.get("designRequirements", {})
+        if isinstance(p_dr, dict) and "insulation" in p_dr:
+            saved_insulation = p_dr.pop("insulation")
+            print("[ADVISOR] Temporarily stripped insulation to avoid C++ crash",
+                  file=sys.stderr)
+
+    # --- DEBUG: dump processed data before calculate_advised_magnetics() ---
+    try:
+        debug_processed_path = os.path.join(debug_dir, "_debug_processed_before_adviser.json")
+        with open(debug_processed_path, "w") as _dbg:
+            json.dump(processed, _dbg, indent=2, default=str)
+        print(f"[DEBUG] Dumped post-process_inputs data to {debug_processed_path}", file=sys.stderr)
+        print(f"[DEBUG] About to call calculate_advised_magnetics("
+              f"max={maximum_number_results}, core_mode='{core_mode}')", file=sys.stderr)
+        # Log key structural info
+        if isinstance(processed, dict):
+            p_dr = processed.get("designRequirements", {})
+            p_ops = processed.get("operatingPoints", [])
+            print(f"[DEBUG] processed topology='{p_dr.get('topology')}'", file=sys.stderr)
+            print(f"[DEBUG] processed turnsRatios={p_dr.get('turnsRatios')}", file=sys.stderr)
+            print(f"[DEBUG] processed Lm={p_dr.get('magnetizingInductance')}", file=sys.stderr)
+            if p_ops:
+                epw = p_ops[0].get("excitationsPerWinding", [])
+                print(f"[DEBUG] processed n_excitations={len(epw)}", file=sys.stderr)
+                for j, ex in enumerate(epw):
+                    print(f"[DEBUG]   excitation[{j}] name='{ex.get('name')}' "
+                          f"freq={ex.get('frequency')}", file=sys.stderr)
+        sys.stderr.flush()
+    except Exception as _dbg_exc:
+        print(f"[DEBUG] Could not dump processed: {_dbg_exc}", file=sys.stderr)
+    sys.stderr.flush()
 
     try:
         try:
@@ -745,6 +801,9 @@ def run_recommendations(config):
                 except Exception as exc:
                     print(f"[ADVISOR] Warning: failed to restore settings: {exc}",
                           file=sys.stderr)
+            # Restore insulation data so downstream code can reference it
+            if saved_insulation is not None and isinstance(processed, dict):
+                processed.get("designRequirements", {})["insulation"] = saved_insulation
     except Exception as exc:
         return {
             "status": "ERROR",
@@ -928,13 +987,19 @@ def compute_losses_for_recommendation(mas_data):
     return core_losses, winding_losses
 
 
-def resolve_wire_info(wire_ref):
+def resolve_wire_info(wire_ref, skip_local_match=False):
     """Resolve an advisor wire reference to its type and dimensions.
 
     The advisor returns internal wire names like 'Litz TXXL180/38TXXX-3(MWXX)'.
     This function uses find_wire_by_name() to look up the wire's actual
-    type and conducting dimensions, then finds the closest match in the
-    local wire database.
+    type and conducting dimensions.
+
+    Args:
+        wire_ref: Wire name string from the adviser result.
+        skip_local_match: If True, skip the expensive match_wire_in_local_db()
+            call which iterates through all wires in the DB via C++ calls.
+            This avoids potential segfaults on multi-winding results.
+            Local DB matching is handled separately by apply_local_ids().
 
     Returns a dict with:
       - original_name: the raw advisor wire reference
@@ -1012,8 +1077,9 @@ def resolve_wire_info(wire_ref):
         elif "round" in name_lower:
             info["wire_type"] = "round"
 
-    # Try to match against the local wire database
-    info["matched_name"] = match_wire_in_local_db(info)
+    # Try to match against the local wire database (expensive — many C++ calls)
+    if not skip_local_match:
+        info["matched_name"] = match_wire_in_local_db(info)
 
     return info
 
@@ -1173,21 +1239,20 @@ def extract_recommendation(item):
             rec[f"{prefix}_wire"] = wire_name
             rec[f"{prefix}_wire_raw"] = wire_name
 
-            # Resolve wire to type/dimensions and find local DB match
-            wire_info = resolve_wire_info(wire_name)
+            # Resolve wire type/dimensions via single find_wire_by_name call.
+            # Skip match_wire_in_local_db (expensive loop of C++ calls that can
+            # segfault on multi-winding results).  Local DB matching is handled
+            # separately by apply_local_ids() using exported JSON files.
+            wire_info = resolve_wire_info(wire_name, skip_local_match=True)
             rec[f"{prefix}_wire_info"] = wire_info
             if wire_info.get("matched_name"):
                 rec[f"{prefix}_wire_matched"] = wire_info["matched_name"]
 
-    # Compute losses using OpenMagnetics APIs
-    core_losses, winding_losses = compute_losses_for_recommendation(mas)
-    rec["core_losses_w"] = core_losses
-    rec["winding_losses_w"] = winding_losses
-    rec["total_losses_w"] = core_losses + winding_losses
-    rec["loss_source"] = "OpenMagnetics"
-
-    # Extract MKF-computed outputs per operating point (inductance, flux density, etc.)
+    # --- Extract adviser-computed outputs (pure dict parsing, no C++ calls) ---
+    # The adviser already computes losses, inductance, flux density etc. for each
+    # operating point.  Extract these FIRST before any additional C++ calls.
     outputs = mas.get("outputs", [])
+    adviser_has_losses = False
     if isinstance(outputs, list) and outputs:
         rec["operating_point_outputs"] = []
         for oi, op_out in enumerate(outputs):
@@ -1241,6 +1306,31 @@ def extract_recommendation(item):
         rec["B_offset_mT"] = nom.get("B_offset_T", 0.0) * 1e3
         rec["core_loss_W"] = nom.get("core_loss_W", 0.0)
         rec["winding_loss_W"] = nom.get("winding_loss_W", 0.0)
+
+        # Use adviser-computed losses as primary source
+        if nom.get("core_loss_W", 0.0) > 0 or nom.get("winding_loss_W", 0.0) > 0:
+            adviser_has_losses = True
+            rec["core_losses_w"] = nom.get("core_loss_W", 0.0)
+            rec["winding_losses_w"] = nom.get("winding_loss_W", 0.0)
+            rec["total_losses_w"] = rec["core_losses_w"] + rec["winding_losses_w"]
+            rec["loss_source"] = "adviser_outputs"
+
+    # Only call separate C++ loss computation if adviser outputs didn't include losses.
+    # This avoids segfaults in calculate_core_losses/calculate_winding_losses on
+    # multi-winding results (the C++ code can crash with 3+ windings).
+    if not adviser_has_losses:
+        try:
+            core_losses, winding_losses = compute_losses_for_recommendation(mas)
+            rec["core_losses_w"] = core_losses
+            rec["winding_losses_w"] = winding_losses
+            rec["total_losses_w"] = core_losses + winding_losses
+            rec["loss_source"] = "recomputed"
+        except Exception as exc:
+            print(f"  [LOSS] Loss recomputation failed: {exc}", file=sys.stderr)
+            rec["core_losses_w"] = 0.0
+            rec["winding_losses_w"] = 0.0
+            rec["total_losses_w"] = 0.0
+            rec["loss_source"] = "unavailable"
 
     # Core effective parameters for saturation context
     core_pd = core.get("processedDescription", {})

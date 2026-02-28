@@ -473,7 +473,7 @@ class TwoSwitchForwardCalc(TopologyCalculator):
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
-            "topology": "two-switch-forward",
+            "topology": "Two Switch Forward Converter",
             "magnetizingInductance": {
                 "nominal": design_reqs["Lm_uH"] * 1e-6
             },
@@ -675,7 +675,7 @@ class SingleSwitchForwardCalc(TopologyCalculator):
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
-            "topology": "single-switch-forward",
+            "topology": "Single Switch Forward Converter",
             "magnetizingInductance": {
                 "nominal": design_reqs["Lm_uH"] * 1e-6
             },
@@ -846,7 +846,7 @@ class ActiveClampForwardCalc(TopologyCalculator):
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
-            "topology": "active-clamp-forward",
+            "topology": "Active Clamp Forward Converter",
             "magnetizingInductance": {"nominal": design_reqs["Lm_uH"] * 1e-6},
             "turnsRatios": [{"nominal": tr} for tr in design_reqs["turns_ratios"]],
         }
@@ -1046,7 +1046,7 @@ class FlybackCalc(TopologyCalculator):
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
-            "topology": "flyback",
+            "topology": "Flyback Converter",
             "magnetizingInductance": {"nominal": design_reqs["Lm_uH"] * 1e-6},
             "turnsRatios": [{"nominal": tr} for tr in design_reqs["turns_ratios"]],
         }
@@ -1217,7 +1217,7 @@ class PushPullCalc(TopologyCalculator):
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
-            "topology": "push-pull",
+            "topology": "Push Pull Converter",
             "magnetizingInductance": {"nominal": design_reqs["Lm_uH"] * 1e-6},
             "turnsRatios": [{"nominal": tr} for tr in design_reqs["turns_ratios"]],
         }
@@ -1336,7 +1336,7 @@ class BuckCalc(TopologyCalculator):
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements (no transformer, minimal MAS)."""
         return {
-            "topology": "buck",
+            "topology": "Buck Converter",
         }
 
 
@@ -1452,7 +1452,7 @@ class BoostCalc(TopologyCalculator):
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements (no transformer)."""
         return {
-            "topology": "boost",
+            "topology": "Boost Converter",
         }
 
 
@@ -1632,7 +1632,7 @@ class IsolatedBuckCalc(TopologyCalculator):
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
-            "topology": "isolated-buck",
+            "topology": "Isolated Buck Converter",
             "magnetizingInductance": {"nominal": design_reqs["Lm_uH"] * 1e-6},
             "turnsRatios": [{"nominal": tr} for tr in design_reqs["turns_ratios"]],
         }
@@ -1812,7 +1812,7 @@ class IsolatedBuckBoostCalc(TopologyCalculator):
     def build_mas_design_requirements(self, converter, design_reqs):
         """Build MAS designRequirements."""
         return {
-            "topology": "isolated-buck-boost",
+            "topology": "Isolated Buck Boost Converter",
             "magnetizingInductance": {"nominal": design_reqs["Lm_uH"] * 1e-6},
             "turnsRatios": [{"nominal": tr} for tr in design_reqs["turns_ratios"]],
         }
@@ -1854,13 +1854,44 @@ def compute_topology(config):
         converter = config.get("converter", {})
         advanced = config.get("advanced", {})
 
+        # Normalize flat MATLAB keys to MAS-nested format expected by all
+        # topology calculators.  MATLAB topology_wizard.m sends vin_min/vin_max
+        # etc., but compute_design_requirements() reads inputVoltage.minimum.
+        if "vin_min" in converter and "inputVoltage" not in converter:
+            vin_nom_raw = converter.get("vin_nom")
+            # MATLAB jsonencode([]) → [] in JSON; treat as missing
+            if isinstance(vin_nom_raw, list) or vin_nom_raw is None:
+                vin_nom_val = None
+            else:
+                vin_nom_val = as_float(vin_nom_raw)
+                if vin_nom_val <= 0:
+                    vin_nom_val = None
+            iv = {
+                "minimum": as_float(converter.get("vin_min", 100)),
+                "maximum": as_float(converter.get("vin_max", 190)),
+            }
+            if vin_nom_val is not None:
+                iv["nominal"] = vin_nom_val
+            converter["inputVoltage"] = iv
+        if "vd" in converter and "diodeVoltageDrop" not in converter:
+            converter["diodeVoltageDrop"] = as_float(converter.get("vd", 0.7))
+        if "max_ripple" in converter and "currentRippleRatio" not in converter:
+            converter["currentRippleRatio"] = as_float(converter.get("max_ripple", 30))
+
         # Determine number of outputs for isolated topologies
-        op = converter.get("operatingPoints", [{}])[0]
-        vout_list = op.get("outputVoltages", [5.0])
-        if isinstance(vout_list, list):
-            n_outputs = len(vout_list)
+        # Prefer explicit n_outputs from config (set by GUI spinner) over inferring
+        # from outputVoltages array length, because MATLAB may send a scalar even
+        # when the user selected multiple outputs.
+        explicit_n = config.get("n_outputs", None)
+        if explicit_n is not None and isinstance(explicit_n, (int, float)) and explicit_n >= 1:
+            n_outputs = int(explicit_n)
         else:
-            n_outputs = 1
+            op = converter.get("operatingPoints", [{}])[0]
+            vout_list = op.get("outputVoltages", [5.0])
+            if isinstance(vout_list, list):
+                n_outputs = len(vout_list)
+            else:
+                n_outputs = 1
 
         # Ensure n_outputs is within range
         n_outputs = max(1, min(n_outputs, calc.n_windings_max - (2 if "single_switch" in topology_key else 1)))

@@ -52,7 +52,10 @@ function topology_wizard()
 
     % Computed requirements (auto-updated from converter specs)
     data.requirements.Lm_uH = 0;
+    data.requirements.Lout_uH = 0;
     data.requirements.turns_ratio = 0;
+    data.requirements.turns_ratios = [];
+    data.requirements.ns_np = 0;
     data.requirements.n_windings = 2;
     data.requirements.duty_nom = 0;
     data.requirements.duty_min_vin = 0;
@@ -66,6 +69,8 @@ function topology_wizard()
     data.requirements.i_mag_pp_worst = 0;
     data.requirements.pin_nom = 0;
     data.requirements.pout_nom = 0;
+    data.requirements.vin_nom = 0;
+    data.requirements.fsw_hz = 0;
 
     % MAS inputs (from Python topology calculator)
     data.mas_inputs = struct();  % populated by generate_om_topology.py
@@ -342,19 +347,14 @@ function build_wizard_panel(data)
     make_label(spec_panel, 'V', [0.59 y 0.05 0.04]);
     y = y - dy;
 
-    % Output Voltage
-    make_label(spec_panel, 'Output Voltage', [0.02 y 0.35 0.04]);
-    data.edit_vout = make_edit(spec_panel, num2str(data.converter.vout), ...
-                               [0.38 y 0.20 0.045], @cb_vout);
-    make_label(spec_panel, 'V', [0.59 y 0.05 0.04]);
-    y = y - dy;
-
-    % Output Current
-    make_label(spec_panel, 'Output Current', [0.02 y 0.35 0.04]);
-    data.edit_iout = make_edit(spec_panel, num2str(data.converter.iout), ...
-                               [0.38 y 0.20 0.045], @cb_iout);
-    make_label(spec_panel, 'A', [0.59 y 0.05 0.04]);
-    y = y - dy;
+    % (Output Voltage / Current removed — defined per-output in the table above)
+    % Hidden edit controls for backward compatibility with collect_gui_field_values()
+    data.edit_vout = uicontrol('Parent', spec_panel, 'Style', 'edit', ...
+                               'String', num2str(data.converter.vout), ...
+                               'Visible', 'off');
+    data.edit_iout = uicontrol('Parent', spec_panel, 'Style', 'edit', ...
+                               'String', num2str(data.converter.iout), ...
+                               'Visible', 'off');
 
     % Switching Frequency
     make_label(spec_panel, 'Switching Frequency', [0.02 y 0.35 0.04]);
@@ -363,27 +363,21 @@ function build_wizard_panel(data)
     make_label(spec_panel, 'kHz', [0.59 y 0.08 0.04]);
     y = y - dy;
 
-    % --- Separator and optional toggle ---
+    % --- Optional parameters toggle ---
     y = y - 0.01;
     data.btn_toggle_optional = uicontrol('Parent', spec_panel, 'Style', 'pushbutton', ...
-              'String', 'Show Optional Parameters', ...
+              'String', 'Design Requirements', ...
               'Units', 'normalized', ...
               'Position', [0.02 y 0.60 0.04], ...
               'FontSize', 8, ...
               'BackgroundColor', [0.3 0.3 0.4], ...
               'ForegroundColor', 'w', ...
               'Callback', @cb_toggle_optional);
-    y = y - 0.02;
 
-    % --- Optional fields (in a sub-panel for show/hide) ---
-    data.optional_panel = uipanel('Parent', spec_panel, ...
-                                  'Position', [0.00 0.01 1.0 y], ...
-                                  'Title', '', ...
-                                  'BorderType', 'none', ...
-                                  'Visible', 'off');
-    guidata(data.fig, data);
-    build_optional_fields(data);
-    data = guidata(data.fig);  % retrieve optional field handles
+    % Design Requirements figure (opened on button click)
+    data.design_req_fig = [];
+    % Initialize design_req struct with defaults
+    data.design_req = init_design_req_defaults(data);
 
     % ----- RIGHT TOP: Computed Requirements -----
     req_panel = uipanel('Parent', panel, ...
@@ -505,121 +499,7 @@ function build_wizard_panel(data)
 end
 
 
-function build_optional_fields(data)
-
-    panel = data.optional_panel;
-    y = 0.90;
-    dy = 0.11;
-
-    % Input Voltage Nominal (optional)
-    make_label(panel, 'Input Voltage Nom. (optional)', [0.02 y 0.35 0.06]);
-    data.edit_vin_nom = make_edit(panel, '', [0.38 y 0.20 0.07], @cb_vin_nom);
-    make_label(panel, 'V', [0.59 y 0.05 0.06]);
-    y = y - dy;
-
-    % Efficiency target
-    make_label(panel, 'Efficiency target', [0.02 y 0.35 0.06]);
-    data.edit_efficiency = make_edit(panel, num2str(data.converter.efficiency), ...
-                                     [0.38 y 0.20 0.07], @cb_efficiency);
-    make_label(panel, '%', [0.59 y 0.05 0.06]);
-    y = y - dy;
-
-    % Diode forward voltage
-    make_label(panel, 'Diode forward voltage', [0.02 y 0.35 0.06]);
-    data.edit_vd = make_edit(panel, num2str(data.converter.vd), ...
-                              [0.38 y 0.20 0.07], @cb_vd);
-    make_label(panel, 'V', [0.59 y 0.05 0.06]);
-    y = y - dy;
-
-    % Max current ripple
-    make_label(panel, 'Max current ripple', [0.02 y 0.35 0.06]);
-    data.edit_ripple = make_edit(panel, num2str(data.converter.max_ripple), ...
-                                 [0.38 y 0.20 0.07], @cb_ripple);
-    make_label(panel, '%', [0.59 y 0.05 0.06]);
-    y = y - dy;
-
-    % Max switch current
-    make_label(panel, 'Max switch current', [0.02 y 0.35 0.06]);
-    data.edit_max_isw = make_edit(panel, '', [0.38 y 0.20 0.07], @cb_max_isw);
-    make_label(panel, 'A', [0.59 y 0.05 0.06]);
-    y = y - dy;
-
-    % --- Insulation ---
-    make_label(panel, 'Insulation class', [0.02 y 0.35 0.06]);
-    data.pop_insulation = uicontrol('Parent', panel, 'Style', 'popupmenu', ...
-              'String', {'Functional', 'Basic', 'Supplementary', 'Reinforced', 'Double'}, ...
-              'Units', 'normalized', ...
-              'Position', [0.38 y 0.25 0.07], ...
-              'Value', 2, ...
-              'Callback', @cb_insulation_class);
-    y = y - dy;
-
-    make_label(panel, 'CTI group', [0.02 y 0.35 0.06]);
-    data.pop_cti = uicontrol('Parent', panel, 'Style', 'popupmenu', ...
-              'String', {'Group I', 'Group II', 'Group IIIA', 'Group IIIB'}, ...
-              'Units', 'normalized', ...
-              'Position', [0.38 y 0.25 0.07], ...
-              'Value', 2, ...
-              'Callback', @cb_cti);
-    y = y - dy;
-
-    make_label(panel, 'Pollution degree', [0.02 y 0.35 0.06]);
-    data.pop_pollution = uicontrol('Parent', panel, 'Style', 'popupmenu', ...
-              'String', {'1', '2', '3'}, ...
-              'Units', 'normalized', ...
-              'Position', [0.38 y 0.25 0.07], ...
-              'Value', 2, ...
-              'Callback', @cb_pollution_degree);
-    y = y - dy;
-
-    make_label(panel, 'Overvoltage category', [0.02 y 0.35 0.06]);
-    data.pop_ovc = uicontrol('Parent', panel, 'Style', 'popupmenu', ...
-              'String', {'I', 'II', 'III', 'IV'}, ...
-              'Units', 'normalized', ...
-              'Position', [0.38 y 0.25 0.07], ...
-              'Value', 2, ...
-              'Callback', @cb_overvoltage_cat);
-    y = y - dy;
-
-    make_label(panel, 'Insulation standard', [0.02 y 0.35 0.06]);
-    data.pop_ins_std = uicontrol('Parent', panel, 'Style', 'popupmenu', ...
-              'String', {'IEC 62368-1', 'IEC 60664-1', 'IEC 61558-1', 'IEC 60335-1'}, ...
-              'Units', 'normalized', ...
-              'Position', [0.38 y 0.25 0.07], ...
-              'Value', 1, ...
-              'Callback', @cb_insulation_standard);
-    y = y - dy;
-
-    % --- Thermal ---
-    make_label(panel, 'Ambient temperature', [0.02 y 0.35 0.06]);
-    data.edit_ambient = make_edit(panel, num2str(data.thermal.ambient_temp), ...
-                                  [0.38 y 0.20 0.07], @cb_ambient_temp);
-    make_label(panel, 'C', [0.59 y 0.05 0.06]);
-    y = y - dy - 0.005;
-
-    make_label(panel, 'Max temperature rise', [0.02 y 0.35 0.06]);
-    data.edit_max_rise = make_edit(panel, num2str(data.thermal.max_rise), ...
-                                   [0.38 y 0.20 0.07], @cb_max_rise);
-    make_label(panel, 'C', [0.59 y 0.05 0.06]);
-    y = y - dy;
-
-    % --- Size Constraints ---
-    make_label(panel, 'Max width (optional)', [0.02 y 0.35 0.06]);
-    data.edit_max_width = make_edit(panel, '', [0.38 y 0.20 0.07], @cb_max_width);
-    make_label(panel, 'mm', [0.59 y 0.05 0.06]);
-    y = y - dy;
-
-    make_label(panel, 'Max height (optional)', [0.02 y 0.35 0.06]);
-    data.edit_max_height = make_edit(panel, '', [0.38 y 0.20 0.07], @cb_max_height);
-    make_label(panel, 'mm', [0.59 y 0.05 0.06]);
-    y = y - dy;
-
-    make_label(panel, 'Max depth (optional)', [0.02 y 0.35 0.06]);
-    data.edit_max_depth = make_edit(panel, '', [0.38 y 0.20 0.07], @cb_max_depth);
-    make_label(panel, 'mm', [0.59 y 0.05 0.06]);
-
-    guidata(data.fig, data);
-end
+% build_optional_fields_figure removed — replaced by design_requirements_figure.m
 
 
 % ===============================================================
@@ -794,6 +674,26 @@ end
 
 
 % ===============================================================
+% GUIDATA HELPER — handles callbacks from both main and optional figures
+% ===============================================================
+
+function [data, fig] = get_wizard_data()
+    % Returns [data, main_fig_handle] from any callback context.
+    % If called from the optional-parameters figure, follows UserData link
+    % back to the main topology wizard figure.
+    fig = gcbf();
+    if isempty(fig), fig = gcf(); end
+    data = guidata(fig);
+    if isempty(data) || ~isstruct(data) || ~isfield(data, 'fig')
+        parent_fig = get(fig, 'UserData');
+        if ~isempty(parent_fig) && ishandle(parent_fig)
+            fig = parent_fig;
+            data = guidata(fig);
+        end
+    end
+end
+
+% ===============================================================
 % PATH SWITCHING CALLBACKS
 % ===============================================================
 
@@ -867,8 +767,7 @@ function cb_vin_max(src, ~)
 end
 
 function cb_vin_nom(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     str = strtrim(get(src, 'String'));
     if isempty(str)
         data.converter.vin_nom = [];
@@ -944,8 +843,7 @@ function cb_fsw(src, ~)
 end
 
 function cb_efficiency(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     val = str2double(get(src, 'String'));
     if ~isnan(val) && val > 0 && val <= 100
         data.converter.efficiency = val;
@@ -956,8 +854,7 @@ function cb_efficiency(src, ~)
 end
 
 function cb_vd(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     val = str2double(get(src, 'String'));
     if ~isnan(val) && val >= 0
         data.converter.vd = val;
@@ -968,8 +865,7 @@ function cb_vd(src, ~)
 end
 
 function cb_ripple(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     val = str2double(get(src, 'String'));
     if ~isnan(val) && val > 0 && val <= 100
         data.converter.max_ripple = val;
@@ -980,8 +876,7 @@ function cb_ripple(src, ~)
 end
 
 function cb_max_isw(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     str = strtrim(get(src, 'String'));
     if isempty(str)
         data.converter.max_switch_current = [];
@@ -995,61 +890,71 @@ function cb_max_isw(src, ~)
 end
 
 function cb_toggle_optional(~, ~)
-    fig = gcbf();
-    data = guidata(fig);
-    data.show_optional = ~data.show_optional;
-    if data.show_optional
-        set(data.optional_panel, 'Visible', 'on');
-        set(data.btn_toggle_optional, 'String', 'Hide Optional Parameters');
+    [data, fig] = get_wizard_data();
+    if isfield(data, 'design_req_fig') && ~isempty(data.design_req_fig) && ishandle(data.design_req_fig)
+        if strcmp(get(data.design_req_fig, 'Visible'), 'on')
+            set(data.design_req_fig, 'Visible', 'off');
+        else
+            set(data.design_req_fig, 'Visible', 'on');
+            figure(data.design_req_fig);
+        end
     else
-        set(data.optional_panel, 'Visible', 'off');
-        set(data.btn_toggle_optional, 'String', 'Show Optional Parameters');
+        data.design_req_fig = design_requirements_figure(data.fig);
+        guidata(fig, data);
     end
-    guidata(fig, data);
 end
 
+% --- Legacy callbacks (backward compatibility) ---
+% These callbacks were originally used by the old build_optional_fields_figure.
+% They are retained because collect_gui_field_values and other code paths
+% still reference the data.insulation.*, data.thermal.*, and data.constraints.*
+% fields they update. They may also be called from the main wizard panel.
+
 function cb_insulation_class(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     items = get(src, 'String');
     data.insulation.class = items{get(src, 'Value')};
     guidata(fig, data);
 end
 
 function cb_pollution_degree(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     data.insulation.pollution_degree = get(src, 'Value');
     guidata(fig, data);
 end
 
 function cb_overvoltage_cat(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     items = get(src, 'String');
     data.insulation.overvoltage_cat = items{get(src, 'Value')};
     guidata(fig, data);
 end
 
 function cb_insulation_standard(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     items = get(src, 'String');
     data.insulation.standard = items{get(src, 'Value')};
     guidata(fig, data);
 end
 
 function cb_cti(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     items = get(src, 'String');
     data.insulation.cti = items{get(src, 'Value')};
     guidata(fig, data);
 end
 
+function cb_altitude(src, ~)
+    [data, fig] = get_wizard_data();
+    val = str2double(get(src, 'String'));
+    if ~isnan(val) && val >= 0
+        data.insulation.altitude_max = val;
+    end
+    guidata(fig, data);
+end
+
 function cb_ambient_temp(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     val = str2double(get(src, 'String'));
     if ~isnan(val)
         data.thermal.ambient_temp = val;
@@ -1058,8 +963,7 @@ function cb_ambient_temp(src, ~)
 end
 
 function cb_max_rise(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     val = str2double(get(src, 'String'));
     if ~isnan(val) && val > 0
         data.thermal.max_rise = val;
@@ -1068,8 +972,7 @@ function cb_max_rise(src, ~)
 end
 
 function cb_max_width(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     val = str2double(get(src, 'String'));
     if isnan(val) || val <= 0
         data.constraints.max_width_mm = [];
@@ -1080,8 +983,7 @@ function cb_max_width(src, ~)
 end
 
 function cb_max_height(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     val = str2double(get(src, 'String'));
     if isnan(val) || val <= 0
         data.constraints.max_height_mm = [];
@@ -1092,8 +994,7 @@ function cb_max_height(src, ~)
 end
 
 function cb_max_depth(src, ~)
-    fig = gcbf();
-    data = guidata(fig);
+    [data, fig] = get_wizard_data();
     val = str2double(get(src, 'String'));
     if isnan(val) || val <= 0
         data.constraints.max_depth_mm = [];
@@ -1416,7 +1317,7 @@ function cb_compute_topology(~, ~)
 
     try
         % STEP 1: Request topology computation (generates waveforms + computed requirements)
-        data = request_topology_compute(data);
+        data = request_topology_compute(data, fig);
 
         % STEP 2: Collect GUI field values for API submission
         fprintf('[TOPOLOGY] Collecting GUI field values...\n');
@@ -1448,6 +1349,7 @@ function cb_compute_topology(~, ~)
         gui_data.insulation.pollution_degree = gui_values.pollution_degree;
         gui_data.insulation.overvoltage_cat = gui_values.overvoltage_cat;
         gui_data.insulation.standard = gui_values.insulation_standard;
+        gui_data.insulation.altitude_max = data.insulation.altitude_max;
 
         mas_struct = build_mas_structure(gui_data, data.topology);
 
@@ -1544,8 +1446,8 @@ function cb_compute_topology(~, ~)
 
         % Reuse the Python found during topology computation (already confirmed to have PyOpenMagnetics)
         if isfield(data, 'found_python') && ~isempty(data.found_python)
-            python_cmd = data.found_python;
-            fprintf('[TOPOLOGY] Reusing confirmed Python: %s\n', python_cmd);
+            python_cmd = ['"' data.found_python '"'];  % found_python is raw path
+            fprintf('[TOPOLOGY] Reusing confirmed Python: %s\n', data.found_python);
         else
             python_cmd = 'python';
             venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
@@ -1626,9 +1528,8 @@ function cb_compute_topology(~, ~)
         % STEP 9: Display results in GUI
         display_api_results(fig, results);
 
-        % Show success message
-        msgbox(sprintf('Topology analysis complete!\nRecommendations displayed below.'), ...
-               'Success', 'help');
+        % Refresh local data — display_api_results stores result_buttons via guidata
+        data = guidata(fig);
 
     catch err
         fprintf('[TOPOLOGY] ERROR: %s\n', err.message);
@@ -1655,10 +1556,12 @@ function cb_compute_topology(~, ~)
 end
 
 
-function data = request_topology_compute(data)
+function data = request_topology_compute(data, fig)
     % Call generate_om_topology.py to compute topology-specific requirements
 
-    fig = gcbf();
+    if nargin < 2 || isempty(fig)
+        fig = gcbf();
+    end
     script_dir = pwd();
     config_file = 'om_topology_config.json';
     output_file = 'om_topology_results.json';
@@ -1685,20 +1588,42 @@ function data = request_topology_compute(data)
     else
         nom_op.ambientTemperature = 25;
     end
-    if isfield(data.converter, 'output_voltages') && ~isempty(data.converter.output_voltages)
-        nom_op.outputVoltages = data.converter.output_voltages;
-    elseif isfield(data.converter, 'vout') && ~isempty(data.converter.vout)
-        nom_op.outputVoltages = [data.converter.vout];
-    else
-        nom_op.outputVoltages = [5.0];
+    % Collect multi-output voltages/currents from GUI table rows
+    out_voltages = [];
+    out_currents = [];
+    for oi = 1:data.n_outputs
+        v_field = sprintf('output%d_v', oi);
+        i_field = sprintf('output%d_i', oi);
+        if isfield(data, v_field) && ~isempty(data.(v_field)) && ishandle(data.(v_field))
+            v = str2double(get(data.(v_field), 'String'));
+            if ~isnan(v) && v > 0
+                out_voltages(end+1) = v;
+            end
+        end
+        if isfield(data, i_field) && ~isempty(data.(i_field)) && ishandle(data.(i_field))
+            i_val = str2double(get(data.(i_field), 'String'));
+            if ~isnan(i_val) && i_val > 0
+                out_currents(end+1) = i_val;
+            end
+        end
     end
-    if isfield(data.converter, 'output_currents') && ~isempty(data.converter.output_currents)
-        nom_op.outputCurrents = data.converter.output_currents;
-    elseif isfield(data.converter, 'iout') && ~isempty(data.converter.iout)
-        nom_op.outputCurrents = [data.converter.iout];
-    else
-        nom_op.outputCurrents = [1.0];
+    % Fallback to single vout/iout if table is empty
+    if isempty(out_voltages)
+        if isfield(data.converter, 'vout') && ~isempty(data.converter.vout)
+            out_voltages = repmat(data.converter.vout, 1, data.n_outputs);
+        else
+            out_voltages = repmat(5.0, 1, data.n_outputs);
+        end
     end
+    if isempty(out_currents)
+        if isfield(data.converter, 'iout') && ~isempty(data.converter.iout)
+            out_currents = repmat(data.converter.iout, 1, data.n_outputs);
+        else
+            out_currents = repmat(1.0, 1, data.n_outputs);
+        end
+    end
+    nom_op.outputVoltages = out_voltages;
+    nom_op.outputCurrents = out_currents;
     config.converter.operatingPoints = {nom_op};
 
     % Optional advanced params
@@ -1718,11 +1643,12 @@ function data = request_topology_compute(data)
 
     % Find Python - same fallback chain as recommendations
     python_cmd = 'python';
+    found_python = 'python';  % Track raw path (no quotes)
     venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
     if exist(venv_python, 'file')
-        python_cmd = ['"' strrep(venv_python, '\', '/') '"'];
+        found_python = strrep(venv_python, '\', '/');
+        python_cmd = ['"' found_python '"'];
     end
-    found_python = python_cmd;  % Track which Python ends up working
 
     cmd = sprintf('%s "%s" "%s" 2>&1', python_cmd, py_script, config_file);
     fprintf('[TOPOLOGY] Running: %s\n', cmd);
@@ -1768,7 +1694,7 @@ function data = request_topology_compute(data)
             if status_alt == 0
                 status = status_alt;
                 output = output_alt;
-                found_python = ['"' p '"'];
+                found_python = p;
                 fprintf('[TOPOLOGY] Success using alternative python.\n');
                 break;
             end
@@ -1850,6 +1776,47 @@ function data = request_topology_compute(data)
                 data.requirements.turns_ratio = tr(1);
             end
         end
+        % Store full turns_ratios array for multi-output display
+        if isfield(comp, 'turns_ratios')
+            data.requirements.turns_ratios = comp.turns_ratios;
+        end
+        if isfield(comp, 'Lout_uH')
+            data.requirements.Lout_uH = comp.Lout_uH;
+        end
+        if isfield(comp, 'ns_np')
+            data.requirements.ns_np = comp.ns_np;
+        end
+        if isfield(comp, 'i_mag_peak')
+            data.requirements.i_mag_peak = comp.i_mag_peak;
+        end
+    end
+
+    % Refresh design_req from updated topology results
+    if isfield(data, 'design_req')
+        if data.requirements.Lm_uH > 0
+            data.design_req.magnetizingInductance.nominal = data.requirements.Lm_uH * 1e-6;
+        end
+        data.design_req.numberWindings = data.requirements.n_windings;
+        if isfield(data.requirements, 'turns_ratios') && ~isempty(data.requirements.turns_ratios)
+            data.design_req.turnsRatios = {};
+            for k = 1:numel(data.requirements.turns_ratios)
+                data.design_req.turnsRatios{k} = struct('minimum', [], ...
+                    'nominal', data.requirements.turns_ratios(k), 'maximum', []);
+            end
+        end
+        if isfield(data, 'topology_display') && ~isempty(data.topology_display)
+            data.design_req.topology = data.topology_display;
+        end
+        % Refresh design requirements figure if open (close + reopen to sync display)
+        if isfield(data, 'design_req_fig') && ~isempty(data.design_req_fig) && ishandle(data.design_req_fig)
+            was_visible = strcmp(get(data.design_req_fig, 'Visible'), 'on');
+            delete(data.design_req_fig);
+            data.design_req_fig = [];
+            if was_visible
+                guidata(fig, data);
+                data.design_req_fig = design_requirements_figure(data.fig);
+            end
+        end
     end
 
     % Store MAS inputs from Python for later use in recommendations
@@ -1865,6 +1832,31 @@ function data = request_topology_compute(data)
     try
         % Build converter spec for the waveform viewer
         conv_spec = data.converter;
+        % Add multi-output voltage/current arrays so waveform script
+        % can match the turns_ratios array from n_outputs > 1
+        conv_spec.n_outputs = data.n_outputs;
+        out_v = [];
+        out_i = [];
+        for oi = 1:data.n_outputs
+            v_field = sprintf('output%d_v', oi);
+            i_field = sprintf('output%d_i', oi);
+            if isfield(data, v_field) && ~isempty(data.(v_field)) && ishandle(data.(v_field))
+                v = str2double(get(data.(v_field), 'String'));
+                if ~isnan(v) && v > 0, out_v(end+1) = v; end
+            end
+            if isfield(data, i_field) && ~isempty(data.(i_field)) && ishandle(data.(i_field))
+                iv = str2double(get(data.(i_field), 'String'));
+                if ~isnan(iv) && iv > 0, out_i(end+1) = iv; end
+            end
+        end
+        if isempty(out_v)
+            out_v = repmat(conv_spec.vout, 1, data.n_outputs);
+        end
+        if isempty(out_i)
+            out_i = repmat(conv_spec.iout, 1, data.n_outputs);
+        end
+        conv_spec.output_voltages = out_v;
+        conv_spec.output_currents = out_i;
 
         % Build topology results struct from computed values
         topo_results = struct();
@@ -2332,64 +2324,97 @@ end
 function data = update_topology_requirements_display(data, results)
     % Update requirements display from computed topology values
 
-    fig = gcbf();
     r = data.requirements;
     c = data.converter;
 
     % Build display text
     lines = {};
-    lines{end+1} = sprintf('--- %s Design ---', data.topology_display);
+    topo_name = data.topology_display;
+    if isfield(results, 'topology_display')
+        topo_name = results.topology_display;
+    end
+    lines{end+1} = sprintf('--- %s ---', topo_name);
     lines{end+1} = '';
 
-    if isfield(results, 'topology_display')
-        lines{end+1} = sprintf('Topology: %s', results.topology_display);
+    % Turns ratios — show per-output for multi-output
+    if isfield(r, 'turns_ratios') && isnumeric(r.turns_ratios) && ~isempty(r.turns_ratios)
+        tr = r.turns_ratios;
+        if numel(tr) == 1
+            lines{end+1} = sprintf('Turns ratio  Np:Ns = %.2f : 1', tr(1));
+        else
+            for ti = 1:numel(tr)
+                lines{end+1} = sprintf('  Np:Ns_%d = %.3f : 1', ti, tr(ti));
+            end
+        end
+        if isfield(r, 'ns_np') && r.ns_np > 0
+            lines{end+1} = sprintf('  (Ns/Np = %.4f)', r.ns_np);
+        end
+        lines{end+1} = '';
+    elseif r.turns_ratio > 0
+        lines{end+1} = sprintf('Turns ratio  Np:Ns = %.2f : 1', r.turns_ratio);
         lines{end+1} = '';
     end
 
-    if r.turns_ratio > 0
-        lines{end+1} = sprintf('Turns ratio Np:Ns = %.2f : 1', r.turns_ratio);
-        lines{end+1} = '';
-    end
-
+    % Duty cycle
     if r.duty_nom > 0
         lines{end+1} = sprintf('Duty cycle:');
         if r.duty_min_vin > 0
             lines{end+1} = sprintf('  at Vin_min (%g V): D = %.3f', c.vin_min, r.duty_min_vin);
         end
-        if r.duty_nom > 0
-            lines{end+1} = sprintf('  at Vin_nom (%g V): D = %.3f', c.vin_min, r.duty_nom);
+        vin_nom_val = c.vin_min;  % fallback
+        if isfield(r, 'vin_nom') && r.vin_nom > 0
+            vin_nom_val = r.vin_nom;
+        elseif isfield(c, 'vin_nom') && ~isempty(c.vin_nom) && c.vin_nom > 0
+            vin_nom_val = c.vin_nom;
         end
+        lines{end+1} = sprintf('  at Vin_nom (%g V): D = %.3f', vin_nom_val, r.duty_nom);
         if r.duty_max_vin > 0
             lines{end+1} = sprintf('  at Vin_max (%g V): D = %.3f', c.vin_max, r.duty_max_vin);
         end
         lines{end+1} = '';
     end
 
+    % Inductances
     if r.Lm_uH > 0
-        lines{end+1} = sprintf('Magnetizing inductance Lm = %.1f uH', r.Lm_uH);
+        lines{end+1} = sprintf('Magnetizing inductance  Lm = %.1f uH', r.Lm_uH);
+    end
+    if isfield(r, 'Lout_uH') && r.Lout_uH > 0
+        lines{end+1} = sprintf('Output inductor        Lout = %.1f uH', r.Lout_uH);
+    end
+    if r.Lm_uH > 0 || (isfield(r, 'Lout_uH') && r.Lout_uH > 0)
         lines{end+1} = '';
     end
 
+    % Currents
     if r.i_pri_rms > 0
-        lines{end+1} = sprintf('Primary RMS current = %.2f A', r.i_pri_rms);
+        lines{end+1} = sprintf('Primary RMS current   = %.2f A', r.i_pri_rms);
     end
-    if r.i_sec_rms > 0
-        lines{end+1} = sprintf('Secondary RMS current = %.2f A', r.i_sec_rms);
+    % Secondary RMS: can be scalar or array for multi-output
+    if isnumeric(r.i_sec_rms) && any(r.i_sec_rms > 0)
+        if numel(r.i_sec_rms) == 1
+            lines{end+1} = sprintf('Secondary RMS current = %.2f A', r.i_sec_rms);
+        else
+            for si = 1:numel(r.i_sec_rms)
+                lines{end+1} = sprintf('  Secondary %d RMS     = %.2f A', si, r.i_sec_rms(si));
+            end
+        end
+    end
+    if isfield(r, 'i_mag_peak') && r.i_mag_peak > 0
+        lines{end+1} = sprintf('Magnetizing Ipk       = %.3f A', r.i_mag_peak);
     end
 
+    % Power
     if r.pout_nom > 0
         lines{end+1} = '';
-        lines{end+1} = sprintf('Output power = %.1f W', r.pout_nom);
+        lines{end+1} = sprintf('Output power  = %.1f W', r.pout_nom);
     end
     if r.pin_nom > 0
-        lines{end+1} = sprintf('Input power = %.1f W (at %.0f%% eff.)', r.pin_nom, c.efficiency);
+        lines{end+1} = sprintf('Input power   = %.1f W (at %.0f%% eff.)', r.pin_nom, c.efficiency);
     end
-    lines{end+1} = sprintf('Frequency = %g kHz', c.fsw_khz);
+    lines{end+1} = sprintf('Frequency     = %g kHz', c.fsw_khz);
+    lines{end+1} = sprintf('Windings      = %d', r.n_windings);
 
-    txt = findobj(fig, 'Style', 'text', '-regexp', 'String', '(computing|---.*Design)');
-    if ~isempty(txt)
-        set(txt(1), 'String', strjoin(lines, char(10)));
-    end
+    set(data.txt_requirements, 'String', strjoin(lines, char(10)));
 end
 
 
@@ -2718,17 +2743,23 @@ function spec = build_design_spec_wizard(data)
     % Operating points will be generated by the Python script
     spec.operating_points = [];
 
-    % Recommendation (if user selected one)
+    % Recommendation (if user selected one from the dialog)
+    % Use the nested 'recommendation' sub-object which has local_key fields,
+    % turns, parallels, wires — everything apply_design_spec needs.
     spec.recommendation = struct();
-    if data.rec.selected_idx > 0 && data.rec.selected_idx <= numel(data.rec.results)
-        spec.recommendation = data.rec.results{data.rec.selected_idx};
+    if isfield(data.rec, 'selected_recommendation') && isstruct(data.rec.selected_recommendation)
+        spec.recommendation = data.rec.selected_recommendation;
+        fprintf('[TOPOLOGY] Passing recommendation: core=%s, material=%s, Np=%d, Ns=%d\n', ...
+            get_field(spec.recommendation, 'core_shape', '?'), ...
+            get_field(spec.recommendation, 'material', '?'), ...
+            get_field(spec.recommendation, 'primary_turns', 0), ...
+            get_field(spec.recommendation, 'secondary_turns', 0));
     end
 
-    % Core-loss method preferences — pass through to interactive designer
-    % Default to iGSE; carry Steinmetz coefficients from recommendation if present.
+    % Core-loss method preferences — default to iGSE
     spec.core_loss = struct('method', 'iGSE');
-    if data.rec.selected_idx > 0 && data.rec.selected_idx <= numel(data.rec.results)
-        r = data.rec.results{data.rec.selected_idx};
+    if isfield(data.rec, 'selected_recommendation') && isstruct(data.rec.selected_recommendation)
+        r = data.rec.selected_recommendation;
         if isfield(r, 'steinmetz_k') && ~isempty(r.steinmetz_k)
             spec.core_loss.k     = r.steinmetz_k;
             spec.core_loss.alpha = r.steinmetz_alpha;
@@ -2943,11 +2974,16 @@ function cb_get_recommendations(~, ~)
             error('Python script "%s" not found in %s', py_script, script_dir);
         end
 
-        % Find Python - check venv first, then fallback chain
-        python_cmd = 'python';
-        venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
-        if exist(venv_python, 'file')
-            python_cmd = ['"' strrep(venv_python, '\', '/') '"'];
+        % Find Python - reuse confirmed path from topology computation, then fallback
+        if isfield(data, 'found_python') && ~isempty(data.found_python)
+            python_cmd = ['"' data.found_python '"'];  % found_python is raw path
+            fprintf('[WIZARD] Reusing confirmed Python: %s\n', data.found_python);
+        else
+            python_cmd = 'python';
+            venv_python = fullfile(script_dir, '.venv', 'Scripts', 'python.exe');
+            if exist(venv_python, 'file')
+                python_cmd = ['"' strrep(venv_python, '\', '/') '"'];
+            end
         end
 
         cmd = sprintf('%s "%s" "%s" 2>&1', python_cmd, py_script, config_file);
@@ -3057,9 +3093,24 @@ function config = build_recommendation_config(data)
     config.max_results = data.rec.n_results;
     config.wire_family_mode = data.rec.wire_family_mode;
 
-    % If MAS inputs already computed, pass them through
-    if ~isempty(data.mas_inputs) && isstruct(data.mas_inputs)
-        config.mas_inputs = data.mas_inputs;
+    % If MAS inputs already computed by topology calculator, pass the pre-built
+    % operating points as operating_points_mas.  This is the key that
+    % generate_om_recommendations.py checks (line 360) to use the MAS passthrough
+    % path, which avoids rebuilding excitations from scratch (which can crash PyMKF).
+    if ~isempty(data.mas_inputs) && isstruct(data.mas_inputs) && ...
+            isfield(data.mas_inputs, 'operatingPoints') && ~isempty(data.mas_inputs.operatingPoints)
+        ops = data.mas_inputs.operatingPoints;
+        % Octave jsondecode converts single-element JSON arrays to structs;
+        % normalize to cell array so jsonencode produces JSON array [{}].
+        if isstruct(ops) && ~iscell(ops)
+            n_ops = numel(ops);
+            ops_cell = cell(1, n_ops);
+            for k = 1:n_ops
+                ops_cell{k} = ops(k);
+            end
+            ops = ops_cell;
+        end
+        config.operating_points_mas = ops;
     end
 
     config.cores_in_stock = data.rec.cores_in_stock;
@@ -3071,7 +3122,7 @@ function config = build_recommendation_config(data)
 
     % Design requirements (MAS format)
     config.design_requirements = struct();
-    config.design_requirements.topology = 'Two Switch Forward Converter';
+    config.design_requirements.topology = data.topology;
 
     % Magnetizing inductance with ±20% tolerance
     config.design_requirements.magnetizingInductance = struct();
@@ -3300,15 +3351,11 @@ function data = display_recommendations(data, results)
 
     if ok && ~isempty(sel)
         data.rec.selected_idx = sel;
-        % Convert to cell array if struct array
+        % Store the selected recommendation for build_design_spec_wizard
         if isstruct(recs)
-            rec_cell = cell(n, 1);
-            for k = 1:n
-                rec_cell{k} = recs(k);
-            end
-            data.rec.results = rec_cell;
-        else
-            data.rec.results = recs;
+            data.rec.selected_recommendation = recs(sel);
+        elseif iscell(recs)
+            data.rec.selected_recommendation = recs{sel};
         end
 
         msgbox(sprintf('Selected recommendation #%d: %s', sel, items{sel}), 'Selection');
@@ -3358,6 +3405,103 @@ end
 
 
 % ===============================================================
+% DESIGN REQUIREMENTS DEFAULTS
+% ===============================================================
+
+function dr = init_design_req_defaults(data)
+    % Initialize design requirements with sensible defaults
+    % Pre-populated from topology computation when available
+
+    dr = struct();
+
+    % Track which optional requirements are enabled
+    dr.enabled = struct();
+    dr.enabled.minimumImpedance = false;
+    dr.enabled.wiringTechnology = false;
+    dr.enabled.insulation = true;  % default on
+    dr.enabled.leakageInductance = false;
+    dr.enabled.strayCapacitance = false;
+    dr.enabled.isolationSides = false;
+    dr.enabled.operatingTemperature = false;
+    dr.enabled.maximumWeight = false;
+    dr.enabled.maximumDimensions = false;
+    dr.enabled.terminalType = false;
+    dr.enabled.topology = false;
+    dr.enabled.market = false;
+
+    % Required: numberWindings
+    dr.numberWindings = data.requirements.n_windings;
+
+    % Required: magnetizingInductance (SI: Henries)
+    dr.magnetizingInductance = struct('minimum', [], 'nominal', [], 'maximum', []);
+    if data.requirements.Lm_uH > 0
+        dr.magnetizingInductance.nominal = data.requirements.Lm_uH * 1e-6;
+    end
+
+    % Required: turnsRatios (cell array of structs)
+    dr.turnsRatios = {};
+    if isfield(data.requirements, 'turns_ratios') && ~isempty(data.requirements.turns_ratios)
+        for k = 1:numel(data.requirements.turns_ratios)
+            dr.turnsRatios{k} = struct('minimum', [], 'nominal', data.requirements.turns_ratios(k), 'maximum', []);
+        end
+    elseif data.requirements.turns_ratio > 0
+        dr.turnsRatios{1} = struct('minimum', [], 'nominal', data.requirements.turns_ratio, 'maximum', []);
+    end
+
+    % Insulation defaults
+    dr.insulation = struct();
+    dr.insulation.cti = 'Group II';
+    dr.insulation.pollutionDegree = 'P2';
+    dr.insulation.overvoltageCategory = 'OVC-III';
+    dr.insulation.insulationType = 'Basic';
+    dr.insulation.standards = {'IEC 60664-1'};
+    dr.insulation.altitude = struct('minimum', [], 'nominal', [], 'maximum', 2000);
+    dr.insulation.mainSupplyVoltage = struct('minimum', [], 'nominal', [], 'maximum', 400);
+
+    % Optional defaults (populated when enabled)
+    dr.minimumImpedance = {struct('frequency', 100000, 'magnitude', 1000)};
+    dr.wiringTechnology = 'Wound';
+    dr.leakageInductance = {};
+    dr.strayCapacitance = {};
+    dr.isolationSides = {};
+    dr.operatingTemperature = struct('minimum', [], 'nominal', [], 'maximum', 85);
+    dr.maximumWeight = 0.3;  % kg
+    dr.maximumDimensions = struct('width', [], 'height', 0.05, 'depth', []);  % meters
+    dr.terminalType = {};
+    dr.topology = '';
+    dr.market = 'Industrial';
+
+    % Auto-set topology display name if available
+    if isfield(data, 'topology_display') && ~isempty(data.topology_display)
+        dr.topology = data.topology_display;
+    end
+
+    % Initialize per-winding arrays based on n_windings
+    nw = dr.numberWindings;
+    n_sec = max(nw - 1, 1);
+    if isempty(dr.leakageInductance) || numel(dr.leakageInductance) ~= n_sec
+        dr.leakageInductance = {};
+        for k = 1:n_sec
+            dr.leakageInductance{k} = struct('minimum', [], 'nominal', [], 'maximum', 3e-6);
+        end
+    end
+    if isempty(dr.strayCapacitance) || numel(dr.strayCapacitance) ~= n_sec
+        dr.strayCapacitance = {};
+        for k = 1:n_sec
+            dr.strayCapacitance{k} = struct('minimum', [], 'nominal', [], 'maximum', 50e-12);
+        end
+    end
+    if isempty(dr.isolationSides) || numel(dr.isolationSides) ~= nw
+        sides = {'Primary', 'Secondary', 'Tertiary', 'Quaternary'};
+        dr.isolationSides = sides(1:min(nw, 4));
+    end
+    if isempty(dr.terminalType) || numel(dr.terminalType) ~= nw
+        dr.terminalType = repmat({''}, 1, nw);
+    end
+end
+
+
+% ===============================================================
 % INPUT COLLECTION & API INTEGRATION (Phase 3.4-3.7)
 % ===============================================================
 
@@ -3374,67 +3518,35 @@ function gui_values = collect_gui_field_values(fig, topology_key)
     data = guidata(fig);
     gui_values = struct();
 
-    % ===== REQUIRED FIELDS =====
+    % Helper: safely read string from a handle that may live in a separate figure
+    % Returns '' if handle is invalid (figure closed, etc.)
 
-    % Input voltage (always required)
+    % ===== REQUIRED FIELDS (main wizard figure — always valid) =====
+
     gui_values.vin_min = str2double(get(data.edit_vin_min, 'String'));
     gui_values.vin_max = str2double(get(data.edit_vin_max, 'String'));
-
-    % Input voltage nominal (optional, but extract if visible and filled)
-    vin_nom_str = get(data.edit_vin_nom, 'String');
-    if ~isempty(vin_nom_str)
-        gui_values.vin_nom = str2double(vin_nom_str);
-    else
-        gui_values.vin_nom = [];
-    end
-
-    % Switching frequency (kHz)
     gui_values.fsw_khz = str2double(get(data.edit_fsw, 'String'));
-
-    % Diode forward drop voltage
-    gui_values.vd = str2double(get(data.edit_vd, 'String'));
-
-    % Output specs
     gui_values.vout = str2double(get(data.edit_vout, 'String'));
     gui_values.iout = str2double(get(data.edit_iout, 'String'));
 
-    % ===== OPTIONAL FIELDS (Extract if visible) =====
+    % ===== FIELDS FROM OPTIONAL/DESIGN-REQUIREMENTS FIGURE =====
+    % These handles live in a separate figure that may be closed or invalid.
+    % Fall back to data.converter / data.insulation / data.thermal struct values.
 
-    % Efficiency (stored as percent in GUI, keep as-is for conversion in build_mas_structure)
-    if isfield(data, 'edit_efficiency') && ~isempty(data.edit_efficiency)
-        eff_str = get(data.edit_efficiency, 'String');
-        if ~isempty(eff_str)
-            gui_values.efficiency = str2double(eff_str);
-        else
-            gui_values.efficiency = [];
-        end
-    else
-        gui_values.efficiency = [];
-    end
+    % Input voltage nominal
+    gui_values.vin_nom = safe_get_edit(data, 'edit_vin_nom', data.converter, 'vin_nom', []);
 
-    % Max current ripple (stored as percent, keep as-is for conversion in build_mas_structure)
-    if isfield(data, 'edit_ripple') && ~isempty(data.edit_ripple)
-        ripple_str = get(data.edit_ripple, 'String');
-        if ~isempty(ripple_str)
-            gui_values.max_ripple = str2double(ripple_str);
-        else
-            gui_values.max_ripple = [];
-        end
-    else
-        gui_values.max_ripple = [];
-    end
+    % Diode forward drop voltage
+    gui_values.vd = safe_get_edit(data, 'edit_vd', data.converter, 'vd', 0.7);
+
+    % Efficiency (percent)
+    gui_values.efficiency = safe_get_edit(data, 'edit_efficiency', data.converter, 'efficiency', 90);
+
+    % Max current ripple (percent)
+    gui_values.max_ripple = safe_get_edit(data, 'edit_ripple', data.converter, 'max_ripple', 30);
 
     % Max switch current (A, optional)
-    if isfield(data, 'edit_max_isw') && ~isempty(data.edit_max_isw)
-        max_isw_str = get(data.edit_max_isw, 'String');
-        if ~isempty(max_isw_str)
-            gui_values.max_switch_current = str2double(max_isw_str);
-        else
-            gui_values.max_switch_current = [];
-        end
-    else
-        gui_values.max_switch_current = [];
-    end
+    gui_values.max_switch_current = safe_get_edit(data, 'edit_max_isw', data.converter, 'max_switch_current', []);
 
     % Max duty cycle (optional, topology-specific)
     gui_values.max_duty = [];
@@ -3443,141 +3555,104 @@ function gui_values = collect_gui_field_values(fig, topology_key)
     gui_values.max_drain_source_voltage = [];
 
     % Ambient temperature
-    if isfield(data, 'edit_ambient') && ~isempty(data.edit_ambient)
-        ambient_str = get(data.edit_ambient, 'String');
-        if ~isempty(ambient_str)
-            gui_values.ambient_temp = str2double(ambient_str);
-        else
-            gui_values.ambient_temp = 25;  % default
-        end
-    else
-        gui_values.ambient_temp = 25;
-    end
+    gui_values.ambient_temp = safe_get_edit(data, 'edit_ambient', data.thermal, 'ambient_temp', 25);
 
-    % ===== INSULATION & THERMAL FIELDS =====
+    % Maximum temperature rise
+    gui_values.max_temp_rise = safe_get_edit(data, 'edit_max_rise', data.thermal, 'max_rise', 40);
 
-    % Insulation class (from popup)
-    if isfield(data, 'pop_insulation') && ~isempty(data.pop_insulation)
-        insulation_options = get(data.pop_insulation, 'String');
-        insulation_idx = get(data.pop_insulation, 'Value');
-        if iscell(insulation_options)
-            gui_values.insulation_class = insulation_options{insulation_idx};
-        else
-            gui_values.insulation_class = insulation_options;
-        end
-    else
-        gui_values.insulation_class = 'Basic';
-    end
+    % Insulation class
+    gui_values.insulation_class = safe_get_popup(data, 'pop_insulation', data.insulation, 'class', 'Basic');
 
     % CTI group
-    if isfield(data, 'pop_cti') && ~isempty(data.pop_cti)
-        cti_options = get(data.pop_cti, 'String');
-        cti_idx = get(data.pop_cti, 'Value');
-        if iscell(cti_options)
-            gui_values.cti = cti_options{cti_idx};
-        else
-            gui_values.cti = cti_options;
-        end
-    else
-        gui_values.cti = 'Group II';
-    end
+    gui_values.cti = safe_get_popup(data, 'pop_cti', data.insulation, 'cti', 'Group II');
 
-    % Pollution degree
-    if isfield(data, 'pop_pollution') && ~isempty(data.pop_pollution)
-        pollution_str = get(data.pop_pollution, 'String');
-        pollution_idx = get(data.pop_pollution, 'Value');
-        if iscell(pollution_str)
-            gui_values.pollution_degree = str2double(pollution_str{pollution_idx});
-        else
-            gui_values.pollution_degree = str2double(pollution_str);
-        end
-    else
-        gui_values.pollution_degree = 2;
+    % Pollution degree (numeric from popup)
+    poll_str = safe_get_popup(data, 'pop_pollution', struct(), '', '2');
+    gui_values.pollution_degree = str2double(poll_str);
+    if isnan(gui_values.pollution_degree)
+        gui_values.pollution_degree = data.insulation.pollution_degree;
     end
 
     % Overvoltage category
-    if isfield(data, 'pop_ovc') && ~isempty(data.pop_ovc)
-        ovc_options = get(data.pop_ovc, 'String');
-        ovc_idx = get(data.pop_ovc, 'Value');
-        if iscell(ovc_options)
-            gui_values.overvoltage_cat = ovc_options{ovc_idx};
-        else
-            gui_values.overvoltage_cat = ovc_options;
-        end
-    else
-        gui_values.overvoltage_cat = 'II';
-    end
+    gui_values.overvoltage_cat = safe_get_popup(data, 'pop_ovc', data.insulation, 'overvoltage_cat', 'II');
 
     % Insulation standard
-    if isfield(data, 'pop_ins_std') && ~isempty(data.pop_ins_std)
-        ins_std_options = get(data.pop_ins_std, 'String');
-        ins_std_idx = get(data.pop_ins_std, 'Value');
-        if iscell(ins_std_options)
-            gui_values.insulation_standard = ins_std_options{ins_std_idx};
-        else
-            gui_values.insulation_standard = ins_std_options;
-        end
-    else
-        gui_values.insulation_standard = 'IEC 62368-1';
-    end
+    gui_values.insulation_standard = safe_get_popup(data, 'pop_ins_std', data.insulation, 'standard', 'IEC 62368-1');
 
-    % Maximum temperature rise
-    if isfield(data, 'edit_max_rise') && ~isempty(data.edit_max_rise)
-        max_rise_str = get(data.edit_max_rise, 'String');
-        if ~isempty(max_rise_str)
-            gui_values.max_temp_rise = str2double(max_rise_str);
-        else
-            gui_values.max_temp_rise = 40;
-        end
-    else
-        gui_values.max_temp_rise = 40;
-    end
+    % Altitude
+    alt_val = safe_get_edit(data, 'edit_altitude', data.insulation, 'altitude_max', 2000);
+    gui_values.altitude_max = alt_val;
 
     % Size constraints (optional)
-    gui_values.max_width_mm = [];
-    gui_values.max_height_mm = [];
-    gui_values.max_depth_mm = [];
+    gui_values.max_width_mm = safe_get_edit(data, 'edit_max_width', struct(), '', []);
+    gui_values.max_height_mm = safe_get_edit(data, 'edit_max_height', struct(), '', []);
+    gui_values.max_depth_mm = safe_get_edit(data, 'edit_max_depth', struct(), '', []);
 
-    if isfield(data, 'edit_max_width') && ~isempty(data.edit_max_width)
-        width_str = get(data.edit_max_width, 'String');
-        if ~isempty(width_str)
-            gui_values.max_width_mm = str2double(width_str);
-        end
-    end
-    if isfield(data, 'edit_max_height') && ~isempty(data.edit_max_height)
-        height_str = get(data.edit_max_height, 'String');
-        if ~isempty(height_str)
-            gui_values.max_height_mm = str2double(height_str);
-        end
-    end
-    if isfield(data, 'edit_max_depth') && ~isempty(data.edit_max_depth)
-        depth_str = get(data.edit_max_depth, 'String');
-        if ~isempty(depth_str)
-            gui_values.max_depth_mm = str2double(depth_str);
-        end
+    % Design requirements struct (from Design Requirements figure, if available)
+    if isfield(data, 'design_req')
+        gui_values.design_req = data.design_req;
     end
 
 end
 
 
+function val = safe_get_edit(data, handle_field, fallback_struct, fallback_field, default_val)
+    % Safely read string from an edit control handle, falling back to struct value.
+    val = default_val;
+    if isfield(data, handle_field) && ~isempty(data.(handle_field)) && ishandle(data.(handle_field))
+        s = get(data.(handle_field), 'String');
+        if ~isempty(s)
+            val = str2double(s);
+            if isnan(val), val = default_val; end
+        end
+    elseif ~isempty(fallback_field) && isfield(fallback_struct, fallback_field)
+        fb = fallback_struct.(fallback_field);
+        if ~isempty(fb) && isnumeric(fb)
+            val = fb;
+        end
+    end
+end
+
+
+function val = safe_get_popup(data, handle_field, fallback_struct, fallback_field, default_val)
+    % Safely read selected string from a popup handle, falling back to struct value.
+    val = default_val;
+    if isfield(data, handle_field) && ~isempty(data.(handle_field)) && ishandle(data.(handle_field))
+        opts = get(data.(handle_field), 'String');
+        idx = get(data.(handle_field), 'Value');
+        if iscell(opts)
+            val = opts{idx};
+        else
+            val = opts;
+        end
+    elseif ~isempty(fallback_field) && isfield(fallback_struct, fallback_field)
+        fb = fallback_struct.(fallback_field);
+        if ~isempty(fb)
+            if isnumeric(fb)
+                val = num2str(fb);
+            else
+                val = fb;
+            end
+        end
+    end
+end
+
+
 function display_api_results(fig, results)
-    % Display PyOpenMagnetics adviser results in the recommendation panel
+    % Display PyOpenMagnetics adviser results — store and open selection dialog
     %
     % Input:
     %   fig: figure handle
-    %   results: struct from om_topology_api_results.json containing:
-    %     .status: 'OK' or 'ERROR'
-    %     .data: array of 1-5 design results, each with:
-    %       .magnetic.core.name
-    %       .outputs.powerLosses.total (W)
-    %       .outputs.temperature (C)
+    %   results: struct from om_topology_api_results.json
 
     data = guidata(fig);
 
-    % Clear previous results
+    % Clear previous result buttons (if any leftover)
     if isfield(data, 'rec') && isfield(data.rec, 'result_buttons')
         for i = 1:length(data.rec.result_buttons)
-            delete(data.rec.result_buttons{i});
+            if ishandle(data.rec.result_buttons{i})
+                delete(data.rec.result_buttons{i});
+            end
         end
         data.rec.result_buttons = {};
     end
@@ -3600,65 +3675,17 @@ function display_api_results(fig, results)
         return;
     end
 
-    result_data = results.data;
-    if ~iscell(result_data)
-        result_data = {result_data};
-    end
-
-    n_results = min(length(result_data), 5);  % max 5 results
+    result_data = results_to_cell(results.data);
+    n_results = min(length(result_data), 5);
 
     fprintf('[TOPOLOGY] Displaying %d API results\n', n_results);
 
-    % Store results for selection callback
+    % Store results as cell array for selection dialog
     data.api_results = results;
+    data.api_result_data = result_data(1:n_results);
     data.rec.result_buttons = {};
 
-    % Create button for each result
-    for i = 1:n_results
-        result = result_data{i};
-
-        % Extract core name
-        core_name = 'Unknown';
-        if isfield(result, 'magnetic') && isfield(result.magnetic, 'core') && ...
-           isfield(result.magnetic.core, 'name')
-            core_name = result.magnetic.core.name;
-        end
-
-        % Extract total losses (W)
-        total_losses = 0;
-        if isfield(result, 'outputs') && isfield(result.outputs, 'powerLosses') && ...
-           isfield(result.outputs.powerLosses, 'total')
-            total_losses = result.outputs.powerLosses.total;
-        end
-
-        % Extract temperature (C)
-        temperature = 25;
-        if isfield(result, 'outputs') && isfield(result.outputs, 'temperature')
-            temperature = result.outputs.temperature;
-        end
-
-        % Create button label
-        btn_label = sprintf('[%d] %s | Losses: %.2fW | Temp: %.0fC', ...
-                           i, core_name, total_losses, temperature);
-
-        % Position buttons vertically in recommendation panel
-        % Assuming rec_panel height is ~0.28 normalized, buttons should fit in grid
-        y_pos = 0.50 - (i - 1) * 0.08;  % top-down layout
-
-        % Create button (positioned in figure, mapped to rec_panel later)
-        btn = uicontrol('Parent', data.fig, 'Style', 'pushbutton', ...
-                       'String', btn_label, ...
-                       'Units', 'normalized', ...
-                       'Position', [0.52 y_pos 0.46 0.075], ...
-                       'FontSize', 8, ...
-                       'HorizontalAlignment', 'left', ...
-                       'BackgroundColor', [0.85 0.85 0.85], ...
-                       'Callback', {@cb_select_design, i, fig});
-
-        data.rec.result_buttons{i} = btn;
-    end
-
-    % Show result count
+    % Update count label
     count_label = sprintf('Results: %d recommendations', n_results);
     if isfield(data, 'txt_rec_count')
         set(data.txt_rec_count, 'String', count_label);
@@ -3666,66 +3693,246 @@ function display_api_results(fig, results)
 
     fprintf('[TOPOLOGY] API results displayed successfully\n');
     guidata(fig, data);
+
+    % Open the detailed selection dialog
+    show_recommendation_dialog(fig);
 end
 
 
-function cb_select_design(hObject, eventdata, selected_idx, fig)
-    % Handle design selection from API results
+function result_data = results_to_cell(raw)
+    % Convert jsondecode output (struct array or cell) to cell array of structs
+    if iscell(raw)
+        result_data = raw;
+    elseif isstruct(raw) && numel(raw) > 1
+        result_data = cell(1, numel(raw));
+        for k = 1:numel(raw)
+            result_data{k} = raw(k);
+        end
+    else
+        result_data = {raw};
+    end
+end
+
+
+function show_recommendation_dialog(wizard_fig)
+    % Open a detailed recommendation selection dialog (new window)
     %
-    % Input:
-    %   hObject: callback object (button)
-    %   eventdata: event data (unused)
-    %   selected_idx: index of selected design (1-5)
-    %   fig: figure handle
+    % Shows a listbox of designs with a detail panel showing:
+    %   Core, Material, Lm, Llk, Bpk, deltaB, Core Loss, Winding Loss,
+    %   Total Loss, Primary Turns/Wire, Secondary Turns/Wire
 
-    data = guidata(fig);
+    data = guidata(wizard_fig);
+    result_data = data.api_result_data;
+    n_results = length(result_data);
 
-    fprintf('[TOPOLOGY] Design %d selected\n', selected_idx);
-
-    % Store selection
-    data.rec.selected_idx = selected_idx;
-
-    % Extract full design from API results
-    if isfield(data, 'api_results') && isfield(data.api_results, 'data')
-        result_data = data.api_results.data;
-        if ~iscell(result_data)
-            result_data = {result_data};
-        end
-
-        if selected_idx <= length(result_data)
-            data.rec.results = result_data{selected_idx};
-        end
+    if n_results == 0
+        msgbox('No recommendations to display.', 'Warning', 'warn');
+        return;
     end
 
-    % Highlight selected button
-    for i = 1:length(data.rec.result_buttons)
-        if i == selected_idx
-            set(data.rec.result_buttons{i}, 'BackgroundColor', [0.2 0.6 0.8], ...
-                                            'ForegroundColor', 'w', 'FontWeight', 'bold');
-        else
-            set(data.rec.result_buttons{i}, 'BackgroundColor', [0.85 0.85 0.85], ...
-                                            'ForegroundColor', 'k', 'FontWeight', 'normal');
-        end
+    % Build listbox strings
+    list_strings = cell(1, n_results);
+    for i = 1:n_results
+        r = result_data{i};
+        core_name = get_field(r, 'core_name', get_field(r, 'core_shape', 'Unknown'));
+        mat = get_field(r, 'material', '');
+        total_loss = get_field(r, 'total_losses_w', 0);
+        list_strings{i} = sprintf('%d. %s (%s) - %.2f W', i, core_name, mat, total_loss);
     end
 
-    guidata(fig, data);
+    % Create dialog figure
+    dlg = figure('Name', 'Select Magnetic Design', ...
+                 'NumberTitle', 'off', ...
+                 'MenuBar', 'none', ...
+                 'ToolBar', 'none', ...
+                 'Position', [200 150 750 500], ...
+                 'Resize', 'on', ...
+                 'Color', [0.94 0.94 0.94]);
 
-    % Proceed to winding designer with selected design
+    % Title
+    uicontrol('Parent', dlg, 'Style', 'text', ...
+              'String', 'PyOpenMagnetics Design Recommendations', ...
+              'Units', 'normalized', 'Position', [0.02 0.92 0.96 0.06], ...
+              'FontSize', 12, 'FontWeight', 'bold', ...
+              'BackgroundColor', [0.94 0.94 0.94], ...
+              'HorizontalAlignment', 'center');
+
+    % Listbox (left side)
+    uicontrol('Parent', dlg, 'Style', 'text', ...
+              'String', 'Recommendations:', ...
+              'Units', 'normalized', 'Position', [0.02 0.86 0.40 0.05], ...
+              'FontSize', 9, 'FontWeight', 'bold', ...
+              'BackgroundColor', [0.94 0.94 0.94], ...
+              'HorizontalAlignment', 'left');
+
+    lb = uicontrol('Parent', dlg, 'Style', 'listbox', ...
+                   'String', list_strings, ...
+                   'Units', 'normalized', 'Position', [0.02 0.15 0.40 0.71], ...
+                   'FontSize', 9, 'FontName', 'Consolas', ...
+                   'Value', 1);
+
+    % Detail panel (right side)
+    uicontrol('Parent', dlg, 'Style', 'text', ...
+              'String', 'Design Details:', ...
+              'Units', 'normalized', 'Position', [0.45 0.86 0.53 0.05], ...
+              'FontSize', 9, 'FontWeight', 'bold', ...
+              'BackgroundColor', [0.94 0.94 0.94], ...
+              'HorizontalAlignment', 'left');
+
+    detail_txt = uicontrol('Parent', dlg, 'Style', 'edit', ...
+                           'String', '', ...
+                           'Units', 'normalized', 'Position', [0.45 0.15 0.53 0.71], ...
+                           'FontSize', 9, 'FontName', 'Consolas', ...
+                           'HorizontalAlignment', 'left', ...
+                           'Max', 50, 'Min', 0, ...
+                           'Enable', 'inactive', ...
+                           'BackgroundColor', 'w');
+
+    % Buttons
+    uicontrol('Parent', dlg, 'Style', 'pushbutton', ...
+              'String', 'Use This Design', ...
+              'Units', 'normalized', 'Position', [0.15 0.02 0.30 0.08], ...
+              'FontSize', 10, 'FontWeight', 'bold', ...
+              'BackgroundColor', [0.0 0.6 0.3], 'ForegroundColor', 'w', ...
+              'Callback', {@cb_use_design, dlg, wizard_fig, lb, result_data});
+
+    uicontrol('Parent', dlg, 'Style', 'pushbutton', ...
+              'String', 'Cancel', ...
+              'Units', 'normalized', 'Position', [0.55 0.02 0.30 0.08], ...
+              'FontSize', 10, ...
+              'BackgroundColor', [0.85 0.85 0.85], ...
+              'Callback', {@(~,~) close(dlg)});
+
+    % Set up listbox callback to update detail panel
+    set(lb, 'Callback', {@cb_update_detail, detail_txt, result_data});
+
+    % Show first item's details
+    cb_update_detail(lb, [], detail_txt, result_data);
+end
+
+
+function cb_update_detail(lb, ~, detail_txt, result_data)
+    % Update the detail panel when a listbox selection changes
+    idx = get(lb, 'Value');
+    if isempty(idx) || idx < 1 || idx > length(result_data)
+        return;
+    end
+    r = result_data{idx};
+
+    % Extract fields from top-level result
+    core_name = get_field(r, 'core_name', get_field(r, 'core_shape', '?'));
+    mat = get_field(r, 'material', '?');
+    Lm = get_field(r, 'Lm_uH', 0);
+    Llk = get_field(r, 'Llk_uH', 0);
+    Bpk = get_field(r, 'B_peak_mT', 0);
+    core_loss = get_field(r, 'core_losses_w', 0);
+    wdg_loss = get_field(r, 'winding_losses_w', 0);
+    total_loss = get_field(r, 'total_losses_w', 0);
+    score = get_field(r, 'score', 0);
+
+    % Extract fields from nested recommendation
+    rec = struct();
+    if isfield(r, 'recommendation')
+        rec = r.recommendation;
+    end
+    B_pp = get_field(rec, 'B_pp_mT', 0);
+    B_offset = get_field(rec, 'B_offset_mT', 0);
+    np = get_field(rec, 'primary_turns', 0);
+    ns = get_field(rec, 'secondary_turns', 0);
+    np_par = get_field(rec, 'primary_parallels', 1);
+    ns_par = get_field(rec, 'secondary_parallels', 1);
+    pri_wire = get_field(rec, 'primary_wire', '?');
+    sec_wire = get_field(rec, 'secondary_wire', '?');
+    n_wdg = get_field(rec, 'n_windings', 2);
+    Ae = get_field(rec, 'Ae_m2', 0);
+    le = get_field(rec, 'le_m', 0);
+    Ve = get_field(rec, 'Ve_m3', 0);
+
+    % Build detail text
+    lines = {};
+    lines{end+1} = '--- Core ---';
+    lines{end+1} = sprintf('  Shape:      %s', core_name);
+    lines{end+1} = sprintf('  Material:   %s', mat);
+    lines{end+1} = sprintf('  Ae:         %.2f mm2', Ae * 1e6);
+    lines{end+1} = sprintf('  le:         %.2f mm', le * 1e3);
+    lines{end+1} = sprintf('  Ve:         %.2f mm3', Ve * 1e9);
+    lines{end+1} = '';
+    lines{end+1} = '--- Magnetics ---';
+    lines{end+1} = sprintf('  Lm:         %.1f uH', Lm);
+    lines{end+1} = sprintf('  Llk:        %.1f uH', Llk);
+    lines{end+1} = sprintf('  B_peak:     %.1f mT', Bpk);
+    lines{end+1} = sprintf('  delta_B:    %.1f mT', B_pp);
+    lines{end+1} = sprintf('  B_offset:   %.1f mT', B_offset);
+    lines{end+1} = '';
+    lines{end+1} = '--- Losses ---';
+    lines{end+1} = sprintf('  Core Loss:     %.3f W', core_loss);
+    lines{end+1} = sprintf('  Winding Loss:  %.3f W', wdg_loss);
+    lines{end+1} = sprintf('  Total Loss:    %.3f W', total_loss);
+    lines{end+1} = '';
+    lines{end+1} = '--- Windings ---';
+    lines{end+1} = sprintf('  Windings:   %d', n_wdg);
+    lines{end+1} = sprintf('  Primary:    Np=%d  x%d parallel', np, np_par);
+    lines{end+1} = sprintf('  Wire:       %s', pri_wire);
+    lines{end+1} = sprintf('  Secondary:  Ns=%d  x%d parallel', ns, ns_par);
+    lines{end+1} = sprintf('  Wire:       %s', sec_wire);
+    lines{end+1} = sprintf('  Ratio:      %.2f : 1', np / max(ns, 1));
+    lines{end+1} = '';
+    lines{end+1} = sprintf('  Score:      %.1f%%', score / max(score, 0.01) * 100);
+
+    set(detail_txt, 'String', strjoin(lines, char(10)));
+end
+
+
+function val = get_field(s, name, default_val)
+    % Safe field accessor with default
+    if isstruct(s) && isfield(s, name) && ~isempty(s.(name))
+        val = s.(name);
+    else
+        val = default_val;
+    end
+end
+
+
+function cb_use_design(~, ~, dlg, wizard_fig, lb, result_data)
+    % Handle "Use This Design" button — store selection and launch designer
+    idx = get(lb, 'Value');
+    if isempty(idx) || idx < 1 || idx > length(result_data)
+        errordlg('Please select a design first.', 'No Selection');
+        return;
+    end
+
+    data = guidata(wizard_fig);
+
+    fprintf('[TOPOLOGY] Design %d selected for winding designer\n', idx);
+
+    % Store the selected result and its nested recommendation
+    selected = result_data{idx};
+    data.rec.selected_idx = idx;
+    data.rec.selected_result = selected;
+
+    % Extract the nested recommendation sub-object (has local_key fields, turns, wires)
+    if isfield(selected, 'recommendation') && isstruct(selected.recommendation)
+        data.rec.selected_recommendation = selected.recommendation;
+    else
+        % Fallback: use top-level fields
+        data.rec.selected_recommendation = selected;
+    end
+
+    guidata(wizard_fig, data);
+
+    % Close the dialog
+    close(dlg);
+
+    % Launch winding designer
     try
-        % Validate required fields before continuing
         c = data.converter;
         if c.vin_min <= 0 || c.vin_max <= 0 || c.vout <= 0 || c.iout <= 0 || c.fsw_khz <= 0
             errordlg('Please fill in all required converter specifications.', 'Missing Data');
             return;
         end
-        if c.vin_min >= c.vin_max
-            errordlg('Input voltage min must be less than max.', 'Invalid Data');
-            return;
-        end
 
-        % Build design spec from topology wizard + API results
         spec = build_design_spec_wizard(data);
-        fprintf('[TOPOLOGY] Launching winding designer with API-selected design...\n');
+        fprintf('[TOPOLOGY] Launching winding designer with design %d...\n', idx);
         launch_winding_designer(spec);
 
     catch err

@@ -211,24 +211,187 @@ function mas_struct = build_mas_structure(gui_data, topology_key)
         mas_struct.inputs.designRequirements.insulation = insulation;
     end
 
+    % ===== STEP 9: Overlay Design Requirements from Design Requirements figure =====
+    % When gui_data.design_req is present, it contains fields matching the MAS
+    % designRequirements schema (already in SI units). Optional fields are gated
+    % by gui_data.design_req.enabled.<fieldName> flags.
+    if isfield(gui_data, 'design_req')
+        dr = gui_data.design_req;
+        mas = mas_struct;  % shorthand alias (written back at end)
+
+        % magnetizingInductance (always present, required)
+        if isfield(dr, 'magnetizingInductance') && isstruct(dr.magnetizingInductance)
+            lm = dr.magnetizingInductance;
+            lm_out = struct();
+            if isfield(lm, 'minimum') && ~isempty(lm.minimum), lm_out.minimum = lm.minimum; end
+            if isfield(lm, 'nominal') && ~isempty(lm.nominal), lm_out.nominal = lm.nominal; end
+            if isfield(lm, 'maximum') && ~isempty(lm.maximum), lm_out.maximum = lm.maximum; end
+            if ~isempty(fieldnames(lm_out))
+                mas.inputs.designRequirements.magnetizingInductance = lm_out;
+            end
+        end
+
+        % turnsRatios (always present, required) - cell array of structs
+        if isfield(dr, 'turnsRatios') && iscell(dr.turnsRatios) && ~isempty(dr.turnsRatios)
+            tr_arr = {};
+            for k = 1:numel(dr.turnsRatios)
+                tr_item = dr.turnsRatios{k};
+                tr_out = struct();
+                if isfield(tr_item, 'minimum') && ~isempty(tr_item.minimum), tr_out.minimum = tr_item.minimum; end
+                if isfield(tr_item, 'nominal') && ~isempty(tr_item.nominal), tr_out.nominal = tr_item.nominal; end
+                if isfield(tr_item, 'maximum') && ~isempty(tr_item.maximum), tr_out.maximum = tr_item.maximum; end
+                tr_arr{k} = tr_out;
+            end
+            mas.inputs.designRequirements.turnsRatios = tr_arr;
+        end
+
+        % Check enabled flags for optional requirements
+        enabled = struct();
+        if isfield(dr, 'enabled'), enabled = dr.enabled; end
+
+        % insulation (if enabled) - overrides Step 8 insulation with Design Requirements values
+        if isfield(enabled, 'insulation') && enabled.insulation && isfield(dr, 'insulation')
+            ins = dr.insulation;
+            ins_out = struct();
+            if isfield(ins, 'cti'), ins_out.cti = ins.cti; end
+            if isfield(ins, 'pollutionDegree'), ins_out.pollutionDegree = ins.pollutionDegree; end
+            if isfield(ins, 'overvoltageCategory'), ins_out.overvoltageCategory = ins.overvoltageCategory; end
+            if isfield(ins, 'insulationType'), ins_out.insulationType = ins.insulationType; end
+            if isfield(ins, 'standards'), ins_out.standards = ins.standards; end
+            if isfield(ins, 'altitude') && isstruct(ins.altitude)
+                ins_out.altitude = filter_dim_tolerance(ins.altitude);
+            end
+            if isfield(ins, 'mainSupplyVoltage') && isstruct(ins.mainSupplyVoltage)
+                ins_out.mainSupplyVoltage = filter_dim_tolerance(ins.mainSupplyVoltage);
+            end
+            mas.inputs.designRequirements.insulation = ins_out;
+        end
+
+        % operatingTemperature (if enabled) - overrides Step 7b value
+        if isfield(enabled, 'operatingTemperature') && enabled.operatingTemperature
+            if isfield(dr, 'operatingTemperature') && isstruct(dr.operatingTemperature)
+                mas.inputs.designRequirements.operatingTemperature = filter_dim_tolerance(dr.operatingTemperature);
+            end
+        end
+
+        % maximumWeight (in kg)
+        if isfield(enabled, 'maximumWeight') && enabled.maximumWeight
+            if isfield(dr, 'maximumWeight') && ~isempty(dr.maximumWeight)
+                mas.inputs.designRequirements.maximumWeight = dr.maximumWeight;
+            end
+        end
+
+        % maximumDimensions (in m)
+        if isfield(enabled, 'maximumDimensions') && enabled.maximumDimensions
+            if isfield(dr, 'maximumDimensions') && isstruct(dr.maximumDimensions)
+                dims = struct();
+                if isfield(dr.maximumDimensions, 'width') && ~isempty(dr.maximumDimensions.width)
+                    dims.width = dr.maximumDimensions.width;
+                end
+                if isfield(dr.maximumDimensions, 'height') && ~isempty(dr.maximumDimensions.height)
+                    dims.height = dr.maximumDimensions.height;
+                end
+                if isfield(dr.maximumDimensions, 'depth') && ~isempty(dr.maximumDimensions.depth)
+                    dims.depth = dr.maximumDimensions.depth;
+                end
+                if ~isempty(fieldnames(dims))
+                    mas.inputs.designRequirements.maximumDimensions = dims;
+                end
+            end
+        end
+
+        % wiringTechnology
+        if isfield(enabled, 'wiringTechnology') && enabled.wiringTechnology
+            if isfield(dr, 'wiringTechnology') && ~isempty(dr.wiringTechnology)
+                mas.inputs.designRequirements.wiringTechnology = dr.wiringTechnology;
+            end
+        end
+
+        % market
+        if isfield(enabled, 'market') && enabled.market
+            if isfield(dr, 'market') && ~isempty(dr.market)
+                mas.inputs.designRequirements.market = dr.market;
+            end
+        end
+
+        % topology (string name) - overrides Step 1 value if design_req provides it
+        if isfield(enabled, 'topology') && enabled.topology
+            if isfield(dr, 'topology') && ~isempty(dr.topology)
+                mas.inputs.designRequirements.topology = dr.topology;
+            end
+        end
+
+        % leakageInductance (cell array, per secondary)
+        if isfield(enabled, 'leakageInductance') && enabled.leakageInductance
+            if isfield(dr, 'leakageInductance') && iscell(dr.leakageInductance)
+                llk_arr = {};
+                for k = 1:numel(dr.leakageInductance)
+                    llk_arr{k} = filter_dim_tolerance(dr.leakageInductance{k});
+                end
+                mas.inputs.designRequirements.leakageInductance = llk_arr;
+            end
+        end
+
+        % strayCapacitance (cell array, per secondary)
+        if isfield(enabled, 'strayCapacitance') && enabled.strayCapacitance
+            if isfield(dr, 'strayCapacitance') && iscell(dr.strayCapacitance)
+                sc_arr = {};
+                for k = 1:numel(dr.strayCapacitance)
+                    sc_arr{k} = filter_dim_tolerance(dr.strayCapacitance{k});
+                end
+                mas.inputs.designRequirements.strayCapacitance = sc_arr;
+            end
+        end
+
+        % minimumImpedance (cell array of {frequency, magnitude} structs)
+        if isfield(enabled, 'minimumImpedance') && enabled.minimumImpedance
+            if isfield(dr, 'minimumImpedance') && iscell(dr.minimumImpedance)
+                imp_arr = {};
+                for k = 1:numel(dr.minimumImpedance)
+                    item = dr.minimumImpedance{k};
+                    imp_arr{k} = struct('frequency', item.frequency, ...
+                                         'impedance', struct('magnitude', item.magnitude));
+                end
+                mas.inputs.designRequirements.minimumImpedance = imp_arr;
+            end
+        end
+
+        % isolationSides (cell array of strings)
+        if isfield(enabled, 'isolationSides') && enabled.isolationSides
+            if isfield(dr, 'isolationSides') && iscell(dr.isolationSides)
+                mas.inputs.designRequirements.isolationSides = dr.isolationSides;
+            end
+        end
+
+        % terminalType (cell array of strings)
+        if isfield(enabled, 'terminalType') && enabled.terminalType
+            if isfield(dr, 'terminalType') && iscell(dr.terminalType)
+                mas.inputs.designRequirements.terminalType = dr.terminalType;
+            end
+        end
+
+        mas_struct = mas;  % write back from shorthand alias
+    end
+
 end
 
 
 % ===== HELPER FUNCTIONS =====
 
 function topology_mas = topology_key_to_mas(topology_key)
-% Map MATLAB topology key (snake_case) to MAS format (kebab-case)
+% Map MATLAB topology key (snake_case) to PyOpenMagnetics formal names.
+% PyOpenMagnetics C++ requires exact formal names (not kebab-case).
 
     mapping = struct();
-    mapping.two_switch_forward = 'two-switch-forward';
-    mapping.single_switch_forward = 'single-switch-forward';
-    mapping.active_clamp_forward = 'active-clamp-forward';
-    mapping.flyback = 'flyback';
-    mapping.push_pull = 'push-pull';
-    mapping.buck = 'buck';
-    mapping.boost = 'boost';
-    mapping.isolated_buck = 'isolated-buck';
-    mapping.isolated_buck_boost = 'isolated-buck-boost';
+    mapping.two_switch_forward = 'Two Switch Forward Converter';
+    mapping.single_switch_forward = 'Single Switch Forward Converter';
+    mapping.active_clamp_forward = 'Active Clamp Forward Converter';
+    mapping.flyback = 'Flyback Converter';
+    mapping.push_pull = 'Push Pull Converter';
+    mapping.buck = 'Buck Converter';
+    mapping.boost = 'Boost Converter';
+    mapping.isolated_buck = 'Isolated Buck Converter';
+    mapping.isolated_buck_boost = 'Isolated Buck Boost Converter';
 
     if isfield(mapping, topology_key)
         topology_mas = mapping.(topology_key);
@@ -253,4 +416,15 @@ function output_type = get_topology_output_type(topology_key)
     else
         output_type = 'single';
     end
+end
+
+
+function out = filter_dim_tolerance(dt)
+% Filter a dimensionWithTolerance struct, keeping only non-empty fields.
+% Input: struct with optional fields 'minimum', 'nominal', 'maximum'
+% Output: struct with only the non-empty fields preserved
+    out = struct();
+    if isfield(dt, 'minimum') && ~isempty(dt.minimum), out.minimum = dt.minimum; end
+    if isfield(dt, 'nominal') && ~isempty(dt.nominal), out.nominal = dt.nominal; end
+    if isfield(dt, 'maximum') && ~isempty(dt.maximum), out.maximum = dt.maximum; end
 end

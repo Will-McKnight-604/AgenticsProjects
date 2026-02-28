@@ -250,31 +250,44 @@ function data = apply_design_spec(data, spec)
     if isfield(spec, 'requirements')
         r = spec.requirements;
 
-        % Turns ratio -> set winding turns
-        if isfield(r, 'turns_ratio') && r.turns_ratio > 0
-            np_ns = r.turns_ratio;
-            % Choose reasonable turn counts
+        % Turns ratio -> set winding turns (supports multi-output)
+        ratios = [];
+        if isfield(r, 'turns_ratios') && ~isempty(r.turns_ratios)
+            ratios = r.turns_ratios;
+        elseif isfield(r, 'turns_ratio') && ~isempty(r.turns_ratio) && all(r.turns_ratio > 0)
+            ratios = r.turns_ratio;
+        end
+        if ~isempty(ratios)
+            np_ns = ratios(1);
+            % Choose reasonable turn counts based on first ratio
             if np_ns >= 1
-                ns = max(1, round(10 / np_ns));  % target ~10 secondary turns
+                ns = max(1, round(10 / np_ns));
                 np = round(ns * np_ns);
             else
                 np = max(1, round(10 * np_ns));
                 ns = round(np / np_ns);
             end
             np = max(1, np);
-            ns = max(1, ns);
             data.windings(1).n_turns = np;
-            if data.n_windings >= 2
-                data.windings(2).n_turns = ns;
+            % Set turns for each secondary based on its ratio
+            for si = 1:min(numel(ratios), data.n_windings - 1)
+                ns_i = max(1, round(np / ratios(si)));
+                data.windings(1 + si).n_turns = ns_i;
             end
         end
 
         % RMS currents
-        if isfield(r, 'i_pri_rms') && r.i_pri_rms > 0
+        if isfield(r, 'i_pri_rms') && isscalar(r.i_pri_rms) && r.i_pri_rms > 0
             data.windings(1).current = r.i_pri_rms;
         end
-        if isfield(r, 'i_sec_rms') && r.i_sec_rms > 0 && data.n_windings >= 2
-            data.windings(2).current = r.i_sec_rms;
+        if isfield(r, 'i_sec_rms') && ~isempty(r.i_sec_rms) && data.n_windings >= 2
+            sec_rms = r.i_sec_rms;
+            if ~isnumeric(sec_rms); sec_rms = [sec_rms]; end
+            for si = 1:min(numel(sec_rms), data.n_windings - 1)
+                if sec_rms(si) > 0
+                    data.windings(1 + si).current = sec_rms(si);
+                end
+            end
         end
 
         % Voltage (store converter voltages for excitation generation)
@@ -287,7 +300,20 @@ function data = apply_design_spec(data, spec)
                 end
                 data.windings(1).voltage = vin_nom;
             end
-            if isfield(c, 'vout') && data.n_windings >= 2
+            % Per-output voltages from operatingPoints or scalar vout
+            vouts_set = false;
+            if isfield(c, 'operatingPoints') && ~isempty(c.operatingPoints)
+                op = c.operatingPoints;
+                if iscell(op); op = op{1}; end
+                if isstruct(op) && isfield(op, 'outputVoltages')
+                    ov = op.outputVoltages;
+                    for si = 1:min(numel(ov), data.n_windings - 1)
+                        data.windings(1 + si).voltage = ov(si);
+                    end
+                    vouts_set = true;
+                end
+            end
+            if ~vouts_set && isfield(c, 'vout') && data.n_windings >= 2
                 data.windings(2).voltage = c.vout;
             end
         end
@@ -464,29 +490,59 @@ function data = apply_design_spec(data, spec)
         % Wire and turns from recommendation
         % Strategy: (1) try direct name match, (2) try Python-resolved match,
         % (3) show picker dialog as fallback.
+        % Primary winding
         if (isfield(rec, 'primary_wire') && ~isempty(rec.primary_wire)) || ...
            (isfield(rec, 'primary_wire_local_key') && ~isempty(rec.primary_wire_local_key))
             [pri_wire_applied, data] = apply_wire_from_rec(data, rec, 'primary', 1);
         end
-        if ((isfield(rec, 'secondary_wire') && ~isempty(rec.secondary_wire)) || ...
-            (isfield(rec, 'secondary_wire_local_key') && ~isempty(rec.secondary_wire_local_key))) && data.n_windings >= 2
-            [sec_wire_applied, data] = apply_wire_from_rec(data, rec, 'secondary', 2);
+        % Secondary windings: "secondary" for winding 2, "secondary_2" for winding 3, etc.
+        for si = 2:data.n_windings
+            if si == 2
+                prefix = 'secondary';
+            else
+                prefix = sprintf('secondary_%d', si - 1);
+            end
+            wire_key = [prefix '_wire'];
+            local_key = [prefix '_wire_local_key'];
+            if (isfield(rec, wire_key) && ~isempty(rec.(wire_key))) || ...
+               (isfield(rec, local_key) && ~isempty(rec.(local_key)))
+                [~, data] = apply_wire_from_rec(data, rec, prefix, si);
+            elseif si > 2 && sec_wire_applied
+                % Fallback: use same wire as first secondary for additional secondaries
+                data.windings(si).wire_type = data.windings(2).wire_type;
+            end
         end
 
         % Turns from recommendation override computed turns
         if isfield(rec, 'primary_turns') && rec.primary_turns > 0
             data.windings(1).n_turns = rec.primary_turns;
         end
-        if isfield(rec, 'secondary_turns') && rec.secondary_turns > 0 && data.n_windings >= 2
-            data.windings(2).n_turns = rec.secondary_turns;
+        for si = 2:data.n_windings
+            if si == 2
+                prefix = 'secondary';
+            else
+                prefix = sprintf('secondary_%d', si - 1);
+            end
+            turns_key = [prefix '_turns'];
+            if isfield(rec, turns_key) && rec.(turns_key) > 0
+                data.windings(si).n_turns = rec.(turns_key);
+            end
         end
 
         % Parallels
         if isfield(rec, 'primary_parallels') && rec.primary_parallels > 0
             data.windings(1).n_filar = rec.primary_parallels;
         end
-        if isfield(rec, 'secondary_parallels') && rec.secondary_parallels > 0 && data.n_windings >= 2
-            data.windings(2).n_filar = rec.secondary_parallels;
+        for si = 2:data.n_windings
+            if si == 2
+                prefix = 'secondary';
+            else
+                prefix = sprintf('secondary_%d', si - 1);
+            end
+            par_key = [prefix '_parallels'];
+            if isfield(rec, par_key) && rec.(par_key) > 0
+                data.windings(si).n_filar = rec.(par_key);
+            end
         end
 
         % Gapping
@@ -515,9 +571,12 @@ function data = apply_design_spec(data, spec)
             end
         end
 
-        fprintf('[DESIGN_SPEC] Applied recommendation fields: supplier=%d core=%d material=%d wireP=%d wireS=%d turns=%d/%d\n', ...
-            supplier_applied, core_applied, material_applied, pri_wire_applied, sec_wire_applied, ...
-            data.windings(1).n_turns, data.windings(min(2,data.n_windings)).n_turns);
+        turns_str = num2str(data.windings(1).n_turns);
+        for si = 2:data.n_windings
+            turns_str = [turns_str '/' num2str(data.windings(si).n_turns)];
+        end
+        fprintf('[DESIGN_SPEC] Applied recommendation fields: supplier=%d core=%d material=%d wireP=%d wireS=%d turns=%s\n', ...
+            supplier_applied, core_applied, material_applied, pri_wire_applied, sec_wire_applied, turns_str);
     end
 
     % --- Core-loss method + Steinmetz pass-through from design_spec ---
@@ -8145,10 +8204,27 @@ function mag_results = compute_magnetic_params(data, geom, solve_options)
     if isfield(data, 'design_spec') && ~isempty(data.design_spec)
         spec = data.design_spec;
         if isfield(spec, 'converter')
-            if isfield(spec.converter, 'vin_nom'), Vin = spec.converter.vin_nom; end
+            c = spec.converter;
+            % Try vin_nom first
+            if isfield(c, 'vin_nom') && ~isempty(c.vin_nom) && c.vin_nom > 0
+                Vin = c.vin_nom;
+            end
+            % Fallback: compute from vin_min/vin_max
+            if Vin <= 0 && isfield(c, 'vin_min') && isfield(c, 'vin_max') ...
+                    && ~isempty(c.vin_min) && ~isempty(c.vin_max) ...
+                    && c.vin_min > 0 && c.vin_max > 0
+                Vin = (c.vin_min + c.vin_max) / 2;
+            end
         end
         if isfield(spec, 'requirements')
-            if isfield(spec.requirements, 'duty_nom'), duty = spec.requirements.duty_nom; end
+            r = spec.requirements;
+            % Try vin_nom from computed requirements
+            if Vin <= 0 && isfield(r, 'vin_nom') && ~isempty(r.vin_nom) && r.vin_nom > 0
+                Vin = r.vin_nom;
+            end
+            if isfield(r, 'duty_nom') && ~isempty(r.duty_nom) && r.duty_nom > 0
+                duty = r.duty_nom;
+            end
         end
     end
 

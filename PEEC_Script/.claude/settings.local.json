@@ -72,7 +72,19 @@
       "Bash(\"c:\\\\Users\\\\Will\\\\proximity_loss\\\\Claude\\\\PEEC_Script\\\\QUICK_FIX_SUMMARY.txt\":*)",
       "Bash(\"c:\\\\Users\\\\Will\\\\proximity_loss\\\\Claude\\\\PEEC_Script\\\\FIX_COMPLETE.md\":*)",
       "Bash(git clone https://github.com/OpenMagnetics/PyOpenMagnetics.git)",
-      "Bash(git status -u)"
+      "Bash(git status -u)",
+      "WebFetch(domain:github.com)",
+      "Bash(tasklist)",
+      "Bash(\"C:\\\\Users\\\\Will\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" -c \":*)",
+      "Bash(\"C:\\\\Users\\\\Will\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" generate_om_recommendations.py om_topology_api_config.json)",
+      "Bash(\"C:\\\\Users\\\\Will\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" generate_om_recommendations.py _test_fix_config.json)",
+      "Bash(\"C:\\\\Users\\\\Will\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" generate_om_topology.py om_topology_config.json)",
+      "Bash(\"C:\\\\Users\\\\Will\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" generate_om_waveforms.py om_waveform_config.json)",
+      "Bash(\"/c/Program Files/GNU Octave/Octave-7.1.0/mingw64/bin/octave-cli.exe\" --no-gui --eval \"try; type design_requirements_figure; disp\\(''PARSE OK''\\); catch e; disp\\([''ERROR: '' e.message]\\); end\")",
+      "Bash(\"/c/Program Files/GNU Octave/Octave-7.1.0/mingw64/bin/octave-cli.exe\" --no-gui --eval \"try; type topology_wizard; disp\\(''PARSE OK''\\); catch e; disp\\([''ERROR: '' e.message]\\); end\")",
+      "Bash(\"/c/Program Files/GNU Octave/Octave-7.1.0/mingw64/bin/octave-cli.exe\" --no-gui --eval \"try; type build_mas_structure; disp\\(''PARSE OK''\\); catch e; disp\\([''ERROR: '' e.message]\\); end\")",
+      "Bash(/c/Users/Will/Desktop/octave-10.3.0-w64-64/mingw64/bin/octave-cli.exe --no-gui --eval \"source\\(''interactive_winding_designer.m''\\); disp\\(''Parse OK''\\)\")",
+      "Bash(/c/Users/Will/Desktop/octave-10.3.0-w64-64/mingw64/bin/octave-cli.exe --no-gui --eval \":*)"
     ]
   }
 }
