@@ -321,12 +321,21 @@ class TwoSwitchForwardCalc(TopologyCalculator):
         pout = vout * total_iout
         pin_nom = pout / max(eta, 0.01)
 
-        # Turns ratio: choose Ns/Np so D_max ~ 0.45 at Vin_min
+        # Turns ratio per secondary: Ns_i/Np = (Vout_i + Vd) / (Vin_min * D_target)
+        # All outputs share the same duty cycle D (set by main output regulation).
+        # Each secondary gets its own turns ratio to deliver its target voltage.
         d_target_max = 0.45
-        ns_np = (vout + vd) / (vin_min * d_target_max)
-        np_ns = 1.0 / ns_np
+        ns_np_list = []
+        np_ns_list = []
+        for i in range(n_outputs):
+            vout_i = vout_list[i] if i < len(vout_list) else vout_list[0]
+            ns_np_i = (vout_i + vd) / (vin_min * d_target_max)
+            ns_np_list.append(ns_np_i)
+            np_ns_list.append(1.0 / ns_np_i)
+        ns_np = ns_np_list[0]  # Main output ratio (for duty cycle calc)
+        np_ns = np_ns_list[0]
 
-        # Actual duty cycles
+        # Actual duty cycles (determined by main output)
         d_min_vin = (vout + vd) / (vin_min * ns_np)
         d_max_vin = (vout + vd) / (vin_max * ns_np)
         d_nom = (vout + vd) / (vin_nom * ns_np)
@@ -335,16 +344,26 @@ class TwoSwitchForwardCalc(TopologyCalculator):
         d_max_vin = clamp(d_max_vin, 0.01, 0.49)
         d_nom = clamp(d_nom, 0.01, 0.49)
 
-        # Output inductor (for first output)
+        # Output inductor per secondary (on-time equation, worst case at Vin_max)
+        # Lout_i = (Vin_max * Ns_i/Np - Vd - Vout_i) * D_at_Vin_max / (ΔI_i * fsw)
         ripple_frac = as_float(c.get("currentRippleRatio", 30)) / 100.0
-        delta_i_max = ripple_frac * iout
-        if delta_i_max > 0:
-            lout = vout * (1 - d_max_vin) / (delta_i_max * fsw)
-        else:
-            lout = 100e-6
+        lout_list = []
+        for i in range(n_outputs):
+            vout_i = vout_list[i] if i < len(vout_list) else vout_list[0]
+            iout_i = iout_list[i] if i < len(iout_list) else iout_list[0]
+            delta_i = ripple_frac * iout_i
+            v_on = vin_max * ns_np_list[i] - vd - vout_i  # Per-secondary reflected voltage
+            if delta_i > 0 and v_on > 0:
+                lout_list.append(v_on * d_max_vin / (delta_i * fsw))
+            else:
+                lout_list.append(100e-6)
+        lout = lout_list[0]
 
-        # Magnetizing inductance
-        i_load_reflected = total_iout * ns_np
+        # Magnetizing inductance (sum of all reflected secondary currents)
+        i_load_reflected = sum(
+            iout_list[i] * ns_np_list[i] if i < len(iout_list) else 0
+            for i in range(n_outputs)
+        )
         i_mag_ripple_target = 0.10 * i_load_reflected
         if i_mag_ripple_target > 0:
             lm = vin_nom * d_nom / (i_mag_ripple_target * fsw)
@@ -352,19 +371,20 @@ class TwoSwitchForwardCalc(TopologyCalculator):
             lm = 500e-6
 
         # RMS currents
-        i_pri_rms = total_iout * ns_np * math.sqrt(d_nom)
+        i_pri_rms = i_load_reflected * math.sqrt(d_nom)
         i_sec_rms = [io * math.sqrt(d_nom) for io in as_list(iout_list)]
 
         # Peak magnetizing current
         i_mag_peak = vin_nom * d_nom / (2 * lm * fsw)
         i_mag_pp = vin_nom * d_nom / (lm * fsw)
 
-        # Build turns ratios for each output (could differ in advanced mode)
-        turns_ratios = [np_ns] * n_outputs
+        # Per-secondary turns ratios (Np/Ns for each output)
+        turns_ratios = np_ns_list
 
         return {
             "Lm_uH": lm * 1e6,
             "Lout_uH": lout * 1e6,
+            "Lout_list_uH": [l * 1e6 for l in lout_list],
             "turns_ratios": turns_ratios,
             "ns_np": ns_np,
             "np_ns": np_ns,
@@ -516,11 +536,19 @@ class SingleSwitchForwardCalc(TopologyCalculator):
         pin_nom = pout / max(eta, 0.01)
 
         # Single-switch forward duty is typically 0.5, demagnetization winding carries reset
-        # Turns ratio for main output
+        # Per-secondary turns ratios: Ns_i/Np = (Vout_i + Vd) / (Vin_min * D_target)
         d_target_max = 0.5  # Single switch can reach 50%
-        ns_np = (vout + vd) / (vin_min * d_target_max)
-        np_ns = 1.0 / ns_np
+        ns_np_list = []
+        np_ns_list = []
+        for i in range(n_outputs):
+            vout_i = vout_list[i] if i < len(vout_list) else vout_list[0]
+            ns_np_i = (vout_i + vd) / (vin_min * d_target_max)
+            ns_np_list.append(ns_np_i)
+            np_ns_list.append(1.0 / ns_np_i)
+        ns_np = ns_np_list[0]
+        np_ns = np_ns_list[0]
 
+        # Actual duty cycles (determined by main output)
         d_min_vin = (vout + vd) / (vin_min * ns_np)
         d_max_vin = (vout + vd) / (vin_max * ns_np)
         d_nom = (vout + vd) / (vin_nom * ns_np)
@@ -532,16 +560,25 @@ class SingleSwitchForwardCalc(TopologyCalculator):
         # Demagnetization winding turns ratio (typically equal to primary for simplicity)
         nd_np = 1.0
 
-        # Output inductor
+        # Output inductor per secondary (on-time equation, worst case at Vin_max)
         ripple_frac = as_float(c.get("currentRippleRatio", 30)) / 100.0
-        delta_i_max = ripple_frac * vout_list[0] if vout_list else 1.0
-        if delta_i_max > 0:
-            lout = vout * (1 - d_max_vin) / (delta_i_max * fsw)
-        else:
-            lout = 100e-6
+        lout_list = []
+        for i in range(n_outputs):
+            vout_i = vout_list[i] if i < len(vout_list) else vout_list[0]
+            iout_i = iout_list[i] if i < len(iout_list) else iout_list[0]
+            delta_i = ripple_frac * iout_i
+            v_on = vin_max * ns_np_list[i] - vd - vout_i
+            if delta_i > 0 and v_on > 0:
+                lout_list.append(v_on * d_max_vin / (delta_i * fsw))
+            else:
+                lout_list.append(100e-6)
+        lout = lout_list[0]
 
-        # Magnetizing inductance
-        i_load_reflected = total_iout * ns_np
+        # Magnetizing inductance (sum of all reflected secondary currents)
+        i_load_reflected = sum(
+            iout_list[i] * ns_np_list[i] if i < len(iout_list) else 0
+            for i in range(n_outputs)
+        )
         i_mag_ripple_target = 0.10 * i_load_reflected
         if i_mag_ripple_target > 0:
             lm = vin_nom * d_nom / (i_mag_ripple_target * fsw)
@@ -549,19 +586,20 @@ class SingleSwitchForwardCalc(TopologyCalculator):
             lm = 500e-6
 
         # RMS currents
-        i_pri_rms = total_iout * ns_np * math.sqrt(d_nom)
-        i_demag_rms = total_iout * nd_np * math.sqrt(d_nom)
+        i_pri_rms = i_load_reflected * math.sqrt(d_nom)
+        i_demag_rms = i_load_reflected * nd_np * math.sqrt(d_nom)
         i_sec_rms = [io * math.sqrt(d_nom) for io in as_list(iout_list)]
 
         i_mag_peak = vin_nom * d_nom / (2 * lm * fsw)
         i_mag_pp = vin_nom * d_nom / (lm * fsw)
 
-        # Build turns ratios [primary to secondary outputs, primary to demagnetization]
-        turns_ratios = [np_ns] * n_outputs + [nd_np]
+        # Build turns ratios [per-secondary Np/Ns, then demagnetization]
+        turns_ratios = np_ns_list + [nd_np]
 
         return {
             "Lm_uH": lm * 1e6,
             "Lout_uH": lout * 1e6,
+            "Lout_list_uH": [l * 1e6 for l in lout_list],
             "turns_ratios": turns_ratios,
             "ns_np": ns_np,
             "np_ns": np_ns,
@@ -717,11 +755,19 @@ class ActiveClampForwardCalc(TopologyCalculator):
         pout = vout * total_iout
         pin_nom = pout / max(eta, 0.01)
 
-        # Similar turns ratio calculation
+        # Per-secondary turns ratios
         d_target_max = 0.45
-        ns_np = (vout + vd) / (vin_min * d_target_max)
-        np_ns = 1.0 / ns_np
+        ns_np_list = []
+        np_ns_list = []
+        for i in range(n_outputs):
+            vout_i = vout_list[i] if i < len(vout_list) else vout_list[0]
+            ns_np_i = (vout_i + vd) / (vin_min * d_target_max)
+            ns_np_list.append(ns_np_i)
+            np_ns_list.append(1.0 / ns_np_i)
+        ns_np = ns_np_list[0]
+        np_ns = np_ns_list[0]
 
+        # Actual duty cycles (determined by main output)
         d_min_vin = (vout + vd) / (vin_min * ns_np)
         d_max_vin = (vout + vd) / (vin_max * ns_np)
         d_nom = (vout + vd) / (vin_nom * ns_np)
@@ -730,31 +776,43 @@ class ActiveClampForwardCalc(TopologyCalculator):
         d_max_vin = clamp(d_max_vin, 0.01, 0.49)
         d_nom = clamp(d_nom, 0.01, 0.49)
 
+        # Output inductor per secondary (on-time equation, worst case at Vin_max)
         ripple_frac = as_float(c.get("currentRippleRatio", 30)) / 100.0
-        delta_i_max = ripple_frac * vout
-        if delta_i_max > 0:
-            lout = vout * (1 - d_max_vin) / (delta_i_max * fsw)
-        else:
-            lout = 100e-6
+        lout_list = []
+        for i in range(n_outputs):
+            vout_i = vout_list[i] if i < len(vout_list) else vout_list[0]
+            iout_i = iout_list[i] if i < len(iout_list) else iout_list[0]
+            delta_i = ripple_frac * iout_i
+            v_on = vin_max * ns_np_list[i] - vd - vout_i
+            if delta_i > 0 and v_on > 0:
+                lout_list.append(v_on * d_max_vin / (delta_i * fsw))
+            else:
+                lout_list.append(100e-6)
+        lout = lout_list[0]
 
-        i_load_reflected = total_iout * ns_np
+        # Magnetizing inductance (sum of all reflected secondary currents)
+        i_load_reflected = sum(
+            iout_list[i] * ns_np_list[i] if i < len(iout_list) else 0
+            for i in range(n_outputs)
+        )
         i_mag_ripple_target = 0.10 * i_load_reflected
         if i_mag_ripple_target > 0:
             lm = vin_nom * d_nom / (i_mag_ripple_target * fsw)
         else:
             lm = 500e-6
 
-        i_pri_rms = total_iout * ns_np * math.sqrt(d_nom)
+        i_pri_rms = i_load_reflected * math.sqrt(d_nom)
         i_sec_rms = [io * math.sqrt(d_nom) for io in as_list(iout_list)]
 
         i_mag_peak = vin_nom * d_nom / (2 * lm * fsw)
         i_mag_pp = vin_nom * d_nom / (lm * fsw)
 
-        turns_ratios = [np_ns] * n_outputs
+        turns_ratios = np_ns_list
 
         return {
             "Lm_uH": lm * 1e6,
             "Lout_uH": lout * 1e6,
+            "Lout_list_uH": [l * 1e6 for l in lout_list],
             "turns_ratios": turns_ratios,
             "ns_np": ns_np,
             "np_ns": np_ns,
@@ -1087,10 +1145,19 @@ class PushPullCalc(TopologyCalculator):
 
         # Push-Pull: center-tapped primary, duty ~0.5 per switch
         # Voltage on secondary is 2 * Vin at full duty
+        # Per-secondary turns ratios
         d_target_max = 0.45
-        ns_np = (vout + vd) / (2 * vin_min * d_target_max)  # 2x multiplier
-        np_ns = 1.0 / ns_np
+        ns_np_list = []
+        np_ns_list = []
+        for i in range(n_outputs):
+            vout_i = vout_list[i] if i < len(vout_list) else vout_list[0]
+            ns_np_i = (vout_i + vd) / (2 * vin_min * d_target_max)  # 2x multiplier
+            ns_np_list.append(ns_np_i)
+            np_ns_list.append(1.0 / ns_np_i)
+        ns_np = ns_np_list[0]
+        np_ns = np_ns_list[0]
 
+        # Actual duty cycles (determined by main output)
         d_min_vin = (vout + vd) / (2 * vin_min * ns_np)
         d_max_vin = (vout + vd) / (2 * vin_max * ns_np)
         d_nom = (vout + vd) / (2 * vin_nom * ns_np)
@@ -1099,31 +1166,44 @@ class PushPullCalc(TopologyCalculator):
         d_max_vin = clamp(d_max_vin, 0.01, 0.49)
         d_nom = clamp(d_nom, 0.01, 0.49)
 
+        # Output inductor per secondary (on-time equation, worst case at Vin_max)
+        # Push-pull has 2× Vin reflected to secondary
         ripple_frac = as_float(c.get("currentRippleRatio", 30)) / 100.0
-        delta_i_max = ripple_frac * vout
-        if delta_i_max > 0:
-            lout = vout * (1 - d_max_vin) / (delta_i_max * fsw)
-        else:
-            lout = 100e-6
+        lout_list = []
+        for i in range(n_outputs):
+            vout_i = vout_list[i] if i < len(vout_list) else vout_list[0]
+            iout_i = iout_list[i] if i < len(iout_list) else iout_list[0]
+            delta_i = ripple_frac * iout_i
+            v_on = 2 * vin_max * ns_np_list[i] - vd - vout_i  # 2× for center-tapped primary
+            if delta_i > 0 and v_on > 0:
+                lout_list.append(v_on * d_max_vin / (delta_i * fsw))
+            else:
+                lout_list.append(100e-6)
+        lout = lout_list[0]
 
-        i_load_reflected = total_iout * ns_np
+        # Magnetizing inductance (sum of all reflected secondary currents)
+        i_load_reflected = sum(
+            iout_list[i] * ns_np_list[i] if i < len(iout_list) else 0
+            for i in range(n_outputs)
+        )
         i_mag_ripple_target = 0.10 * i_load_reflected
         if i_mag_ripple_target > 0:
             lm = (2 * vin_nom) * d_nom / (i_mag_ripple_target * fsw)  # 2x for center tap
         else:
             lm = 500e-6
 
-        i_pri_rms = total_iout * ns_np * math.sqrt(d_nom)
+        i_pri_rms = i_load_reflected * math.sqrt(d_nom)
         i_sec_rms = [io * math.sqrt(d_nom) for io in as_list(iout_list)]
 
         i_mag_peak = (2 * vin_nom) * d_nom / (2 * lm * fsw)
         i_mag_pp = (2 * vin_nom) * d_nom / (lm * fsw)
 
-        turns_ratios = [np_ns] * n_outputs
+        turns_ratios = np_ns_list
 
         return {
             "Lm_uH": lm * 1e6,
             "Lout_uH": lout * 1e6,
+            "Lout_list_uH": [l * 1e6 for l in lout_list],
             "turns_ratios": turns_ratios,
             "ns_np": ns_np,
             "np_ns": np_ns,

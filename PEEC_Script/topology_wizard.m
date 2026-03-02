@@ -1783,6 +1783,9 @@ function data = request_topology_compute(data, fig)
         if isfield(comp, 'Lout_uH')
             data.requirements.Lout_uH = comp.Lout_uH;
         end
+        if isfield(comp, 'Lout_list_uH')
+            data.requirements.Lout_list_uH = comp.Lout_list_uH;
+        end
         if isfield(comp, 'ns_np')
             data.requirements.ns_np = comp.ns_np;
         end
@@ -1870,6 +1873,9 @@ function data = request_topology_compute(data, fig)
             end
             if isfield(comp, 'Lout_uH')
                 topo_results.Lout_uH = comp.Lout_uH;
+            end
+            if isfield(comp, 'Lout_list_uH')
+                topo_results.Lout_list_uH = comp.Lout_list_uH;
             end
         end
 
@@ -2378,7 +2384,11 @@ function data = update_topology_requirements_display(data, results)
     if r.Lm_uH > 0
         lines{end+1} = sprintf('Magnetizing inductance  Lm = %.1f uH', r.Lm_uH);
     end
-    if isfield(r, 'Lout_uH') && r.Lout_uH > 0
+    if isfield(r, 'Lout_list_uH') && isnumeric(r.Lout_list_uH) && numel(r.Lout_list_uH) > 1
+        for li = 1:numel(r.Lout_list_uH)
+            lines{end+1} = sprintf('  Output inductor %d    Lout = %.1f uH', li, r.Lout_list_uH(li));
+        end
+    elseif isfield(r, 'Lout_uH') && r.Lout_uH > 0
         lines{end+1} = sprintf('Output inductor        Lout = %.1f uH', r.Lout_uH);
     end
     if r.Lm_uH > 0 || (isfield(r, 'Lout_uH') && r.Lout_uH > 0)
@@ -2590,10 +2600,22 @@ function data = update_requirements_display(data)
     lines{end+1} = sprintf('  at Vin_max (%g V): D = %.3f', c.vin_max, r.duty_max_vin);
     lines{end+1} = '';
     lines{end+1} = sprintf('Magnetizing inductance  Lm = %.1f uH', r.Lm_uH);
-    lines{end+1} = sprintf('Output inductor        Lout = %.1f uH', r.Lout_uH);
+    if isfield(r, 'Lout_list_uH') && isnumeric(r.Lout_list_uH) && numel(r.Lout_list_uH) > 1
+        for li = 1:numel(r.Lout_list_uH)
+            lines{end+1} = sprintf('  Output inductor %d    Lout = %.1f uH', li, r.Lout_list_uH(li));
+        end
+    else
+        lines{end+1} = sprintf('Output inductor        Lout = %.1f uH', r.Lout_uH);
+    end
     lines{end+1} = '';
     lines{end+1} = sprintf('Primary RMS current   = %.2f A', r.i_pri_rms);
-    lines{end+1} = sprintf('Secondary RMS current = %.2f A', r.i_sec_rms);
+    if isnumeric(r.i_sec_rms) && numel(r.i_sec_rms) > 1
+        for si = 1:numel(r.i_sec_rms)
+            lines{end+1} = sprintf('  Secondary %d RMS     = %.2f A', si, r.i_sec_rms(si));
+        end
+    else
+        lines{end+1} = sprintf('Secondary RMS current = %.2f A', r.i_sec_rms);
+    end
     lines{end+1} = sprintf('Magnetizing Ipk       = %.3f A', r.i_mag_peak);
     lines{end+1} = '';
     lines{end+1} = sprintf('Output power  = %.1f W', r.pout_nom);

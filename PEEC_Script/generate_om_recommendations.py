@@ -744,7 +744,7 @@ def run_recommendations(config):
         if p_ops and isinstance(p_ops[0], dict):
             n_windings = len(p_ops[0].get("excitationsPerWinding", []))
     if n_windings >= 3:
-        pool_size = max_results  # 3+ windings: no over-request
+        pool_size = min(max_results, 3)  # 3+ windings: limit pool to avoid timeout
     else:
         pool_size = max(max_results * 2, 10)
     maximum_number_results = pool_size

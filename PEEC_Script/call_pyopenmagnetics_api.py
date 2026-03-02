@@ -363,7 +363,7 @@ def call_pyopenmagnetics_adviser(mas_inputs, max_results=5, core_mode='STANDARD_
                 [py_exec, gen_script, config_path],
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minute timeout
+                timeout=600  # 10 minute timeout (multi-winding designs are slow)
             )
 
             if result.returncode != 0:
@@ -455,7 +455,7 @@ def call_pyopenmagnetics_adviser(mas_inputs, max_results=5, core_mode='STANDARD_
     except subprocess.TimeoutExpired:
         return {
             "status": "ERROR",
-            "error": "generate_om_recommendations.py timed out after 5 minutes"
+            "error": "generate_om_recommendations.py timed out after 10 minutes"
         }
 
     except Exception as e:

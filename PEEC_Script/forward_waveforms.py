@@ -177,7 +177,10 @@ def generate_two_switch_forward_waveforms(
             main_lout = 1e-3  # fallback
 
     # ---- Timing ----
-    t1 = (period / 2.0) * (main_vout + vd) / (vin / main_n)
+    # Volt-second balance: D = (Vout + Vd) / (Vin * Ns/Np), so t1 = D * T
+    # Note: C++ MKF uses period/2 but compensates with turnsRatio = 2*Np/Ns.
+    # We use standard Ns/Np, so the correct formula is t1 = period * ...
+    t1 = period * (main_vout + vd) / (vin / main_n)
     if t1 > period / 2.0:
         raise ValueError(
             f"t1={t1:.3e} > period/2={period/2:.3e}: wrong topology configuration"
@@ -278,6 +281,7 @@ def generate_two_switch_forward_waveforms(
     ]
 
     # ---- Secondary waveforms ----
+    actual_duty = t1 / period  # Use actual on-time, not nominal duty_cycle
     for si in range(n_sec):
         sec_pp = max_sec[si] - min_sec[si]
         sec_v_min = -(vin + 2.0 * vd) / turns_ratios[si]
@@ -286,10 +290,10 @@ def generate_two_switch_forward_waveforms(
         sec_v_offset = sec_v_max + sec_v_min
 
         sec_current_wf = _make_flyback_primary(
-            sec_pp, fsw, duty_cycle, min_sec[si], 0.0
+            sec_pp, fsw, actual_duty, min_sec[si], 0.0
         )
         sec_voltage_wf = _make_rectangular_with_deadtime(
-            sec_v_pp, fsw, duty_cycle, sec_v_offset, dead_time
+            sec_v_pp, fsw, actual_duty, sec_v_offset, dead_time
         )
 
         excitations.append(
@@ -403,7 +407,8 @@ def generate_single_switch_forward_waveforms(
             main_lout = 1e-3
 
     # ---- Timing (CCM assumption) ----
-    t1 = (period / 2.0) * (main_vout + vd) / (vin / main_n)
+    # Volt-second balance: D = (Vout + Vd) / (Vin * Ns/Np), so t1 = D * T
+    t1 = period * (main_vout + vd) / (vin / main_n)
     if t1 > period / 2.0:
         raise ValueError(
             f"t1={t1:.3e} > period/2: wrong topology configuration"
@@ -450,16 +455,17 @@ def generate_single_switch_forward_waveforms(
 
     # ---- Dead time for single-switch forward: td = t1, deadTime = T - 2*t1 ----
     dead_time = period - t1 * 2.0
+    actual_duty = t1 / period  # Use actual on-time, not nominal duty_cycle
 
     # ---- Primary winding ----
     # C++ uses FLYBACK_PRIMARY for current and RECTANGULAR_WITH_DEADTIME for voltage
     pri_i_pp = max_pri - min_pri
     pri_v_pp = 2.0 * vin  # voltage swings from +Vin to -Vin
     pri_current_wf = _make_flyback_primary(
-        pri_i_pp, fsw, duty_cycle, min_pri, dead_time
+        pri_i_pp, fsw, actual_duty, min_pri, dead_time
     )
     pri_voltage_wf = _make_rectangular_with_deadtime(
-        pri_v_pp, fsw, duty_cycle, 0.0, dead_time
+        pri_v_pp, fsw, actual_duty, 0.0, dead_time
     )
 
     excitations = [
@@ -476,11 +482,11 @@ def generate_single_switch_forward_waveforms(
     # RECTANGULAR_WITH_DEADTIME for voltage.
     # peakToPeak = magnetizationCurrent, offset = minimumPrimaryCurrent
     demag_current_wf = _make_flyback_secondary_with_deadtime(
-        mag_current, fsw, duty_cycle, min_pri, dead_time
+        mag_current, fsw, actual_duty, min_pri, dead_time
     )
     demag_v_pp = 2.0 * vin
     demag_voltage_wf = _make_rectangular_with_deadtime(
-        demag_v_pp, fsw, duty_cycle, 0.0, dead_time
+        demag_v_pp, fsw, actual_duty, 0.0, dead_time
     )
 
     excitations.append(
@@ -502,10 +508,10 @@ def generate_single_switch_forward_waveforms(
         sec_v_offset = sec_v_max + sec_v_min
 
         sec_current_wf = _make_flyback_primary(
-            sec_pp, fsw, duty_cycle, min_sec[si], 0.0
+            sec_pp, fsw, actual_duty, min_sec[si], 0.0
         )
         sec_voltage_wf = _make_rectangular_with_deadtime(
-            sec_v_pp, fsw, duty_cycle, sec_v_offset, dead_time
+            sec_v_pp, fsw, actual_duty, sec_v_offset, dead_time
         )
 
         excitations.append(
@@ -617,7 +623,8 @@ def generate_active_clamp_forward_waveforms(
             main_lout = 1e-3
 
     # ---- Timing ----
-    t1 = (period / 2.0) * (main_vout + vd) / (vin / main_n)
+    # Volt-second balance: D = (Vout + Vd) / (Vin * Ns/Np), so t1 = D * T
+    t1 = period * (main_vout + vd) / (vin / main_n)
     if t1 > period / 2.0:
         raise ValueError(
             f"t1={t1:.3e} > period/2: wrong topology configuration"
@@ -726,6 +733,7 @@ def generate_active_clamp_forward_waveforms(
     ]
 
     # ---- Secondary waveforms ----
+    actual_duty = t1 / period  # Use actual on-time, not nominal duty_cycle
     for si in range(n_sec):
         sec_pp = max_sec[si] - min_sec[si]
         sec_v_min = -clamp_voltage / turns_ratios[si]
@@ -734,10 +742,10 @@ def generate_active_clamp_forward_waveforms(
         sec_v_offset = sec_v_max + sec_v_min
 
         sec_current_wf = _make_flyback_primary(
-            sec_pp, fsw, duty_cycle, min_sec[si], 0.0
+            sec_pp, fsw, actual_duty, min_sec[si], 0.0
         )
         sec_voltage_wf = _make_rectangular_with_deadtime(
-            sec_v_pp, fsw, duty_cycle, sec_v_offset, dead_time
+            sec_v_pp, fsw, actual_duty, sec_v_offset, dead_time
         )
 
         excitations.append(
