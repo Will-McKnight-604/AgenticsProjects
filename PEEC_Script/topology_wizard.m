@@ -1587,12 +1587,13 @@ function converter = build_converter_spec(data)
     end
 
     % Desired turns ratios (from topology equations)
+    % Use num2cell/{} so Octave jsonencode produces JSON arrays, not scalars
     if isfield(data, 'requirements') && isfield(data.requirements, 'turns_ratios') && ...
             ~isempty(data.requirements.turns_ratios)
-        converter.desiredTurnsRatios = data.requirements.turns_ratios;
+        converter.desiredTurnsRatios = num2cell(data.requirements.turns_ratios);
     elseif isfield(data, 'requirements') && isfield(data.requirements, 'turns_ratio') && ...
             data.requirements.turns_ratio > 0
-        converter.desiredTurnsRatios = [data.requirements.turns_ratio];
+        converter.desiredTurnsRatios = {data.requirements.turns_ratio};
     end
 
     % Current ripple ratio (percentage from GUI → ratio for API)
@@ -1600,9 +1601,9 @@ function converter = build_converter_spec(data)
         converter.currentRippleRatio = data.converter.max_ripple / 100;
     end
 
-    % Efficiency (Flyback, etc.)
+    % Efficiency — GUI stores as percent (90), MAS/C++ needs decimal (0.9)
     if data.converter.efficiency > 0 && data.converter.efficiency < 100
-        converter.efficiency = data.converter.efficiency;
+        converter.efficiency = data.converter.efficiency / 100;
     end
 
     % Maximum duty cycle (Flyback)
@@ -1666,8 +1667,9 @@ function converter = build_converter_spec(data)
         op.outputVoltage = out_voltages(1);
         op.outputCurrent = out_currents(1);
     else
-        op.outputVoltages = out_voltages;
-        op.outputCurrents = out_currents;
+        % Use num2cell so Octave jsonencode produces JSON arrays, not scalars
+        op.outputVoltages = num2cell(out_voltages);
+        op.outputCurrents = num2cell(out_currents);
     end
 
     converter.operatingPoints = {op};
@@ -1676,9 +1678,12 @@ function converter = build_converter_spec(data)
         data.topology, data.converter.vin_min, data.converter.vin_max, ...
         mat2str(out_voltages), mat2str(out_currents), data.converter.fsw_khz);
     if isfield(converter, 'desiredInductance')
+        % desiredTurnsRatios is a cell array (for jsonencode), use mat2str on the numeric values
+        tr_vals = data.requirements.turns_ratios;
+        if ~isnumeric(tr_vals), tr_vals = cell2mat(tr_vals); end
         fprintf('[TOPOLOGY]   desiredInductance=%.2f uH, desiredTurnsRatios=%s\n', ...
             converter.desiredInductance * 1e6, ...
-            mat2str(converter.desiredTurnsRatios));
+            mat2str(tr_vals));
     end
 end
 
@@ -4105,6 +4110,16 @@ function cb_update_detail(lb, ~, detail_txt, result_data)
     lines{end+1} = sprintf('  Secondary:  Ns=%d  x%d parallel', ns, ns_par);
     lines{end+1} = sprintf('  Wire:       %s', sec_wire);
     lines{end+1} = sprintf('  Ratio:      %.2f : 1', np / max(ns, 1));
+    for k = 2:(n_wdg - 1)
+        sk_turns = get_field(rec, sprintf('secondary_%d_turns', k), 0);
+        sk_par   = get_field(rec, sprintf('secondary_%d_parallels', k), 1);
+        sk_wire  = get_field(rec, sprintf('secondary_%d_wire', k), '?');
+        if sk_turns > 0
+            lines{end+1} = sprintf('  Secondary %d: Ns%d=%d  x%d parallel', k, k, sk_turns, sk_par);
+            lines{end+1} = sprintf('  Wire:       %s', sk_wire);
+            lines{end+1} = sprintf('  Ratio:      %.2f : 1', np / max(sk_turns, 1));
+        end
+    end
     lines{end+1} = '';
     lines{end+1} = sprintf('  Score:      %.1f%%', score / max(score, 0.01) * 100);
 

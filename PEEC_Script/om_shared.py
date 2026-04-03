@@ -95,6 +95,19 @@ TOPOLOGY_MAP = {
 }
 
 
+def strip_nulls(obj):
+    """Recursively remove None values from dicts and lists.
+
+    C++ pybind11 bindings crash on unexpected None values, so this must be
+    called on any dict before passing it to PyOpenMagnetics functions.
+    """
+    if isinstance(obj, dict):
+        return {k: strip_nulls(v) for k, v in obj.items() if v is not None}
+    elif isinstance(obj, list):
+        return [strip_nulls(v) for v in obj]
+    return obj
+
+
 def import_pyopenmagnetics():
     """Import and return PyOpenMagnetics module.
 

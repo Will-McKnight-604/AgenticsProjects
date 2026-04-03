@@ -45,7 +45,7 @@ import os
 import sys
 import time
 
-from om_shared import _log, as_float, sanitize_local_key, import_pyopenmagnetics
+from om_shared import _log, as_float, sanitize_local_key, strip_nulls, import_pyopenmagnetics
 
 
 def _load_local_json_map(path):
@@ -326,7 +326,15 @@ def extract_recommendation(item):
 
 
 def apply_adviser_settings(config):
-    """Apply performance-tuned settings before the adviser call.
+    """Apply real PyOpenMagnetics settings before the adviser call.
+
+    Only sets settings that actually exist in the C++ engine:
+      Tier 1 (returned by get_settings()):
+        - useOnlyCoresInStock
+      Tier 2 (accepted by set_settings() but not returned by get_settings()):
+        - coreAdviserMaximumMagneticsAfterFiltering
+        - maximumNumberParallels
+        - coreAdviserMaximumNumberStacks
 
     Returns (settings_overridden, previous_settings) for cleanup.
     """
@@ -342,88 +350,34 @@ def apply_adviser_settings(config):
         previous_settings = dict(settings_obj)
         changed = False
 
-        # Core database filtering
+        # Tier 1: useOnlyCoresInStock (real, returned by get_settings)
         use_in_stock = bool(adv.get("cores_in_stock", False))
         if settings_obj.get("useOnlyCoresInStock", True) != use_in_stock:
             settings_obj["useOnlyCoresInStock"] = use_in_stock
             changed = True
 
-        inc_toroidal = bool(adv.get("include_toroidal_cores", True))
-        if settings_obj.get("useToroidalCores", True) != inc_toroidal:
-            settings_obj["useToroidalCores"] = inc_toroidal
-            changed = True
-
-        inc_concentric = bool(adv.get("include_concentric_cores", False))
-        if settings_obj.get("useConcentricCores", True) != inc_concentric:
-            settings_obj["useConcentricCores"] = inc_concentric
-            changed = True
-
-        # Core adviser search parameters
-        inc_stacks = bool(adv.get("include_stacked_cores", False))
-        if settings_obj.get("coreAdviserIncludeStacks", True) != inc_stacks:
-            settings_obj["coreAdviserIncludeStacks"] = inc_stacks
-            changed = True
-
-        inc_dist_gaps = bool(adv.get("include_distributed_gaps", False))
-        if settings_obj.get("coreAdviserIncludeDistributedGaps", True) != inc_dist_gaps:
-            settings_obj["coreAdviserIncludeDistributedGaps"] = inc_dist_gaps
-            changed = True
-
+        # Tier 2: coreAdviserMaximumMagneticsAfterFiltering (real, hidden)
         max_after_filter = int(adv.get("max_cores_after_filtering", 100))
         if settings_obj.get("coreAdviserMaximumMagneticsAfterFiltering", 500) != max_after_filter:
             settings_obj["coreAdviserMaximumMagneticsAfterFiltering"] = max_after_filter
             changed = True
 
-        # Coil adviser search parameters
-        max_wires = int(adv.get("max_wires_per_winding", 50))
-        if settings_obj.get("coilAdviserMaximumNumberWires", 100) != max_wires:
-            settings_obj["coilAdviserMaximumNumberWires"] = max_wires
+        # Tier 2: maximumNumberParallels (real, hidden)
+        max_parallels = adv.get("max_parallels")
+        if max_parallels is not None:
+            settings_obj["maximumNumberParallels"] = int(max_parallels)
             changed = True
 
-        # Wire type filtering
-        wire_cfg = adv.get("wire_types", {})
-        if isinstance(wire_cfg, dict):
-            wire_map = {
-                "round": "wireAdviserIncludeRound",
-                "litz": "wireAdviserIncludeLitz",
-                "rectangular": "wireAdviserIncludeRectangular",
-                "foil": "wireAdviserIncludeFoil",
-                "planar": "wireAdviserIncludePlanar",
-            }
-            for key, setting_name in wire_map.items():
-                if key in wire_cfg:
-                    val = bool(wire_cfg[key])
-                    if settings_obj.get(setting_name) != val:
-                        settings_obj[setting_name] = val
-                        changed = True
-
-        # Wire family mode shortcut
-        wfm = adv.get("wire_family_mode", "auto_all")
-        if wfm == "foil_planar":
-            for sn in ("wireAdviserIncludeRound", "wireAdviserIncludeLitz", "wireAdviserIncludeRectangular"):
-                if settings_obj.get(sn) is not False:
-                    settings_obj[sn] = False
-                    changed = True
-            for sn in ("wireAdviserIncludeFoil", "wireAdviserIncludePlanar"):
-                if settings_obj.get(sn) is not True:
-                    settings_obj[sn] = True
-                    changed = True
-        elif wfm == "round_litz_rect":
-            for sn in ("wireAdviserIncludeRound", "wireAdviserIncludeLitz", "wireAdviserIncludeRectangular"):
-                if settings_obj.get(sn) is not True:
-                    settings_obj[sn] = True
-                    changed = True
-            for sn in ("wireAdviserIncludeFoil", "wireAdviserIncludePlanar"):
-                if settings_obj.get(sn) is not False:
-                    settings_obj[sn] = False
-                    changed = True
+        # Tier 2: coreAdviserMaximumNumberStacks (real, hidden)
+        max_stacks = adv.get("max_stacks")
+        if max_stacks is not None:
+            settings_obj["coreAdviserMaximumNumberStacks"] = int(max_stacks)
+            changed = True
 
         if changed:
             pm.set_settings(settings_obj)
             _log(f"[CONVERTER_API] Applied settings: inStock={use_in_stock}, "
-                 f"toroidal={inc_toroidal}, stacks={inc_stacks}, "
-                 f"distGaps={inc_dist_gaps}, maxFilter={max_after_filter}, "
-                 f"maxWires={max_wires}")
+                 f"maxFilter={max_after_filter}")
             return True, previous_settings
 
         return False, previous_settings
@@ -564,9 +518,10 @@ def _ensure_list(value):
 
 
 def _normalize_converter_for_process(converter):
-    """Normalize converter spec fields to arrays as required by process_converter().
+    """Normalize converter spec fields for process_converter().
 
-    The MATLAB GUI may pass scalars for fields that the C++ engine expects as arrays.
+    The MATLAB/Octave GUI may pass scalars for fields that the C++ engine expects
+    as arrays, and may pass efficiency as percentage instead of decimal.
     """
     conv = dict(converter)  # shallow copy
     for key in ("desiredTurnsRatios",):
@@ -577,7 +532,49 @@ def _normalize_converter_for_process(converter):
         for key in ("outputVoltages", "outputCurrents"):
             if key in op:
                 op[key] = _ensure_list(op[key])
+    # Efficiency: GUI stores as percent (90), C++ expects decimal (0.9)
+    eff = conv.get("efficiency")
+    if eff is not None and eff > 1:
+        conv["efficiency"] = eff / 100.0
     return conv
+
+
+def _relax_mas_constraints(mas):
+    """Relax over-constraining fields in MAS designRequirements.
+
+    process_converter() locks magnetizingInductance and turnsRatios to exact
+    nominal values from our pre-computed converter spec.  This forces the
+    adviser into oversized cores because it must find a core that fits those
+    exact parameters.  The web frontend (Method A) lets PyOM optimize freely.
+
+    This function widens the acceptable ranges so the adviser can explore
+    smaller cores while still respecting the transformer topology structure.
+    """
+    dr = mas.get("designRequirements", {})
+
+    # Widen magnetizingInductance: allow adviser to explore smaller/larger Lm
+    # Keep range moderate so waveforms (computed at nominal Lm) stay valid
+    mi = dr.get("magnetizingInductance")
+    if isinstance(mi, dict) and mi.get("nominal"):
+        nom = mi["nominal"]
+        dr["magnetizingInductance"] = {
+            "nominal": nom,
+            "minimum": nom * 0.3,
+            "maximum": nom * 3.0,
+        }
+
+    # Widen turnsRatios: keep close to nominal (voltage ratios are fixed
+    # by the converter spec) but allow some flexibility for core selection
+    for tr in dr.get("turnsRatios", []):
+        if isinstance(tr, dict) and tr.get("nominal"):
+            nom = tr["nominal"]
+            tr["minimum"] = nom * 0.8
+            tr["maximum"] = nom * 1.3
+            tr.pop("excludeMinimum", None)
+            tr.pop("excludeMaximum", None)
+
+    # Strip all None/null values — C++ pybind11 crashes on them
+    return strip_nulls(mas)
 
 
 def run_process_and_advise(config):
@@ -627,6 +624,10 @@ def run_process_and_advise(config):
     _log(f"[PROCESS_ADVISE] topology={dr.get('topology')}, "
          f"Lm={dr.get('magnetizingInductance', {}).get('nominal', 0)*1e6:.1f}uH")
     _log(f"[TIMER] process_converter:  {time.perf_counter() - t_process:.3f}s")
+
+    # Step 1b: Relax constraints so adviser can optimize freely
+    mas = _relax_mas_constraints(mas)
+    _log(f"[PROCESS_ADVISE] Relaxed MAS constraints for adviser optimization")
 
     # Step 2: Apply adviser settings
     t_settings = time.perf_counter()

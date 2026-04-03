@@ -83,7 +83,7 @@ MAS topology strings must be exact (case and spacing matter):
 
 ---
 
-## PyOpenMagnetics API Surface (v1.2.2 pinned)
+## PyOpenMagnetics API Surface (v1.3.0)
 
 ### Core Functions Used
 
@@ -100,7 +100,7 @@ MAS topology strings must be exact (case and spacing matter):
 | `pm.get_wire_names()` | None | List of strings | |
 | `pm.get_available_core_shapes()` | None | List of shapes | |
 
-### Known Issues (v1.2.2)
+### Known Issues (v1.2.2, may be fixed in v1.3.0)
 - **3-winding CoilAdviser crash:** Topologies with ≥3 windings (e.g., multi-output forward) can crash the CoilAdviser. Workaround: limit to 2 windings or catch and retry.
 - **magnetizingCurrent inflation:** `process_inputs()` may compute inflated magnetizing current when converter specs have high turns ratios.
 - **Settings persistence:** `set_settings()` modifies global state. Always use try/finally with `restore_settings()`.
