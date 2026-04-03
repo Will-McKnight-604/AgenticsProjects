@@ -1,1 +1,0 @@
-{"fast_speedup_vs_baseline_min":1.05,"standard_speedup_vs_baseline_min":1,"tuned_standard_loss_error_median_pct_max":0.01,"max_fast_loss_err_pct_max":30,"warning_fraction_max":0.15,"require_no_iter_quality_reject":true,"require_fft_routed_on_uniform_case":true,"fft_interaction_rel_error_max":0.001,"fft_speedup_min":1.3}
