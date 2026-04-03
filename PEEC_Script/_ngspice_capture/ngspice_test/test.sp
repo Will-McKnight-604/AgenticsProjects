@@ -1,4 +1,0 @@
-* Minimal test circuit
-V1 1 0 DC 1
-R1 1 0 1k
-.end
