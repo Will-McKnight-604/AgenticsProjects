@@ -1,6 +1,6 @@
 # PEEC Design Tool Sub-Agents
 
-This directory contains 10 specialized Claude Sub-Agents for the PEEC electromagnetic design tool.
+This directory contains 15 specialized Claude Sub-Agents for the PEEC electromagnetic design tool.
 
 ## What Are These?
 
@@ -73,6 +73,44 @@ Generates CAD exports, performs DFM validation, and estimates manufacturing cost
 - **Tools:** Read, Bash, Write
 - **Model:** Sonnet
 
+---
+
+## Project-Specific Agents (11-15)
+
+These agents were created from hard-won debugging experience specific to this project's cross-language architecture. They encode domain knowledge that generic agents lack.
+
+### 11. **integration-architect** (Agent 11)
+Cross-language systems architect. Traces data flow across the Octave→JSON→Python→C++ boundaries, enforces invariants at each crossing, and diagnoses cross-boundary failures.
+- **When used:** Debugging segfaults, reviewing cross-language data flow changes, validating boundary invariants
+- **Tools:** Read, Glob, Grep
+- **Model:** Opus 4.6
+
+### 12. **power-electronics-expert** (Agent 12)
+Power electronics domain specialist. Verifies converter topology equations for physical correctness across all 9 calculator classes.
+- **When used:** Modifying topology calculators, adding new topologies, debugging unreasonable design outputs
+- **Tools:** Read, Grep, Glob, Bash
+- **Model:** Opus 4.6
+
+### 13. **pyom-api-specialist** (Agent 13)
+PyOpenMagnetics C++ API expert. Knows every pm.* function signature, return format, error mode, and known bug in v1.2.2.
+- **When used:** Modifying code that calls pm.*, debugging API failures, adding new PyOpenMagnetics integrations
+- **Tools:** Read, Grep, Bash
+- **Model:** Opus 4.6
+
+### 14. **octave-python-bridge** (Agent 14)
+Octave↔Python interop engineer. Expert in the subprocess chain, jsonencode quirks, MSYS2 path handling, and error propagation.
+- **When used:** Modifying .m files that call Python, debugging subprocess failures, changing JSON serialization
+- **Tools:** Read, Grep, Glob, Bash
+- **Model:** Opus 4.6
+
+### 15. **python-codebase-steward** (Agent 15)
+Python codebase quality lead. Enforces om_shared usage, prevents duplication, ensures pattern consistency, and can directly fix mechanical issues.
+- **When used:** Reviewing Python changes, adding new scripts, refactoring shared code
+- **Tools:** Read, Grep, Glob, Edit
+- **Model:** Opus 4.6
+
+---
+
 ## How Claude Uses These
 
 Claude automatically invokes these agents based on task descriptions. For example:
@@ -128,6 +166,8 @@ JSON Reconciler (validates all configs)
 ```
 .claude/agents/
 ├── README.md (this file)
+│
+│   Generic agents (1-10, from initial setup):
 ├── agent-1-peec-optimizer.md
 ├── agent-2-winding-validator.md
 ├── agent-3-json-reconciler.md
@@ -137,7 +177,14 @@ JSON Reconciler (validates all configs)
 ├── agent-7-loss-visualization.md
 ├── agent-8-thermal-integrator.md
 ├── agent-9-octave-ci.md
-└── agent-10-cad-export.md
+├── agent-10-cad-export.md
+│
+│   Project-specific agents (11-15, from debugging experience):
+├── agent-11-integration-architect.md
+├── agent-12-power-electronics-expert.md
+├── agent-13-pyom-api-specialist.md
+├── agent-14-octave-python-bridge.md
+└── agent-15-python-codebase-steward.md
 ```
 
 ## Getting Started
@@ -157,7 +204,6 @@ These agents are now available in your Claude Code environment:
 
 ---
 
-**Created:** 2026-02-22
-**Total Agents:** 10
-**Total Size:** 92 KB
+**Created:** 2026-02-22 (agents 1-10), 2026-03-22 (agents 11-15)
+**Total Agents:** 15
 **Status:** Ready for use

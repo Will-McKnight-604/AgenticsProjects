@@ -1,0 +1,100 @@
+================================================================================
+                    API PIPELINE FIX - QUICK SUMMARY
+================================================================================
+
+PROBLEM:
+  PyOpenMagnetics API pipeline failed with exit code 1 when user ran 
+  topology_wizard and clicked "Compute Requirements"
+
+ROOT CAUSE:
+  MAS JSON from build_mas_structure.m used field names (switchingFrequency)
+  that didn't match what generate_om_recommendations.py expected (frequency_hz)
+
+SOLUTION:
+  Added transformation layer in call_pyopenmagnetics_api.py to bridge the gap
+
+FILES CHANGED:
+  1. call_pyopenmagnetics_api.py (NEW - 362 lines)
+     - Added transform_mas_operating_points() function
+     - Converts MAS field names to API field names
+     - Provides default duty=0.4 and placeholder windings
+  
+  2. topology_wizard.m (MODIFIED - ~40 lines added)
+     - Enhanced ImportError detection in results JSON
+     - Added API error propagation to user
+     - Improved results count extraction
+
+COMMIT:
+  Branch: topologyWizard_improve
+  Hash: 75ebc8c
+  Message: fix(api-pipeline): Debug and fix PyOpenMagnetics advisor API integration
+
+FIELD TRANSFORMATIONS:
+  Input (MAS)              Output (API)           Notes
+  ==================       =================      ================
+  switchingFrequency  -->  frequency_hz          Direct mapping
+  ambientTemperature  -->  ambient_temperature   Rename only
+  (not provided)      -->  duty                  Default: 0.4
+  (not provided)      -->  windings              Default: Primary+Secondary
+  (dropped)               outputVoltages
+  (dropped)               outputCurrents
+
+VERIFICATION:
+  The transformation was tested and produces correct output:
+  
+  Input:  {switchingFrequency: 200000, ambientTemperature: 25}
+  Output: {frequency_hz: 200000, ambient_temperature: 25, duty: 0.4, 
+           windings: [Primary, Secondary]}
+
+HOW TO TEST:
+  1. Run: topology_wizard
+  2. Select: Two-Switch Forward topology
+  3. Enter: Vin 100-190V, Vout 5V, Iout 5A, Fsw 200kHz
+  4. Click: "Compute Requirements"
+  5. Expect: 5 core recommendations displayed (not error dialog)
+
+SUCCESS CRITERIA:
+  [ ] Python exits with status 0
+  [ ] 5 core recommendations displayed
+  [ ] No error dialogs (unless API genuinely fails)
+  [ ] Results show realistic cores from OpenMagnetics database
+
+FALLBACK BEHAVIOR:
+  If Python 3.12 (no PyOpenMagnetics) is default:
+  1. First attempt fails with ImportError
+  2. Error detected in results JSON (NEW - previously missed)
+  3. Fallback chain activated to find Python 3.11
+  4. Python 3.11 runs successfully
+  5. Results displayed
+
+ERROR HANDLING:
+  If API processing fails:
+  1. generate_om_recommendations.py returns {status: "ERROR", error: "..."}
+  2. topology_wizard.m detects and propagates to user
+  3. User sees helpful error message with details
+
+DOCUMENTATION:
+  - DEBUG_SUMMARY.md         - Detailed problem analysis
+  - TECHNICAL_REFERENCE.md   - Function specification and implementation
+  - VERIFICATION_STEPS.md    - Step-by-step testing instructions
+  - API_PIPELINE_FIX.md      - Complete fix documentation
+  - This file               - Quick reference
+
+KEY INSIGHTS:
+  1. MAS format != API format - transformation layer needed
+  2. ImportError in JSON file wasn't detected by string search
+  3. Default duty=0.4 appropriate for forward topologies
+  4. Placeholder waveforms enable adviser to work without explicit data
+
+NEXT STEPS:
+  1. Run verification tests to confirm fix works
+  2. Test with both Python 3.11 and 3.12 available
+  3. Verify results match expected core recommendations
+  4. Check fallback chain activates correctly if needed
+
+QUESTIONS?
+  See DEBUG_SUMMARY.md for complete analysis
+  See TECHNICAL_REFERENCE.md for implementation details
+  See VERIFICATION_STEPS.md for testing procedures
+
+================================================================================

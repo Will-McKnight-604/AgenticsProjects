@@ -138,6 +138,22 @@ classdef openmagnetics_api_interface < handle
             end
         end
 
+        function Bsat = get_saturation_flux_density(obj, material_name)
+            % Get saturation flux density for a material [T].
+            % Returns 0 if not available.
+            Bsat = 0;
+            safe_key = make_valid_name(material_name);
+            if ~isfield(obj.material_database, safe_key)
+                return;
+            end
+            mat = obj.material_database.(safe_key);
+            if isfield(mat, 'saturation_flux_density') && ~isempty(mat.saturation_flux_density)
+                Bsat = mat.saturation_flux_density;
+            elseif isfield(mat, 'Bsat') && ~isempty(mat.Bsat)
+                Bsat = mat.Bsat;
+            end
+        end
+
         function [k, alpha, beta, ct0, ct1, ct2] = get_steinmetz_coefficients(obj, material_name, freq_hz)
             % Get Steinmetz coefficients for a material at a given frequency.
             % Returns empty values if no Steinmetz data available.

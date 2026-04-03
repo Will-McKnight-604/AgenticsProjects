@@ -15,8 +15,10 @@ function plot_loss_density(geom, results)
     xlabel(ax, 'x (m)');
     ylabel(ax, 'y (m)');
 
-    % Calculate power density in W/mm^2
-    % fil areas are in m^2; 1 m^2 = 1e6 mm^2, so P(W/mm^2) = P/(area_m2 * 1e6)
+    % Calculate volumetric power loss density in mW/mm^3
+    % P_fil is in W/m (power per unit axial length, 2D PEEC model).
+    % Dividing by cross-sectional area [m^2] gives W/m^3.
+    % 1 W/m^3 = 1e-9 W/mm^3 = 1e-6 mW/mm^3
     pdens = P ./ (fil(:,3) .* fil(:,4)) * 1e-6;
     pmax  = max(pdens);
 
@@ -37,6 +39,93 @@ function plot_loss_density(geom, results)
     winding_names = {};
     if isfield(geom, 'winding_names') && ~isempty(geom.winding_names)
         winding_names = geom.winding_names;
+    end
+
+    % ========== Draw core/bobbin shapes in background (from OM SVG) ==========
+    % The SVG coordinates need to be mapped onto PEEC metre coordinates.
+    % Mapping: compute bounding box of filaments, compare with SVG viewBox,
+    % derive affine scale and offset, then draw polygons below conductors.
+
+    has_core_shapes   = isfield(geom, 'core_polygons')   && ~isempty(geom.core_polygons)   && numel(geom.core_polygons)   > 1;
+    has_bobbin_shapes = isfield(geom, 'bobbin_polygons') && ~isempty(geom.bobbin_polygons) && numel(geom.bobbin_polygons) > 1;
+
+    if has_core_shapes || has_bobbin_shapes
+        % First cell is the viewBox sentinel [x0 y0 w h]
+        vb = [];
+        if has_core_shapes
+            vb_candidate = geom.core_polygons{1};
+            if isnumeric(vb_candidate) && numel(vb_candidate) == 4
+                vb = double(vb_candidate);
+            end
+        end
+        if isempty(vb) && has_bobbin_shapes
+            vb_candidate = geom.bobbin_polygons{1};
+            if isnumeric(vb_candidate) && numel(vb_candidate) == 4
+                vb = double(vb_candidate);
+            end
+        end
+
+        % Build scale/offset from viewBox + filament bounding box
+        if ~isempty(vb) && vb(3) > 0 && vb(4) > 0
+            fil_xmin = min(fil(:,1) - fil(:,3)/2);
+            fil_xmax = max(fil(:,1) + fil(:,3)/2);
+            fil_ymin = min(fil(:,2) - fil(:,4)/2);
+            fil_ymax = max(fil(:,2) + fil(:,4)/2);
+            fil_w = fil_xmax - fil_xmin;
+            fil_h = fil_ymax - fil_ymin;
+
+            svg_x0 = vb(1); svg_y0 = vb(2);
+            svg_w  = vb(3); svg_h  = vb(4);
+
+            scale_x = fil_w / svg_w;
+            scale_y = fil_h / svg_h;  % applied with y-flip
+
+            % SVG helper: map SVG (x,y) → metres with y-flip
+            function [mx, my] = svg_to_m(sx, sy)
+                mx = fil_xmin + (sx - svg_x0) * scale_x;
+                % SVG y increases downward; flip so top-SVG → top-filament
+                my = fil_ymax - (sy - svg_y0) * scale_y;
+            end
+
+            ferrite_color = [0.486 0.486 0.490];  % #7b7c7d gray
+            bobbin_color  = [0.325 0.592 0.588];  % #539796 teal
+
+            if has_core_shapes
+                for k = 2:numel(geom.core_polygons)
+                    poly = geom.core_polygons{k};
+                    if ~isnumeric(poly) || size(poly,2) < 2 || size(poly,1) < 3
+                        continue;
+                    end
+                    [px, py] = svg_to_m(poly(:,1), poly(:,2));
+                    try
+                        patch(ax, px, py, ferrite_color, ...
+                              'EdgeColor', ferrite_color * 0.8, 'LineWidth', 0.5, ...
+                              'FaceAlpha', 0.45);
+                    catch
+                        patch(ax, px, py, ferrite_color, ...
+                              'EdgeColor', ferrite_color * 0.8, 'LineWidth', 0.5);
+                    end
+                end
+            end
+
+            if has_bobbin_shapes
+                for k = 2:numel(geom.bobbin_polygons)
+                    poly = geom.bobbin_polygons{k};
+                    if ~isnumeric(poly) || size(poly,2) < 2 || size(poly,1) < 3
+                        continue;
+                    end
+                    [px, py] = svg_to_m(poly(:,1), poly(:,2));
+                    try
+                        patch(ax, px, py, bobbin_color, ...
+                              'EdgeColor', bobbin_color * 0.8, 'LineWidth', 0.5, ...
+                              'FaceAlpha', 0.4);
+                    catch
+                        patch(ax, px, py, bobbin_color, ...
+                              'EdgeColor', bobbin_color * 0.8, 'LineWidth', 0.5);
+                    end
+                end
+            end
+        end
     end
 
     % ========== TIMING: Filament rendering (vectorized batch patch) ==========
@@ -100,42 +189,65 @@ function plot_loss_density(geom, results)
               'FaceColor', 'flat', 'EdgeColor', 'none');
     end
 
-    % ---- Winding outline overlays (one patch per winding, not per filament) ----
+    % ---- Winding zone backgrounds (semi-transparent colored regions) ----
+    % Instead of thin colored outlines around each filament (which are invisible at small scales),
+    % draw semi-transparent background zones that clearly separate windings spatially.
+    % This preserves the loss colormap visibility while providing strong winding identity.
     if size(fil,2) >= 6 && ~isempty(winding_colors)
         winding_idx_col = round(fil(:,6));
         unique_windings = unique(winding_idx_col);
+
+        % Compute bounding box for each winding and draw zone
         for w = unique_windings(:)'
             if w < 1 || w > numel(winding_colors), continue; end
-            ec         = winding_colors{w};
-            mask_w     = (winding_idx_col == w);
-            fil_w      = fil(mask_w, :);
-            is_round_w = is_round(mask_w);
-            idx_r_w    = find(is_round_w);
-            idx_q_w    = find(~is_round_w);
-            % Round outlines
-            if ~isempty(idx_r_w)
-                Nr_w  = numel(idx_r_w);
-                R_w   = sqrt(fil_w(idx_r_w,3) .* fil_w(idx_r_w,4)) / 2;
-                vx_w  = bsxfun(@plus, fil_w(idx_r_w,1), bsxfun(@times, R_w, cos(theta)));
-                vy_w  = bsxfun(@plus, fil_w(idx_r_w,2), bsxfun(@times, R_w, sin(theta)));
-                vts_w = [reshape(vx_w', [], 1), reshape(vy_w', [], 1)];
-                fcs_w = reshape(1:Nr_w*Nv, Nv, Nr_w)';
-                patch(ax, 'Faces', fcs_w, 'Vertices', vts_w, ...
-                      'FaceColor', 'none', 'EdgeColor', ec, 'LineWidth', 0.5);
+            mask_w = (winding_idx_col == w);
+            fil_w = fil(mask_w, :);
+
+            % Get filament bounds (including their half-widths/heights as radii)
+            x_min = min(fil_w(:,1) - fil_w(:,3)/2);
+            x_max = max(fil_w(:,1) + fil_w(:,3)/2);
+            y_min = min(fil_w(:,2) - fil_w(:,4)/2);
+            y_max = max(fil_w(:,2) + fil_w(:,4)/2);
+
+            % Add 10% margin to zone bounds for visual separation
+            x_margin = 0.1 * (x_max - x_min);
+            y_margin = 0.1 * (y_max - y_min);
+            x_min = x_min - x_margin;
+            x_max = x_max + x_margin;
+            y_min = y_min - y_margin;
+            y_max = y_max + y_margin;
+
+            % Draw semi-transparent rectangular zone
+            zone_color = winding_colors{w};
+            try
+                % Try to set FaceAlpha and EdgeAlpha (MATLAB R2014b+)
+                zone_patch = patch(ax, ...
+                    [x_min, x_max, x_max, x_min], ...
+                    [y_min, y_min, y_max, y_max], ...
+                    zone_color, ...
+                    'FaceAlpha', 0.12, ...
+                    'EdgeColor', zone_color, ...
+                    'EdgeAlpha', 0.25, ...
+                    'LineWidth', 1.5);
+            catch
+                % Fallback for older Octave without EdgeAlpha
+                zone_patch = patch(ax, ...
+                    [x_min, x_max, x_max, x_min], ...
+                    [y_min, y_min, y_max, y_max], ...
+                    zone_color, ...
+                    'EdgeColor', zone_color, ...
+                    'LineWidth', 1.5);
+                try
+                    set(zone_patch, 'FaceAlpha', 0.12);
+                catch
+                end
             end
-            % Rect outlines
-            if ~isempty(idx_q_w)
-                Nq_w  = numel(idx_q_w);
-                hx_w  = fil_w(idx_q_w,3) / 2;
-                hy_w  = fil_w(idx_q_w,4) / 2;
-                cx_w  = fil_w(idx_q_w,1);
-                cy_w  = fil_w(idx_q_w,2);
-                vx_w  = [cx_w-hx_w, cx_w+hx_w, cx_w+hx_w, cx_w-hx_w];
-                vy_w  = [cy_w-hy_w, cy_w-hy_w, cy_w+hy_w, cy_w+hy_w];
-                vts_w = [reshape(vx_w', [], 1), reshape(vy_w', [], 1)];
-                fcs_w = reshape(1:Nq_w*4, 4, Nq_w)';
-                patch(ax, 'Faces', fcs_w, 'Vertices', vts_w, ...
-                      'FaceColor', 'none', 'EdgeColor', ec, 'LineWidth', 0.5);
+
+            % Try to send zone to back (behind the filament patches drawn above)
+            try
+                uistack(zone_patch, 'bottom');
+            catch
+                % Octave may not support uistack; zones are still visible
             end
         end
     end
@@ -158,7 +270,9 @@ function plot_loss_density(geom, results)
         end
     end
 
-    % Draw winding legend entries (one marker per winding)
+    % Store legend handles for later (add AFTER colorbar to avoid resize conflict)
+    leg_handles = [];
+    leg_names = {};
     if ~isempty(winding_names) && ~isempty(winding_colors)
         n_w = min(numel(winding_names), numel(winding_colors));
         leg_handles = zeros(1, n_w);
@@ -166,19 +280,16 @@ function plot_loss_density(geom, results)
             leg_handles(w) = plot(ax, NaN, NaN, 's', 'MarkerFaceColor', winding_colors{w}, ...
                 'MarkerEdgeColor', winding_colors{w}, 'MarkerSize', 8);
         end
-        try
-            legend(ax, leg_handles, winding_names(1:n_w), 'Location', 'best', 'FontSize', 7);
-        catch
-        end
+        leg_names = winding_names(1:n_w);
     end
 
     % Set colormap for this axes
     colormap(ax, hot);
 
-    % Add colorbar - use try/catch for Octave compatibility
+    % Add colorbar first (before legend to avoid resize conflicts in Octave)
     try
         cb = colorbar(ax);
-        ylabel(cb, 'P (W/mm^2)');
+        ylabel(cb, 'p (mW/mm^3)');
     catch
         colorbar;
     end
@@ -188,6 +299,14 @@ function plot_loss_density(geom, results)
         caxis(ax, [0 pmax]);
     catch
         caxis([0 pmax]);
+    end
+
+    % Add legend after colorbar (avoid 'best' which fails in Octave with colorbar)
+    if ~isempty(leg_handles) && ~isempty(leg_names)
+        try
+            legend(ax, leg_handles, leg_names, 'Location', 'northeast', 'FontSize', 7);
+        catch
+        end
     end
 
     t_decor_s = toc(t_decor_start);
