@@ -1,0 +1,1041 @@
+{
+  "generated_utc": "2026-03-21T12:37:54.767296+00:00",
+  "total_materials": 12,
+  "total_pass": 68,
+  "total_warn": 4,
+  "total_fail": 0,
+  "reports": [
+    {
+      "material_id": "FR_31",
+      "timestamp": "2026-03-21T12:37:54.754667+00:00",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "layer": 1,
+          "name": "sha256_source",
+          "status": "SKIP",
+          "message": "No raw source provided for hash check",
+          "details": {}
+        },
+        {
+          "layer": 2,
+          "name": "structural",
+          "status": "SKIP",
+          "message": "No raw source or no curve data for structural check",
+          "details": {}
+        },
+        {
+          "layer": 3,
+          "name": "curve_similarity",
+          "status": "SKIP",
+          "message": "Curve similarity check requires two independent sources (see Layer 5)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "kramers_kronig_qualitative",
+          "status": "PASS",
+          "message": "\u00b5' decreasing around \u00b5'' peak at 2.33 MHz (KK-consistent)",
+          "details": {
+            "peak_f_Hz": 2330000.0,
+            "mu_p_before": 1263.6966666666667,
+            "mu_p_after": 672.1133333333333
+          }
+        },
+        {
+          "layer": 4,
+          "name": "mu_magnitude_vs_mu_i",
+          "status": "PASS",
+          "message": "|\u00b5|(f_low) = 1424 consistent with \u00b5_i = 1500",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "energy_conservation",
+          "status": "PASS",
+          "message": "\u00b5'' \u2265 0 everywhere (energy conservation satisfied)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "snoek_limit",
+          "status": "PASS",
+          "message": "Snoek product = 3.5 GHz (typical range 1-20 GHz for ferrites)",
+          "details": {
+            "f_res_Hz": 2330000.0,
+            "mu_i": 1500,
+            "snoek_GHz": 3.495
+          }
+        },
+        {
+          "layer": 4,
+          "name": "curie_temp",
+          "status": "PASS",
+          "message": "Curie temp = 130\u00b0C (reasonable)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "bsat_chemistry",
+          "status": "PASS",
+          "message": "Bsat = 360 mT consistent with MnZn",
+          "details": {}
+        },
+        {
+          "layer": 5,
+          "name": "cross_source",
+          "status": "SKIP",
+          "message": "No secondary sources available for corroboration",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "material_id": "FR_43",
+      "timestamp": "2026-03-21T12:37:54.755001+00:00",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "layer": 1,
+          "name": "sha256_source",
+          "status": "SKIP",
+          "message": "No raw source provided for hash check",
+          "details": {}
+        },
+        {
+          "layer": 2,
+          "name": "structural",
+          "status": "SKIP",
+          "message": "No raw source or no curve data for structural check",
+          "details": {}
+        },
+        {
+          "layer": 3,
+          "name": "curve_similarity",
+          "status": "SKIP",
+          "message": "Curve similarity check requires two independent sources (see Layer 5)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "kramers_kronig_qualitative",
+          "status": "PASS",
+          "message": "\u00b5' decreasing around \u00b5'' peak at 4.40 MHz (KK-consistent)",
+          "details": {
+            "peak_f_Hz": 4398123.62,
+            "mu_p_before": 627.4326204333333,
+            "mu_p_after": 551.2738408
+          }
+        },
+        {
+          "layer": 4,
+          "name": "mu_magnitude_vs_mu_i",
+          "status": "PASS",
+          "message": "|\u00b5|(f_low) = 816 consistent with \u00b5_i = 800",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "energy_conservation",
+          "status": "PASS",
+          "message": "\u00b5'' \u2265 0 everywhere (energy conservation satisfied)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "snoek_limit",
+          "status": "PASS",
+          "message": "Snoek product = 3.5 GHz (typical range 1-20 GHz for ferrites)",
+          "details": {
+            "f_res_Hz": 4398123.62,
+            "mu_i": 800,
+            "snoek_GHz": 3.518498896
+          }
+        },
+        {
+          "layer": 4,
+          "name": "curie_temp",
+          "status": "PASS",
+          "message": "Curie temp = 130\u00b0C (reasonable)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "bsat_chemistry",
+          "status": "PASS",
+          "message": "Bsat = 300 mT consistent with NiZn",
+          "details": {}
+        },
+        {
+          "layer": 5,
+          "name": "cross_source",
+          "status": "SKIP",
+          "message": "No secondary sources available for corroboration",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "material_id": "FR_52",
+      "timestamp": "2026-03-21T12:37:54.755164+00:00",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "layer": 1,
+          "name": "sha256_source",
+          "status": "SKIP",
+          "message": "No raw source provided for hash check",
+          "details": {}
+        },
+        {
+          "layer": 2,
+          "name": "structural",
+          "status": "SKIP",
+          "message": "No raw source or no curve data for structural check",
+          "details": {}
+        },
+        {
+          "layer": 3,
+          "name": "curve_similarity",
+          "status": "SKIP",
+          "message": "Curve similarity check requires two independent sources (see Layer 5)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "kramers_kronig_qualitative",
+          "status": "PASS",
+          "message": "\u00b5' decreasing around \u00b5'' peak at 13.20 MHz (KK-consistent)",
+          "details": {
+            "peak_f_Hz": 13200000.0,
+            "mu_p_before": 233.23333333333335,
+            "mu_p_after": 174.91666666666666
+          }
+        },
+        {
+          "layer": 4,
+          "name": "mu_magnitude_vs_mu_i",
+          "status": "PASS",
+          "message": "|\u00b5|(f_low) = 273 consistent with \u00b5_i = 250",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "energy_conservation",
+          "status": "PASS",
+          "message": "\u00b5'' \u2265 0 everywhere (energy conservation satisfied)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "snoek_limit",
+          "status": "PASS",
+          "message": "Snoek product = 3.3 GHz (typical range 1-20 GHz for ferrites)",
+          "details": {
+            "f_res_Hz": 13200000.0,
+            "mu_i": 250,
+            "snoek_GHz": 3.3
+          }
+        },
+        {
+          "layer": 4,
+          "name": "curie_temp",
+          "status": "PASS",
+          "message": "Curie temp = 270\u00b0C (reasonable)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "bsat_chemistry",
+          "status": "PASS",
+          "message": "Bsat = 360 mT consistent with NiZn",
+          "details": {}
+        },
+        {
+          "layer": 5,
+          "name": "cross_source",
+          "status": "SKIP",
+          "message": "No secondary sources available for corroboration",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "material_id": "FR_61",
+      "timestamp": "2026-03-21T12:37:54.755300+00:00",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "layer": 1,
+          "name": "sha256_source",
+          "status": "SKIP",
+          "message": "No raw source provided for hash check",
+          "details": {}
+        },
+        {
+          "layer": 2,
+          "name": "structural",
+          "status": "SKIP",
+          "message": "No raw source or no curve data for structural check",
+          "details": {}
+        },
+        {
+          "layer": 3,
+          "name": "curve_similarity",
+          "status": "SKIP",
+          "message": "Curve similarity check requires two independent sources (see Layer 5)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "kramers_kronig_qualitative",
+          "status": "PASS",
+          "message": "\u00b5' decreasing around \u00b5'' peak at 39.50 MHz (KK-consistent)",
+          "details": {
+            "peak_f_Hz": 39500000.0,
+            "mu_p_before": 120.3984,
+            "mu_p_after": 97.48871000000001
+          }
+        },
+        {
+          "layer": 4,
+          "name": "mu_magnitude_vs_mu_i",
+          "status": "PASS",
+          "message": "|\u00b5|(f_low) = 124 consistent with \u00b5_i = 125",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "energy_conservation",
+          "status": "PASS",
+          "message": "\u00b5'' \u2265 0 everywhere (energy conservation satisfied)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "snoek_limit",
+          "status": "PASS",
+          "message": "Snoek product = 4.9 GHz (typical range 1-20 GHz for ferrites)",
+          "details": {
+            "f_res_Hz": 39500000.0,
+            "mu_i": 125,
+            "snoek_GHz": 4.9375
+          }
+        },
+        {
+          "layer": 4,
+          "name": "curie_temp",
+          "status": "PASS",
+          "message": "Curie temp = 350\u00b0C (reasonable)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "bsat_chemistry",
+          "status": "PASS",
+          "message": "Bsat = 250 mT consistent with NiZn",
+          "details": {}
+        },
+        {
+          "layer": 5,
+          "name": "cross_source",
+          "status": "SKIP",
+          "message": "No secondary sources available for corroboration",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "material_id": "FR_79",
+      "timestamp": "2026-03-21T12:37:54.755421+00:00",
+      "verdict": "FAIL",
+      "checks": [
+        {
+          "layer": 1,
+          "name": "sha256_source",
+          "status": "SKIP",
+          "message": "No raw source provided for hash check",
+          "details": {}
+        },
+        {
+          "layer": 2,
+          "name": "structural",
+          "status": "SKIP",
+          "message": "No raw source or no curve data for structural check",
+          "details": {}
+        },
+        {
+          "layer": 3,
+          "name": "curve_similarity",
+          "status": "SKIP",
+          "message": "Curve similarity check requires two independent sources (see Layer 5)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "kramers_kronig_qualitative",
+          "status": "PASS",
+          "message": "\u00b5' decreasing around \u00b5'' peak at 4.62 MHz (KK-consistent)",
+          "details": {
+            "peak_f_Hz": 4620000.0,
+            "mu_p_before": 1293.3333333333333,
+            "mu_p_after": 289.8
+          }
+        },
+        {
+          "layer": 4,
+          "name": "mu_magnitude_vs_mu_i",
+          "status": "WARN",
+          "message": "|\u00b5|(f_low) = 1382 vs \u00b5_i = 225 (514% difference)",
+          "details": {
+            "mu_mag_f_low": 1382.4004376446067,
+            "mu_i": 225
+          }
+        },
+        {
+          "layer": 4,
+          "name": "energy_conservation",
+          "status": "PASS",
+          "message": "\u00b5'' \u2265 0 everywhere (energy conservation satisfied)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "snoek_limit",
+          "status": "PASS",
+          "message": "Snoek product = 1.0 GHz (typical range 1-20 GHz for ferrites)",
+          "details": {
+            "f_res_Hz": 4620000.0,
+            "mu_i": 225,
+            "snoek_GHz": 1.0395
+          }
+        },
+        {
+          "layer": 4,
+          "name": "curie_temp",
+          "status": "PASS",
+          "message": "Curie temp = 250\u00b0C (reasonable)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "bsat_chemistry",
+          "status": "PASS",
+          "message": "Bsat = 450 mT consistent with MnZn",
+          "details": {}
+        },
+        {
+          "layer": 5,
+          "name": "cross_source",
+          "status": "SKIP",
+          "message": "No secondary sources available for corroboration",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "material_id": "FR_80",
+      "timestamp": "2026-03-21T12:37:54.755522+00:00",
+      "verdict": "FAIL",
+      "checks": [
+        {
+          "layer": 1,
+          "name": "sha256_source",
+          "status": "SKIP",
+          "message": "No raw source provided for hash check",
+          "details": {}
+        },
+        {
+          "layer": 2,
+          "name": "structural",
+          "status": "SKIP",
+          "message": "No raw source or no curve data for structural check",
+          "details": {}
+        },
+        {
+          "layer": 3,
+          "name": "curve_similarity",
+          "status": "SKIP",
+          "message": "Curve similarity check requires two independent sources (see Layer 5)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "kramers_kronig_qualitative",
+          "status": "PASS",
+          "message": "\u00b5' decreasing around \u00b5'' peak at 8.65 MHz (KK-consistent)",
+          "details": {
+            "peak_f_Hz": 8649888.0,
+            "mu_p_before": 1227.1000000000001,
+            "mu_p_after": 375.93333333333334
+          }
+        },
+        {
+          "layer": 4,
+          "name": "mu_magnitude_vs_mu_i",
+          "status": "WARN",
+          "message": "|\u00b5|(f_low) = 613 vs \u00b5_i = 900 (32% difference)",
+          "details": {
+            "mu_mag_f_low": 613.0094289650037,
+            "mu_i": 900
+          }
+        },
+        {
+          "layer": 4,
+          "name": "energy_conservation",
+          "status": "PASS",
+          "message": "\u00b5'' \u2265 0 everywhere (energy conservation satisfied)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "snoek_limit",
+          "status": "PASS",
+          "message": "Snoek product = 7.8 GHz (typical range 1-20 GHz for ferrites)",
+          "details": {
+            "f_res_Hz": 8649888.0,
+            "mu_i": 900,
+            "snoek_GHz": 7.7848992
+          }
+        },
+        {
+          "layer": 4,
+          "name": "curie_temp",
+          "status": "PASS",
+          "message": "Curie temp = 250\u00b0C (reasonable)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "bsat_chemistry",
+          "status": "PASS",
+          "message": "Bsat = 430 mT consistent with MnZn",
+          "details": {}
+        },
+        {
+          "layer": 5,
+          "name": "cross_source",
+          "status": "SKIP",
+          "message": "No secondary sources available for corroboration",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "material_id": "FR_31",
+      "timestamp": "2026-03-21T12:37:54.766256+00:00",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "layer": 1,
+          "name": "sha256_source",
+          "status": "SKIP",
+          "message": "No raw source provided for hash check",
+          "details": {}
+        },
+        {
+          "layer": 2,
+          "name": "structural",
+          "status": "SKIP",
+          "message": "No raw source or no curve data for structural check",
+          "details": {}
+        },
+        {
+          "layer": 3,
+          "name": "curve_similarity",
+          "status": "SKIP",
+          "message": "Curve similarity check requires two independent sources (see Layer 5)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "kramers_kronig_qualitative",
+          "status": "PASS",
+          "message": "\u00b5' decreasing around \u00b5'' peak at 2.33 MHz (KK-consistent)",
+          "details": {
+            "peak_f_Hz": 2330000.0,
+            "mu_p_before": 1263.6966666666667,
+            "mu_p_after": 672.1133333333333
+          }
+        },
+        {
+          "layer": 4,
+          "name": "mu_magnitude_vs_mu_i",
+          "status": "PASS",
+          "message": "|\u00b5|(f_low) = 1424 consistent with \u00b5_i = 1500",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "energy_conservation",
+          "status": "PASS",
+          "message": "\u00b5'' \u2265 0 everywhere (energy conservation satisfied)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "snoek_limit",
+          "status": "PASS",
+          "message": "Snoek product = 3.5 GHz (typical range 1-20 GHz for ferrites)",
+          "details": {
+            "f_res_Hz": 2330000.0,
+            "mu_i": 1500,
+            "snoek_GHz": 3.495
+          }
+        },
+        {
+          "layer": 4,
+          "name": "curie_temp",
+          "status": "PASS",
+          "message": "Curie temp = 130\u00b0C (reasonable)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "bsat_chemistry",
+          "status": "PASS",
+          "message": "Bsat = 360 mT consistent with MnZn",
+          "details": {}
+        },
+        {
+          "layer": 5,
+          "name": "cross_source",
+          "status": "SKIP",
+          "message": "No secondary sources available for corroboration",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "material_id": "FR_43",
+      "timestamp": "2026-03-21T12:37:54.766393+00:00",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "layer": 1,
+          "name": "sha256_source",
+          "status": "SKIP",
+          "message": "No raw source provided for hash check",
+          "details": {}
+        },
+        {
+          "layer": 2,
+          "name": "structural",
+          "status": "SKIP",
+          "message": "No raw source or no curve data for structural check",
+          "details": {}
+        },
+        {
+          "layer": 3,
+          "name": "curve_similarity",
+          "status": "SKIP",
+          "message": "Curve similarity check requires two independent sources (see Layer 5)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "kramers_kronig_qualitative",
+          "status": "PASS",
+          "message": "\u00b5' decreasing around \u00b5'' peak at 4.40 MHz (KK-consistent)",
+          "details": {
+            "peak_f_Hz": 4398123.62,
+            "mu_p_before": 627.4326204333333,
+            "mu_p_after": 551.2738408
+          }
+        },
+        {
+          "layer": 4,
+          "name": "mu_magnitude_vs_mu_i",
+          "status": "PASS",
+          "message": "|\u00b5|(f_low) = 816 consistent with \u00b5_i = 800",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "energy_conservation",
+          "status": "PASS",
+          "message": "\u00b5'' \u2265 0 everywhere (energy conservation satisfied)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "snoek_limit",
+          "status": "PASS",
+          "message": "Snoek product = 3.5 GHz (typical range 1-20 GHz for ferrites)",
+          "details": {
+            "f_res_Hz": 4398123.62,
+            "mu_i": 800,
+            "snoek_GHz": 3.518498896
+          }
+        },
+        {
+          "layer": 4,
+          "name": "curie_temp",
+          "status": "PASS",
+          "message": "Curie temp = 130\u00b0C (reasonable)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "bsat_chemistry",
+          "status": "PASS",
+          "message": "Bsat = 300 mT consistent with NiZn",
+          "details": {}
+        },
+        {
+          "layer": 5,
+          "name": "cross_source",
+          "status": "SKIP",
+          "message": "No secondary sources available for corroboration",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "material_id": "FR_52",
+      "timestamp": "2026-03-21T12:37:54.766531+00:00",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "layer": 1,
+          "name": "sha256_source",
+          "status": "SKIP",
+          "message": "No raw source provided for hash check",
+          "details": {}
+        },
+        {
+          "layer": 2,
+          "name": "structural",
+          "status": "SKIP",
+          "message": "No raw source or no curve data for structural check",
+          "details": {}
+        },
+        {
+          "layer": 3,
+          "name": "curve_similarity",
+          "status": "SKIP",
+          "message": "Curve similarity check requires two independent sources (see Layer 5)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "kramers_kronig_qualitative",
+          "status": "PASS",
+          "message": "\u00b5' decreasing around \u00b5'' peak at 13.20 MHz (KK-consistent)",
+          "details": {
+            "peak_f_Hz": 13200000.0,
+            "mu_p_before": 233.23333333333335,
+            "mu_p_after": 174.91666666666666
+          }
+        },
+        {
+          "layer": 4,
+          "name": "mu_magnitude_vs_mu_i",
+          "status": "PASS",
+          "message": "|\u00b5|(f_low) = 273 consistent with \u00b5_i = 250",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "energy_conservation",
+          "status": "PASS",
+          "message": "\u00b5'' \u2265 0 everywhere (energy conservation satisfied)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "snoek_limit",
+          "status": "PASS",
+          "message": "Snoek product = 3.3 GHz (typical range 1-20 GHz for ferrites)",
+          "details": {
+            "f_res_Hz": 13200000.0,
+            "mu_i": 250,
+            "snoek_GHz": 3.3
+          }
+        },
+        {
+          "layer": 4,
+          "name": "curie_temp",
+          "status": "PASS",
+          "message": "Curie temp = 270\u00b0C (reasonable)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "bsat_chemistry",
+          "status": "PASS",
+          "message": "Bsat = 360 mT consistent with NiZn",
+          "details": {}
+        },
+        {
+          "layer": 5,
+          "name": "cross_source",
+          "status": "SKIP",
+          "message": "No secondary sources available for corroboration",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "material_id": "FR_61",
+      "timestamp": "2026-03-21T12:37:54.766623+00:00",
+      "verdict": "PASS",
+      "checks": [
+        {
+          "layer": 1,
+          "name": "sha256_source",
+          "status": "SKIP",
+          "message": "No raw source provided for hash check",
+          "details": {}
+        },
+        {
+          "layer": 2,
+          "name": "structural",
+          "status": "SKIP",
+          "message": "No raw source or no curve data for structural check",
+          "details": {}
+        },
+        {
+          "layer": 3,
+          "name": "curve_similarity",
+          "status": "SKIP",
+          "message": "Curve similarity check requires two independent sources (see Layer 5)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "kramers_kronig_qualitative",
+          "status": "PASS",
+          "message": "\u00b5' decreasing around \u00b5'' peak at 39.50 MHz (KK-consistent)",
+          "details": {
+            "peak_f_Hz": 39500000.0,
+            "mu_p_before": 120.3984,
+            "mu_p_after": 97.48871000000001
+          }
+        },
+        {
+          "layer": 4,
+          "name": "mu_magnitude_vs_mu_i",
+          "status": "PASS",
+          "message": "|\u00b5|(f_low) = 124 consistent with \u00b5_i = 125",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "energy_conservation",
+          "status": "PASS",
+          "message": "\u00b5'' \u2265 0 everywhere (energy conservation satisfied)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "snoek_limit",
+          "status": "PASS",
+          "message": "Snoek product = 4.9 GHz (typical range 1-20 GHz for ferrites)",
+          "details": {
+            "f_res_Hz": 39500000.0,
+            "mu_i": 125,
+            "snoek_GHz": 4.9375
+          }
+        },
+        {
+          "layer": 4,
+          "name": "curie_temp",
+          "status": "PASS",
+          "message": "Curie temp = 350\u00b0C (reasonable)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "bsat_chemistry",
+          "status": "PASS",
+          "message": "Bsat = 250 mT consistent with NiZn",
+          "details": {}
+        },
+        {
+          "layer": 5,
+          "name": "cross_source",
+          "status": "SKIP",
+          "message": "No secondary sources available for corroboration",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "material_id": "FR_79",
+      "timestamp": "2026-03-21T12:37:54.766762+00:00",
+      "verdict": "FAIL",
+      "checks": [
+        {
+          "layer": 1,
+          "name": "sha256_source",
+          "status": "SKIP",
+          "message": "No raw source provided for hash check",
+          "details": {}
+        },
+        {
+          "layer": 2,
+          "name": "structural",
+          "status": "SKIP",
+          "message": "No raw source or no curve data for structural check",
+          "details": {}
+        },
+        {
+          "layer": 3,
+          "name": "curve_similarity",
+          "status": "SKIP",
+          "message": "Curve similarity check requires two independent sources (see Layer 5)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "kramers_kronig_qualitative",
+          "status": "PASS",
+          "message": "\u00b5' decreasing around \u00b5'' peak at 4.62 MHz (KK-consistent)",
+          "details": {
+            "peak_f_Hz": 4620000.0,
+            "mu_p_before": 1293.3333333333333,
+            "mu_p_after": 289.8
+          }
+        },
+        {
+          "layer": 4,
+          "name": "mu_magnitude_vs_mu_i",
+          "status": "WARN",
+          "message": "|\u00b5|(f_low) = 1382 vs \u00b5_i = 225 (514% difference)",
+          "details": {
+            "mu_mag_f_low": 1382.4004376446067,
+            "mu_i": 225
+          }
+        },
+        {
+          "layer": 4,
+          "name": "energy_conservation",
+          "status": "PASS",
+          "message": "\u00b5'' \u2265 0 everywhere (energy conservation satisfied)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "snoek_limit",
+          "status": "PASS",
+          "message": "Snoek product = 1.0 GHz (typical range 1-20 GHz for ferrites)",
+          "details": {
+            "f_res_Hz": 4620000.0,
+            "mu_i": 225,
+            "snoek_GHz": 1.0395
+          }
+        },
+        {
+          "layer": 4,
+          "name": "curie_temp",
+          "status": "PASS",
+          "message": "Curie temp = 250\u00b0C (reasonable)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "bsat_chemistry",
+          "status": "PASS",
+          "message": "Bsat = 450 mT consistent with MnZn",
+          "details": {}
+        },
+        {
+          "layer": 5,
+          "name": "cross_source",
+          "status": "SKIP",
+          "message": "No secondary sources available for corroboration",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "material_id": "FR_80",
+      "timestamp": "2026-03-21T12:37:54.766843+00:00",
+      "verdict": "FAIL",
+      "checks": [
+        {
+          "layer": 1,
+          "name": "sha256_source",
+          "status": "SKIP",
+          "message": "No raw source provided for hash check",
+          "details": {}
+        },
+        {
+          "layer": 2,
+          "name": "structural",
+          "status": "SKIP",
+          "message": "No raw source or no curve data for structural check",
+          "details": {}
+        },
+        {
+          "layer": 3,
+          "name": "curve_similarity",
+          "status": "SKIP",
+          "message": "Curve similarity check requires two independent sources (see Layer 5)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "kramers_kronig_qualitative",
+          "status": "PASS",
+          "message": "\u00b5' decreasing around \u00b5'' peak at 8.65 MHz (KK-consistent)",
+          "details": {
+            "peak_f_Hz": 8649888.0,
+            "mu_p_before": 1227.1000000000001,
+            "mu_p_after": 375.93333333333334
+          }
+        },
+        {
+          "layer": 4,
+          "name": "mu_magnitude_vs_mu_i",
+          "status": "WARN",
+          "message": "|\u00b5|(f_low) = 613 vs \u00b5_i = 900 (32% difference)",
+          "details": {
+            "mu_mag_f_low": 613.0094289650037,
+            "mu_i": 900
+          }
+        },
+        {
+          "layer": 4,
+          "name": "energy_conservation",
+          "status": "PASS",
+          "message": "\u00b5'' \u2265 0 everywhere (energy conservation satisfied)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "snoek_limit",
+          "status": "PASS",
+          "message": "Snoek product = 7.8 GHz (typical range 1-20 GHz for ferrites)",
+          "details": {
+            "f_res_Hz": 8649888.0,
+            "mu_i": 900,
+            "snoek_GHz": 7.7848992
+          }
+        },
+        {
+          "layer": 4,
+          "name": "curie_temp",
+          "status": "PASS",
+          "message": "Curie temp = 250\u00b0C (reasonable)",
+          "details": {}
+        },
+        {
+          "layer": 4,
+          "name": "bsat_chemistry",
+          "status": "PASS",
+          "message": "Bsat = 430 mT consistent with MnZn",
+          "details": {}
+        },
+        {
+          "layer": 5,
+          "name": "cross_source",
+          "status": "SKIP",
+          "message": "No secondary sources available for corroboration",
+          "details": {}
+        }
+      ]
+    }
+  ]
+}
