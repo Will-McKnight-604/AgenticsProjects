@@ -17,24 +17,15 @@ import math
 import os
 import sys
 
+from om_shared import _log, as_float, as_list, clamp, import_pyopenmagnetics, TOPOLOGY_MAP
+
 try:
-    import PyOpenMagnetics as pm
+    pm = import_pyopenmagnetics()
 except Exception as exc:
     print(f"ImportError: {exc}", file=sys.stderr)
     print(f"Python executable: {sys.executable}", file=sys.stderr)
     print(f"Python path: {sys.path}", file=sys.stderr)
     sys.exit(1)
-
-
-def clamp(value, lo, hi):
-    return max(lo, min(hi, value))
-
-
-def as_float(value, default=0.0):
-    try:
-        return float(value)
-    except Exception:
-        return float(default)
 
 
 def normalize_source_mode(value):
@@ -216,6 +207,217 @@ def generate_voltage_waveform(rms_target, duty, winding_index, phase_deg, sample
     return periodic_shift(values, shift)
 
 
+def _resample_pwl(time_pts, data_pts, n_samples, period):
+    """Resample piecewise-linear waveform to n_samples uniformly-spaced points.
+
+    Args:
+        time_pts: list of time breakpoints (monotonic, starting at 0)
+        data_pts: list of values at each breakpoint
+        n_samples: number of output samples
+        period: T = 1/frequency
+
+    Returns:
+        list of n_samples uniformly-spaced values
+    """
+    if not time_pts or not data_pts or len(time_pts) < 2:
+        return [0.0] * n_samples
+
+    out = []
+    j = 0  # index into PWL segments
+    n_seg = len(time_pts) - 1
+    for i in range(n_samples):
+        t = float(i) / float(n_samples) * period
+        # Advance to the correct segment
+        while j < n_seg - 1 and time_pts[j + 1] <= t:
+            j += 1
+        # Interpolate
+        t0, t1 = time_pts[j], time_pts[j + 1]
+        d0, d1 = data_pts[j], data_pts[j + 1]
+        dt = t1 - t0
+        if dt > 0:
+            frac = (t - t0) / dt
+            frac = max(0.0, min(1.0, frac))
+            out.append(d0 + frac * (d1 - d0))
+        else:
+            out.append(d1)
+    return out
+
+
+def _build_excitation_converter(cfg, line_scale, load_scale):
+    """Build MAS converter dict from excitation config for a specific operating point.
+
+    Scales Vin by line_scale and Iout by load_scale.
+    """
+    converter = cfg.get("converter", {})
+    topology_results = cfg.get("topology_results", {})
+    if not converter:
+        return None, None
+
+    vin_min = as_float(converter.get("vin_min"), 0)
+    vin_max = as_float(converter.get("vin_max"), 0)
+    if vin_min <= 0 or vin_max <= 0:
+        return None, None
+
+    topology_key = cfg.get("topology", "two_switch_forward")
+    if topology_key not in TOPOLOGY_MAP:
+        return None, None
+
+    vd = as_float(converter.get("vd"), 0.5)
+    fsw_khz = as_float(converter.get("fsw_khz"), 0)
+    fsw_hz = as_float(cfg.get("frequency_hz"), fsw_khz * 1000.0)
+    if fsw_hz <= 0:
+        return None, None
+
+    eff = as_float(converter.get("efficiency"), 90)
+    if eff > 1:
+        eff = eff / 100.0
+
+    ripple = as_float(converter.get("max_ripple"), 30)
+    if ripple > 1:
+        ripple = ripple / 100.0
+
+    max_duty = as_float(converter.get("max_duty"), 0)
+    if max_duty > 1:
+        max_duty = max_duty / 100.0
+
+    vouts = converter.get("output_voltages")
+    iouts = converter.get("output_currents")
+    if not isinstance(vouts, list):
+        vouts = [as_float(vouts if vouts is not None else converter.get("vout"), 12)]
+    if not isinstance(iouts, list):
+        iouts = [as_float(iouts if iouts is not None else converter.get("iout"), 5)]
+    while len(iouts) < len(vouts):
+        iouts.append(iouts[-1] if iouts else 1.0)
+    vouts = [as_float(v) for v in vouts]
+    iouts = [as_float(i) * load_scale for i in iouts]
+
+    # Scale input voltage by line_scale — set both min and max to the scaled point
+    vin_nom = (vin_min + vin_max) / 2.0
+    vin_scaled = vin_nom * line_scale
+    ambient = as_float(converter.get("ambient_temp"), 25)
+
+    non_isolated = topology_key in ("buck", "boost")
+    op = {"switchingFrequency": fsw_hz, "ambientTemperature": ambient}
+    if non_isolated:
+        op["outputVoltage"] = vouts[0]
+        op["outputCurrent"] = iouts[0]
+    else:
+        op["outputVoltages"] = vouts
+        op["outputCurrents"] = iouts
+
+    mas_conv = {
+        "inputVoltage": {"minimum": vin_scaled, "maximum": vin_scaled},
+        "diodeVoltageDrop": vd,
+        "currentRippleRatio": ripple,
+        "efficiency": eff,
+        "operatingPoints": [op],
+    }
+
+    if max_duty > 0:
+        mas_conv["maximumDutyCycle"] = max_duty
+
+    if topology_results:
+        lm_uh = as_float(topology_results.get("Lm_uH"))
+        if lm_uh > 0:
+            mas_conv["desiredInductance"] = lm_uh * 1e-6
+
+        tr = topology_results.get("turns_ratios")
+        if isinstance(tr, list) and len(tr) > 0:
+            tr_list = [as_float(t) for t in tr]
+        elif isinstance(tr, (int, float)) and as_float(tr) > 0:
+            tr_list = [as_float(tr)]
+        else:
+            tr_list = []
+
+        if topology_key == "single_switch_forward" and tr_list:
+            n_secondaries = len(vouts)
+            if len(tr_list) == n_secondaries:
+                nd_np = as_float(topology_results.get("nd_np"), 1.0)
+                tr_list.append(nd_np)
+
+        if tr_list:
+            mas_conv["desiredTurnsRatios"] = tr_list
+
+        d_nom = as_float(topology_results.get("duty_nom"))
+        d_worst = as_float(topology_results.get("duty_max_vin"))
+        if d_nom > 0:
+            if d_worst <= 0:
+                d_worst = d_nom
+            mas_conv["desiredDutyCycle"] = [[d_nom, d_worst]]
+
+    # Normalize arrays
+    for key in ("desiredTurnsRatios",):
+        if key in mas_conv and not isinstance(mas_conv[key], list):
+            mas_conv[key] = [mas_conv[key]]
+    for op_item in mas_conv.get("operatingPoints", []):
+        for key in ("outputVoltages", "outputCurrents"):
+            if key in op_item and not isinstance(op_item[key], list):
+                op_item[key] = [op_item[key]]
+
+    return topology_key, mas_conv
+
+
+def _get_topology_waveforms(cfg, line_scale, load_scale, n_windings, samples, frequency_hz):
+    """Get topology-aware waveforms from pm.process_converter(), resampled to uniform samples.
+
+    Returns:
+        (i_waveforms, v_waveforms) — lists of lists, one per winding, each with `samples` points.
+        Returns (None, None) if process_converter is not available or fails.
+    """
+    topology_key, mas_conv = _build_excitation_converter(cfg, line_scale, load_scale)
+    if mas_conv is None:
+        return None, None
+
+    try:
+        mas = pm.process_converter(topology_key, mas_conv, False)
+    except Exception as exc:
+        _log(f"[EXCITATION] process_converter failed for line={line_scale:.2f} load={load_scale:.2f}: {exc}")
+        return None, None
+
+    if isinstance(mas, dict) and "error" in mas:
+        _log(f"[EXCITATION] process_converter error: {mas['error']}")
+        return None, None
+
+    ops = mas.get("operatingPoints", [])
+    if not ops:
+        return None, None
+
+    # Use first operating point (we set min==max Vin for this specific condition)
+    op = ops[0]
+    excitations = op.get("excitationsPerWinding", [])
+
+    period = 1.0 / frequency_hz
+    i_waveforms = []
+    v_waveforms = []
+
+    for w_idx in range(n_windings):
+        if w_idx < len(excitations):
+            exc = excitations[w_idx]
+            # Current waveform
+            c_wf = exc.get("current", {}).get("waveform", {})
+            c_time = c_wf.get("time", [])
+            c_data = c_wf.get("data", [])
+            if c_time and c_data:
+                i_waveforms.append(_resample_pwl(c_time, c_data, samples, period))
+            else:
+                i_waveforms.append([0.0] * samples)
+
+            # Voltage waveform
+            v_wf = exc.get("voltage", {}).get("waveform", {})
+            v_time = v_wf.get("time", [])
+            v_data = v_wf.get("data", [])
+            if v_time and v_data:
+                v_waveforms.append(_resample_pwl(v_time, v_data, samples, period))
+            else:
+                v_waveforms.append([0.0] * samples)
+        else:
+            # More windings in excitation config than process_converter returned
+            i_waveforms.append([0.0] * samples)
+            v_waveforms.append([0.0] * samples)
+
+    return i_waveforms, v_waveforms
+
+
 def dft_harmonics(values, max_order):
     n = len(values)
     if n <= 0:
@@ -311,7 +513,10 @@ def build_processed_summary_with_pm(op_name, frequency_hz, windings, wave_t, i_w
             }
         )
 
-    out = pm.process_inputs(inputs)
+    try:
+        out = pm.process_inputs(inputs)
+    except Exception as exc:
+        return {"ok": False, "error": f"process_inputs failed: {exc}", "windings": []}
     if isinstance(out, dict) and "data" in out and isinstance(out["data"], str) and "Exception:" in out["data"]:
         return {"ok": False, "error": out["data"], "windings": []}
 
@@ -341,6 +546,12 @@ def build_excitation(cfg):
     if source_mode != "converter":
         return {"status": "ERROR", "error": "Only converter source mode is supported in this generator."}
 
+    # NEW: Get topology for waveform dispatch
+    topology_key = cfg.get("topology", "two_switch_forward")
+    if not isinstance(topology_key, str):
+        topology_key = "two_switch_forward"
+    topology_key = topology_key.lower().replace(" ", "_").replace("-", "_")
+
     frequency_hz = as_float(cfg.get("frequency_hz", 100e3), 100e3)
     windings = cfg.get("windings", []) or []
     if not windings:
@@ -360,35 +571,49 @@ def build_excitation(cfg):
     op_grid = build_grid(cfg)
     operating_points = []
 
+    # Check if topology-aware waveforms via process_converter are available
+    has_converter = bool(cfg.get("converter"))
+    if has_converter:
+        _log(f"[EXCITATION] Converter data available — using process_converter() for topology-aware waveforms")
+    else:
+        _log(f"[EXCITATION] No converter data — using simplified analytical waveforms")
+
     for (line_scale, load_scale, conduction_mode) in op_grid:
         duty = estimate_duty(cfg, line_scale)
         if conduction_mode == "dcm":
             duty = clamp(duty * 0.7, 0.05, 0.42)
 
-        i_waveforms = []
-        v_waveforms = []
-        op_rms_currents = []
-        op_rms_voltages = []
+        i_waveforms = None
+        v_waveforms = None
+
+        # Try topology-aware waveforms from process_converter (CCM only — DCM not modeled by PyOM)
+        if has_converter and conduction_mode != "dcm":
+            i_waveforms, v_waveforms = _get_topology_waveforms(
+                cfg, line_scale, load_scale, len(windings), samples, frequency_hz)
+            if i_waveforms is not None:
+                _log(f"[EXCITATION] process_converter OK for line={line_scale:.2f} load={load_scale:.2f}")
+
+        # Fallback: simplified analytical waveforms
+        if i_waveforms is None:
+            i_waveforms = []
+            v_waveforms = []
+            for idx, w in enumerate(windings):
+                base_i = as_float(w.get("rms_current_a", 0.0), 0.0)
+                base_v = as_float(w.get("rms_voltage_v", 0.0), 0.0)
+                phase = as_float(w.get("phase_deg", 0.0), 0.0)
+                i_rms = abs(base_i) * load_scale
+                v_rms = abs(base_v) * line_scale
+                i_waveforms.append(generate_current_waveform(i_rms, duty, conduction_mode, phase, samples))
+                v_waveforms.append(generate_voltage_waveform(v_rms, duty, idx, phase, samples))
+
+        op_rms_currents = [rms(iw) for iw in i_waveforms]
+        op_rms_voltages = [rms(vw) for vw in v_waveforms]
+
         i_harm_all = []
         v_harm_all = []
-
-        for idx, w in enumerate(windings):
-            base_i = as_float(w.get("rms_current_a", 0.0), 0.0)
-            base_v = as_float(w.get("rms_voltage_v", 0.0), 0.0)
-            phase = as_float(w.get("phase_deg", 0.0), 0.0)
-
-            i_rms = abs(base_i) * load_scale
-            v_rms = abs(base_v) * line_scale
-            op_rms_currents.append(i_rms)
-            op_rms_voltages.append(v_rms)
-
-            iw = generate_current_waveform(i_rms, duty, conduction_mode, phase, samples)
-            vw = generate_voltage_waveform(v_rms, duty, idx, phase, samples)
-            i_waveforms.append(iw)
-            v_waveforms.append(vw)
-
-            i_harm_all.append(dft_harmonics(iw, max_order))
-            v_harm_all.append(dft_harmonics(vw, max_order))
+        for idx in range(len(windings)):
+            i_harm_all.append(dft_harmonics(i_waveforms[idx], max_order))
+            v_harm_all.append(dft_harmonics(v_waveforms[idx], max_order))
 
         keep_orders = select_harmonic_orders(i_harm_all, target_pct, small_pct, small_consecutive)
         harmonics = []
@@ -438,10 +663,13 @@ def build_excitation(cfg):
             }
         )
 
+    waveform_source = "process_converter" if has_converter else "simplified_analytical"
     return {
         "status": "OK",
-        "source": "om_converter_2switch_forward",
-        "topology": "two_switch_forward",
+        "source": "om_converter_multi_topology",
+        "waveform_source": waveform_source,
+        "topology": topology_key,
+        "topology_display": topology_key.replace("_", " ").title(),
         "sweep_mode": sweep_mode,
         "conduction_mode": conduction_mode_cfg,
         "frequency_hz": frequency_hz,

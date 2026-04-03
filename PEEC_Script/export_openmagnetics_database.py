@@ -13,11 +13,14 @@ Requirements:
     pip install PyMKF
 """
 
-import PyOpenMagnetics as pm
 import json
 import sys
 import os
 import time
+
+from om_shared import import_pyopenmagnetics
+
+pm = import_pyopenmagnetics()
 
 
 def extract_nominal(field):

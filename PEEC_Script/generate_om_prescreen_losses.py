@@ -12,8 +12,10 @@ import math
 import os
 import sys
 
+from om_shared import as_float, clamp, import_pyopenmagnetics
+
 try:
-    import PyOpenMagnetics as pm
+    pm = import_pyopenmagnetics()
 except Exception as exc:
     print(f"ImportError: {exc}", file=sys.stderr)
     print(f"Python executable: {sys.executable}", file=sys.stderr)
@@ -31,22 +33,11 @@ except Exception as exc:
     sys.exit(1)
 
 
-def as_float(value, default=0.0):
-    try:
-        return float(value)
-    except Exception:
-        return float(default)
-
-
 def as_int(value, default=0):
     try:
         return int(round(float(value)))
     except Exception:
         return int(default)
-
-
-def clamp(value, lo, hi):
-    return max(lo, min(hi, value))
 
 
 def load_json(path):

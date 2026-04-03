@@ -10,29 +10,28 @@ Usage:
     python generate_om_recommendations.py config.json
 """
 
+import time as _time
+_t_script_start = _time.perf_counter()
+
 import json
 import math
 import os
-import re
 import sys
 import importlib.metadata
 
+from om_shared import _log, as_float, clamp, sanitize_local_key, import_pyopenmagnetics, TOPOLOGY_MAP
+
+_t_stdlib_done = _time.perf_counter()
+_log(f"[TIMER] Stdlib imports:          {_t_stdlib_done - _t_script_start:.3f}s")
+
+_t_pm_import_start = _time.perf_counter()
 try:
-    import PyOpenMagnetics as pm
+    pm = import_pyopenmagnetics()
 except Exception as exc:
-    print(f"ImportError: {exc}", file=sys.stderr)
+    _log(f"ImportError: {exc}")
     sys.exit(1)
-
-
-def clamp(value, lo, hi):
-    return max(lo, min(hi, value))
-
-
-def as_float(value, default=0.0):
-    try:
-        return float(value)
-    except Exception:
-        return float(default)
+_t_pm_import_done = _time.perf_counter()
+_log(f"[TIMER] Import PyOpenMagnetics:  {_t_pm_import_done - _t_pm_import_start:.3f}s")
 
 
 def get_pm_runtime_version():
@@ -42,19 +41,6 @@ def get_pm_runtime_version():
     except Exception:
         return "unknown"
 
-
-def sanitize_local_key(raw):
-    """Match MATLAB make_valid_name/sanitize_field_name behavior."""
-    if raw is None:
-        raw = "Unknown"
-    if not isinstance(raw, str):
-        raw = str(raw)
-    name = re.sub(r"[^a-zA-Z0-9_]", "_", raw)
-    if not name:
-        name = "Unknown"
-    if not name[0].isalpha():
-        name = f"W_{name}"
-    return name
 
 
 def _load_local_json_map(path):
@@ -336,10 +322,47 @@ def _build_excitations_for_op(op_windings, freq_hz, duty):
 def build_mas_inputs(config):
     """Build MAS inputs structure from recommendation config.
 
-    Supports two config formats:
+    Supports three config formats:
+      - MAS passthrough: config.operating_points_mas[] (pre-built by topology calculator)
       - New: config.operating_points[] array (each with .windings, .duty, .vin, etc.)
       - Legacy: config.operating_point + config.windings (single operating point)
     """
+
+    # NEW: If pre-built MAS operating points provided by topology calculator, use them directly
+    if "operating_points_mas" in config and config["operating_points_mas"]:
+        design_req = config.get("design_requirements", {})
+        # Map topology key to MAS topology string if present
+        if "topology" in design_req:
+            topology_key = str(design_req["topology"]).lower().replace(" ", "_").replace("-", "_")
+            if topology_key in TOPOLOGY_MAP:
+                design_req["topology"] = TOPOLOGY_MAP[topology_key]
+
+        # MATLAB jsonencode converts single-element arrays to dicts — normalize
+        # all MAS fields that must be arrays per the schema
+        tr = design_req.get("turnsRatios")
+        if isinstance(tr, dict):
+            design_req["turnsRatios"] = [tr]
+        ops_mas = config["operating_points_mas"]
+        if isinstance(ops_mas, dict):
+            ops_mas = [ops_mas]
+        # Normalize each operating point: fix single-element arrays and inject
+        # required MAS fields that the topology calculator omits
+        for i, op in enumerate(ops_mas):
+            if isinstance(op, dict):
+                # excitationsPerWinding must be array
+                epw = op.get("excitationsPerWinding")
+                if isinstance(epw, dict):
+                    op["excitationsPerWinding"] = [epw]
+                # process_inputs() requires 'name' and 'conditions' on each OP
+                if "name" not in op:
+                    op["name"] = f"Operating Point {i+1}"
+                if "conditions" not in op:
+                    op["conditions"] = {"ambientTemperature": 25.0}
+
+        return {
+            "designRequirements": design_req,
+            "operatingPoints": ops_mas,
+        }
 
     dr = config.get("design_requirements", {})
     samples = int(as_float(config.get("samples_per_period", 512), 512))
@@ -408,22 +431,21 @@ def build_mas_inputs(config):
     if isinstance(mag_ind, (int, float)):
         mag_ind = {"nominal": float(mag_ind)}
 
-    # --- Map topology names ---
-    topology_map = {
-        "two_switch_forward": "Two Switch Forward Converter",
-        "2_switch_forward": "Two Switch Forward Converter",
-        "2-switch forward": "Two Switch Forward Converter",
-        "forward": "Two Switch Forward Converter",
-        "flyback": "Flyback Converter",
-        "buck": "Buck Converter",
-        "boost": "Boost Converter",
-        "push_pull": "Push-Pull Converter",
-        "half_bridge": "Half-Bridge Converter",
-        "full_bridge": "Full-Bridge Converter",
-    }
+    # --- Map topology names to formal PyOpenMagnetics format ---
+    # PyOpenMagnetics C++ requires exact formal names like "Two Switch Forward Converter"
     raw_topo = dr.get("topology", "Two Switch Forward Converter")
+
+    # Normalize to snake_case key, then look up formal name via TOPOLOGY_MAP
     topo_key = raw_topo.lower().replace("-", "_").replace(" ", "_")
-    topology = topology_map.get(topo_key, raw_topo)
+    # Strip trailing "_converter" for matching
+    topo_key_stripped = topo_key.replace("_converter", "")
+    if topo_key in TOPOLOGY_MAP:
+        topology = TOPOLOGY_MAP[topo_key]
+    elif topo_key_stripped in TOPOLOGY_MAP:
+        topology = TOPOLOGY_MAP[topo_key_stripped]
+    else:
+        # If already a formal name (e.g., "Two Switch Forward Converter"), pass through
+        topology = raw_topo
 
     # --- Assemble MAS inputs ---
     design_req = {
@@ -472,9 +494,9 @@ def ensure_databases_loaded():
         if pm.is_core_shape_database_empty() or pm.is_core_material_database_empty():
             pm.load_databases({})
             n_shapes = len(pm.get_available_core_shapes())
-            print(f"Loaded databases: {n_shapes} core shapes available", file=sys.stderr)
+            _log(f"Loaded databases: {n_shapes} core shapes available")
     except Exception as exc:
-        print(f"Warning: database loading failed: {exc}", file=sys.stderr)
+        _log(f"Warning: database loading failed: {exc}")
 
 
 def apply_user_weights(recommendations, weights):
@@ -574,8 +596,16 @@ def recommendation_matches_wire_family(rec, wire_family_mode):
     return not (has_foil or has_planar)
 
 
+# Module-level list to collect stage timings from run_recommendations()
+# Each entry is (label_string, elapsed_seconds).
+_stage_timings = []
+
+
 def run_recommendations(config):
     """Run PyOpenMagnetics advisor to get design recommendations."""
+    global _stage_timings
+    _stage_timings = []  # reset for this run
+    _t_run_start = _time.perf_counter()
 
     max_results = int(as_float(config.get("max_results", 5), 5))
     wire_family_mode = _normalize_wire_family_mode(config.get("wire_family_mode", "auto_all"))
@@ -592,10 +622,16 @@ def run_recommendations(config):
     }
 
     # Ensure core databases are loaded before calling advisor
+    _t_db_start = _time.perf_counter()
     ensure_databases_loaded()
+    _t_db_done = _time.perf_counter()
+    _stage_timings.append(("Load databases:          ", _t_db_done - _t_db_start))
 
     # Build MAS inputs
+    _t_build_start = _time.perf_counter()
     inputs = build_mas_inputs(config)
+    _t_build_done = _time.perf_counter()
+    _stage_timings.append(("Build MAS inputs:        ", _t_build_done - _t_build_start))
 
     # Log key inputs for traceability
     dr = inputs.get("designRequirements", {})
@@ -613,21 +649,42 @@ def run_recommendations(config):
     if ops and ops[0].get("excitationsPerWinding"):
         pri_label = ops[0]["excitationsPerWinding"][0].get("current", {}).get(
             "processed", {}).get("label", "?")
-    print(f"[ADVISOR] Inputs: Lm={mag_ind}, turnsRatios={turns_ratios}, "
-          f"freq={freq}Hz, weights={api_weights}, "
-          f"ops={n_ops}, pri_current={pri_label}, "
-          f"insulation={has_insulation}, maxDims={has_max_dims}, "
-          f"opTemp={op_temp}", file=sys.stderr)
+    _log(f"[ADVISOR] Inputs: Lm={mag_ind}, turnsRatios={turns_ratios}, "
+         f"freq={freq}Hz, weights={api_weights}, "
+         f"ops={n_ops}, pri_current={pri_label}, "
+         f"insulation={has_insulation}, maxDims={has_max_dims}, "
+         f"opTemp={op_temp}")
+
+    # --- DEBUG: dump inputs before process_inputs() ---
+    debug_dir = os.path.dirname(os.path.abspath(__file__))
+    try:
+        debug_inputs_path = os.path.join(debug_dir, "_debug_inputs_before_process.json")
+        with open(debug_inputs_path, "w") as _dbg:
+            json.dump(inputs, _dbg, indent=2, default=str)
+        _log(f"[DEBUG] Dumped pre-process_inputs data to {debug_inputs_path}")
+    except Exception as _dbg_exc:
+        _log(f"[DEBUG] Could not dump inputs: {_dbg_exc}")
+    sys.stderr.flush()
 
     # Process inputs through PyOpenMagnetics
+    _t_process_start = _time.perf_counter()
     try:
+        _log("[DEBUG] Calling pm.process_inputs()...")
+        sys.stderr.flush()
         processed = pm.process_inputs(inputs)
+        _log("[DEBUG] pm.process_inputs() returned OK")
+        sys.stderr.flush()
     except Exception as exc:
+        _t_process_done = _time.perf_counter()
+        _stage_timings.append(("process_inputs() [FAIL]: ", _t_process_done - _t_process_start))
         return {
             "status": "ERROR",
             "error": f"process_inputs failed: {exc}",
             "recommendations": []
         }
+    _t_process_done = _time.perf_counter()
+    _stage_timings.append(("process_inputs():        ", _t_process_done - _t_process_start))
+    _log(f"[TIMER] process_inputs():        {_t_process_done - _t_process_start:.3f}s")
 
     # Check for processing errors
     if isinstance(processed, dict) and "data" in processed:
@@ -646,33 +703,141 @@ def run_recommendations(config):
     # Match web-tool default behavior for faster recommendations.
     core_mode = "available cores"
 
-    # For available-cores mode, include both stock and non-stock entries
-    # so we get mixed core families (not predominantly toroids).
+    # Apply performance-tuned settings before the adviser call.
+    # These override C++ defaults for faster execution while preserving
+    # result quality.  All are restored in the finally block after the call.
+    _t_settings_start = _time.perf_counter()
     settings_overridden = False
     previous_settings = None
     try:
         settings_obj = pm.get_settings()
         if isinstance(settings_obj, dict) and "data" not in settings_obj:
             previous_settings = dict(settings_obj)
-            if settings_obj.get("useOnlyCoresInStock", True):
-                settings_obj["useOnlyCoresInStock"] = False
+            changed = False
+
+            # --- Core database filtering ---
+            use_in_stock = bool(config.get("cores_in_stock", False))
+            if settings_obj.get("useOnlyCoresInStock", True) != use_in_stock:
+                settings_obj["useOnlyCoresInStock"] = use_in_stock
+                changed = True
+
+            inc_toroidal = bool(config.get("include_toroidal_cores", True))
+            if settings_obj.get("useToroidalCores", True) != inc_toroidal:
+                settings_obj["useToroidalCores"] = inc_toroidal
+                changed = True
+
+            inc_concentric = bool(config.get("include_concentric_cores", False))
+            if settings_obj.get("useConcentricCores", True) != inc_concentric:
+                settings_obj["useConcentricCores"] = inc_concentric
+                changed = True
+
+            # --- Core adviser search parameters ---
+            inc_stacks = bool(config.get("include_stacked_cores", False))
+            if settings_obj.get("coreAdviserIncludeStacks", True) != inc_stacks:
+                settings_obj["coreAdviserIncludeStacks"] = inc_stacks
+                changed = True
+
+            inc_dist_gaps = bool(config.get("include_distributed_gaps", False))
+            if settings_obj.get("coreAdviserIncludeDistributedGaps", True) != inc_dist_gaps:
+                settings_obj["coreAdviserIncludeDistributedGaps"] = inc_dist_gaps
+                changed = True
+
+            max_after_filter = int(config.get("max_cores_after_filtering", 100))
+            if settings_obj.get("coreAdviserMaximumMagneticsAfterFiltering", 500) != max_after_filter:
+                settings_obj["coreAdviserMaximumMagneticsAfterFiltering"] = max_after_filter
+                changed = True
+
+            # --- Coil adviser search parameters ---
+            max_wires = int(config.get("max_wires_per_winding", 50))
+            if settings_obj.get("coilAdviserMaximumNumberWires", 100) != max_wires:
+                settings_obj["coilAdviserMaximumNumberWires"] = max_wires
+                changed = True
+
+            # --- Wire type filtering ---
+            wire_cfg = config.get("wire_types", {})
+            if isinstance(wire_cfg, dict):
+                wire_map = {
+                    "round": "wireAdviserIncludeRound",
+                    "litz": "wireAdviserIncludeLitz",
+                    "rectangular": "wireAdviserIncludeRectangular",
+                    "foil": "wireAdviserIncludeFoil",
+                    "planar": "wireAdviserIncludePlanar",
+                }
+                for key, setting_name in wire_map.items():
+                    if key in wire_cfg:
+                        val = bool(wire_cfg[key])
+                        if settings_obj.get(setting_name) != val:
+                            settings_obj[setting_name] = val
+                            changed = True
+
+            if changed:
                 pm.set_settings(settings_obj)
                 settings_overridden = True
-                print(
-                    "[ADVISOR] Set useOnlyCoresInStock=False "
-                    "(available cores mode; mixed families enabled)",
-                    file=sys.stderr,
-                )
+                _log(f"[ADVISOR] Applied performance settings: "
+                     f"inStock={use_in_stock}, toroidal={inc_toroidal}, "
+                     f"concentric={inc_concentric}, stacks={inc_stacks}, "
+                     f"distGaps={inc_dist_gaps}, maxFilter={max_after_filter}, "
+                     f"maxWires={max_wires}")
     except Exception as exc:
-        print(f"[ADVISOR] Warning: could not update useOnlyCoresInStock: {exc}",
-              file=sys.stderr)
+        _log(f"[ADVISOR] Warning: could not apply settings: {exc}")
+    _t_settings_done = _time.perf_counter()
+    _stage_timings.append(("Apply settings:          ", _t_settings_done - _t_settings_start))
+    _log(f"[TIMER] Apply settings:          {_t_settings_done - _t_settings_start:.3f}s")
 
     # Request a moderately larger pool so we get some core family diversity
     # after compatibility filtering.  Keep it small to avoid MKF crashes
     # (each result requires full winding computation which can segfault).
-    pool_size = max(max_results * 2, 10)
+    # Multi-winding designs (3+ windings) are much slower per candidate,
+    # so keep pool_size small to stay within the 5-minute subprocess timeout.
+    n_windings = 0
+    if isinstance(processed, dict):
+        p_ops = processed.get("operatingPoints", [])
+        if p_ops and isinstance(p_ops[0], dict):
+            n_windings = len(p_ops[0].get("excitationsPerWinding", []))
+    if n_windings >= 3:
+        pool_size = min(max_results, 3)  # 3+ windings: limit pool to avoid timeout
+    else:
+        pool_size = max(max_results * 2, 10)
     maximum_number_results = pool_size
 
+    # --- Workaround: strip insulation from processed data before adviser ---
+    # The MKF C++ adviser segfaults (ACCESS_VIOLATION) when insulation data
+    # is present for multi-winding (3+) topologies.  We remove it before
+    # the call and restore it afterward so the results still carry context.
+    saved_insulation = None
+    if isinstance(processed, dict):
+        p_dr = processed.get("designRequirements", {})
+        if isinstance(p_dr, dict) and "insulation" in p_dr:
+            saved_insulation = p_dr.pop("insulation")
+            _log("[ADVISOR] Temporarily stripped insulation to avoid C++ crash")
+
+    # --- DEBUG: dump processed data before calculate_advised_magnetics() ---
+    try:
+        debug_processed_path = os.path.join(debug_dir, "_debug_processed_before_adviser.json")
+        with open(debug_processed_path, "w") as _dbg:
+            json.dump(processed, _dbg, indent=2, default=str)
+        _log(f"[DEBUG] Dumped post-process_inputs data to {debug_processed_path}")
+        _log(f"[DEBUG] About to call calculate_advised_magnetics("
+             f"max={maximum_number_results}, core_mode='{core_mode}')")
+        # Log key structural info
+        if isinstance(processed, dict):
+            p_dr = processed.get("designRequirements", {})
+            p_ops = processed.get("operatingPoints", [])
+            _log(f"[DEBUG] processed topology='{p_dr.get('topology')}'")
+            _log(f"[DEBUG] processed turnsRatios={p_dr.get('turnsRatios')}")
+            _log(f"[DEBUG] processed Lm={p_dr.get('magnetizingInductance')}")
+            if p_ops:
+                epw = p_ops[0].get("excitationsPerWinding", [])
+                _log(f"[DEBUG] processed n_excitations={len(epw)}")
+                for j, ex in enumerate(epw):
+                    _log(f"[DEBUG]   excitation[{j}] name='{ex.get('name')}' "
+                         f"freq={ex.get('frequency')}")
+        sys.stderr.flush()
+    except Exception as _dbg_exc:
+        _log(f"[DEBUG] Could not dump processed: {_dbg_exc}")
+    sys.stderr.flush()
+
+    _t_adviser_start = _time.perf_counter()
     try:
         try:
             results = pm.calculate_advised_magnetics(
@@ -681,12 +846,17 @@ def run_recommendations(config):
                 core_mode
             )
         finally:
+            _t_adviser_done = _time.perf_counter()
+            _stage_timings.append(("calculate_advised():     ", _t_adviser_done - _t_adviser_start))
+            _log(f"[TIMER] calculate_advised():     {_t_adviser_done - _t_adviser_start:.3f}s")
             if settings_overridden and previous_settings is not None:
                 try:
                     pm.set_settings(previous_settings)
                 except Exception as exc:
-                    print(f"[ADVISOR] Warning: failed to restore settings: {exc}",
-                          file=sys.stderr)
+                    _log(f"[ADVISOR] Warning: failed to restore settings: {exc}")
+            # Restore insulation data so downstream code can reference it
+            if saved_insulation is not None and isinstance(processed, dict):
+                processed.get("designRequirements", {})["insulation"] = saved_insulation
     except Exception as exc:
         return {
             "status": "ERROR",
@@ -695,6 +865,7 @@ def run_recommendations(config):
         }
 
     # Load local GUI catalogs for compatibility filtering + dual IDs.
+    _t_format_start = _time.perf_counter()
     base_dir = os.path.dirname(os.path.abspath(__file__))
     local_idx = load_local_catalog_index(base_dir)
     core_filter_active = len(local_idx.get("core_keys", set())) > 0
@@ -723,10 +894,9 @@ def run_recommendations(config):
             rec = apply_local_ids(rec, local_idx)
             if core_filter_active and not rec.get("core_shape_local_key"):
                 incompatible_recommendations.append(rec)
-                print(
+                _log(
                     f"[ADVISOR] Incompatible core not in local DB: "
-                    f"{rec.get('core_shape_raw', rec.get('core_shape', 'Unknown'))}",
-                    file=sys.stderr,
+                    f"{rec.get('core_shape_raw', rec.get('core_shape', 'Unknown'))}"
                 )
             else:
                 compatible_recommendations.append(rec)
@@ -737,18 +907,16 @@ def run_recommendations(config):
         recommendations = compatible_recommendations
         skipped_incompatible_cores = len(incompatible_recommendations)
         if skipped_incompatible_cores > 0:
-            print(
+            _log(
                 f"[ADVISOR] Filtered out {skipped_incompatible_cores} recommendation(s) "
-                f"with cores missing from local GUI database",
-                file=sys.stderr,
+                f"with cores missing from local GUI database"
             )
     elif incompatible_recommendations:
         recommendations = incompatible_recommendations
         compatibility_fallback_used = True
-        print(
+        _log(
             "[ADVISOR] No core recommendations matched local GUI DB. "
-            "Falling back to unfiltered adviser results.",
-            file=sys.stderr,
+            "Falling back to unfiltered adviser results."
         )
     else:
         recommendations = []
@@ -765,22 +933,29 @@ def run_recommendations(config):
         if filtered:
             recommendations = filtered
             wire_filtered_out = before_wire_filter - len(filtered)
-            print(
+            _log(
                 f"[ADVISOR] Wire family filter '{wire_family_mode}' kept "
-                f"{len(filtered)}/{before_wire_filter} recommendation(s)",
-                file=sys.stderr,
+                f"{len(filtered)}/{before_wire_filter} recommendation(s)"
             )
         else:
             wire_filter_fallback_used = True
-            print(
+            _log(
                 f"[ADVISOR] Wire family filter '{wire_family_mode}' matched 0 results. "
-                "Falling back to unfiltered wire families.",
-                file=sys.stderr,
+                "Falling back to unfiltered wire families."
             )
 
     # Compute UI-weighted scores while preserving raw adviser ranking, then trim.
     recommendations = apply_user_weights(recommendations, weights)
     recommendations = recommendations[:max_results]
+
+    _t_format_done = _time.perf_counter()
+    _stage_timings.append(("Format results:          ", _t_format_done - _t_format_start))
+    _log(f"[TIMER] Format results:          {_t_format_done - _t_format_start:.3f}s")
+
+    _t_run_done = _time.perf_counter()
+    _stage_timings.append(("run_recommendations():   ", _t_run_done - _t_run_start))
+    _log(f"[TIMER] run_recommendations():   {_t_run_done - _t_run_start:.3f}s")
+    sys.stderr.flush()
 
     return {
         "status": "OK",
@@ -841,15 +1016,13 @@ def compute_losses_for_recommendation(mas_data):
             core_result = pm.calculate_core_losses(core, coil, inputs_data, attempt_models)
             if isinstance(core_result, dict) and "data" not in core_result:
                 core_losses = as_float(core_result.get("coreLosses", 0.0), 0.0)
-                print(f"  [LOSS] Core loss calc OK ({attempt_label}): {core_losses:.4f} W",
-                      file=sys.stderr)
+                _log(f"  [LOSS] Core loss calc OK ({attempt_label}): {core_losses:.4f} W")
                 break
             else:
                 err_detail = core_result.get("data", "") if isinstance(core_result, dict) else str(core_result)
-                print(f"  [LOSS] Core loss attempt '{attempt_label}' returned error response: {err_detail}",
-                      file=sys.stderr)
+                _log(f"  [LOSS] Core loss attempt '{attempt_label}' returned error response: {err_detail}")
         except Exception as exc:
-            print(f"  [LOSS] Core loss attempt '{attempt_label}' failed: {exc}", file=sys.stderr)
+            _log(f"  [LOSS] Core loss attempt '{attempt_label}' failed: {exc}")
 
     # Winding losses via calculate_winding_losses(magnetic, operating_point, temperature)
     try:
@@ -865,18 +1038,24 @@ def compute_losses_for_recommendation(mas_data):
                     winding_result.get("windingLosses", 0.0), 0.0
                 )
     except Exception as exc:
-        print(f"  [LOSS] Winding loss calc failed: {exc}", file=sys.stderr)
+        _log(f"  [LOSS] Winding loss calc failed: {exc}")
 
     return core_losses, winding_losses
 
 
-def resolve_wire_info(wire_ref):
+def resolve_wire_info(wire_ref, skip_local_match=False):
     """Resolve an advisor wire reference to its type and dimensions.
 
     The advisor returns internal wire names like 'Litz TXXL180/38TXXX-3(MWXX)'.
     This function uses find_wire_by_name() to look up the wire's actual
-    type and conducting dimensions, then finds the closest match in the
-    local wire database.
+    type and conducting dimensions.
+
+    Args:
+        wire_ref: Wire name string from the adviser result.
+        skip_local_match: If True, skip the expensive match_wire_in_local_db()
+            call which iterates through all wires in the DB via C++ calls.
+            This avoids potential segfaults on multi-winding results.
+            Local DB matching is handled separately by apply_local_ids().
 
     Returns a dict with:
       - original_name: the raw advisor wire reference
@@ -939,8 +1118,7 @@ def resolve_wire_info(wire_ref):
             nc = wire_data.get("numberConductors", 1)
             info["number_conductors"] = int(as_float(nc, 1))
     except Exception as exc:
-        print(f"  [WIRE] find_wire_by_name('{wire_ref}') failed: {exc}",
-              file=sys.stderr)
+        _log(f"  [WIRE] find_wire_by_name('{wire_ref}') failed: {exc}")
 
     # If find_wire_by_name didn't work, try to parse from the name string
     if info["wire_type"] == "unknown":
@@ -954,8 +1132,9 @@ def resolve_wire_info(wire_ref):
         elif "round" in name_lower:
             info["wire_type"] = "round"
 
-    # Try to match against the local wire database
-    info["matched_name"] = match_wire_in_local_db(info)
+    # Try to match against the local wire database (expensive — many C++ calls)
+    if not skip_local_match:
+        info["matched_name"] = match_wire_in_local_db(info)
 
     return info
 
@@ -1051,8 +1230,8 @@ def match_wire_in_local_db(wire_info):
             continue
 
     if best_name:
-        print(f"  [WIRE] Matched '{wire_info['original_name']}' -> '{best_name}' "
-              f"(dist={best_distance:.4f})", file=sys.stderr)
+        _log(f"  [WIRE] Matched '{wire_info['original_name']}' -> '{best_name}' "
+             f"(dist={best_distance:.4f})")
 
     return best_name
 
@@ -1115,21 +1294,20 @@ def extract_recommendation(item):
             rec[f"{prefix}_wire"] = wire_name
             rec[f"{prefix}_wire_raw"] = wire_name
 
-            # Resolve wire to type/dimensions and find local DB match
-            wire_info = resolve_wire_info(wire_name)
+            # Resolve wire type/dimensions via single find_wire_by_name call.
+            # Skip match_wire_in_local_db (expensive loop of C++ calls that can
+            # segfault on multi-winding results).  Local DB matching is handled
+            # separately by apply_local_ids() using exported JSON files.
+            wire_info = resolve_wire_info(wire_name, skip_local_match=True)
             rec[f"{prefix}_wire_info"] = wire_info
             if wire_info.get("matched_name"):
                 rec[f"{prefix}_wire_matched"] = wire_info["matched_name"]
 
-    # Compute losses using OpenMagnetics APIs
-    core_losses, winding_losses = compute_losses_for_recommendation(mas)
-    rec["core_losses_w"] = core_losses
-    rec["winding_losses_w"] = winding_losses
-    rec["total_losses_w"] = core_losses + winding_losses
-    rec["loss_source"] = "OpenMagnetics"
-
-    # Extract MKF-computed outputs per operating point (inductance, flux density, etc.)
+    # --- Extract adviser-computed outputs (pure dict parsing, no C++ calls) ---
+    # The adviser already computes losses, inductance, flux density etc. for each
+    # operating point.  Extract these FIRST before any additional C++ calls.
     outputs = mas.get("outputs", [])
+    adviser_has_losses = False
     if isinstance(outputs, list) and outputs:
         rec["operating_point_outputs"] = []
         for oi, op_out in enumerate(outputs):
@@ -1183,6 +1361,31 @@ def extract_recommendation(item):
         rec["B_offset_mT"] = nom.get("B_offset_T", 0.0) * 1e3
         rec["core_loss_W"] = nom.get("core_loss_W", 0.0)
         rec["winding_loss_W"] = nom.get("winding_loss_W", 0.0)
+
+        # Use adviser-computed losses as primary source
+        if nom.get("core_loss_W", 0.0) > 0 or nom.get("winding_loss_W", 0.0) > 0:
+            adviser_has_losses = True
+            rec["core_losses_w"] = nom.get("core_loss_W", 0.0)
+            rec["winding_losses_w"] = nom.get("winding_loss_W", 0.0)
+            rec["total_losses_w"] = rec["core_losses_w"] + rec["winding_losses_w"]
+            rec["loss_source"] = "adviser_outputs"
+
+    # Only call separate C++ loss computation if adviser outputs didn't include losses.
+    # This avoids segfaults in calculate_core_losses/calculate_winding_losses on
+    # multi-winding results (the C++ code can crash with 3+ windings).
+    if not adviser_has_losses:
+        try:
+            core_losses, winding_losses = compute_losses_for_recommendation(mas)
+            rec["core_losses_w"] = core_losses
+            rec["winding_losses_w"] = winding_losses
+            rec["total_losses_w"] = core_losses + winding_losses
+            rec["loss_source"] = "recomputed"
+        except Exception as exc:
+            _log(f"  [LOSS] Loss recomputation failed: {exc}")
+            rec["core_losses_w"] = 0.0
+            rec["winding_losses_w"] = 0.0
+            rec["total_losses_w"] = 0.0
+            rec["loss_source"] = "unavailable"
 
     # Core effective parameters for saturation context
     core_pd = core.get("processedDescription", {})
@@ -1248,17 +1451,22 @@ def run_export_mas(config):
 
 
 def main():
+    _t_main_start = _time.perf_counter()
+
     if len(sys.argv) < 2:
-        print("Usage: python generate_om_recommendations.py config.json", file=sys.stderr)
+        _log("Usage: python generate_om_recommendations.py config.json")
         sys.exit(1)
 
     config_path = sys.argv[1]
     if not os.path.exists(config_path):
-        print(f"ERROR: Config file not found: {config_path}", file=sys.stderr)
+        _log(f"ERROR: Config file not found: {config_path}")
         sys.exit(1)
 
+    _t_config_start = _time.perf_counter()
     with open(config_path, "r", encoding="utf-8") as fh:
         config = json.load(fh)
+    _t_config_done = _time.perf_counter()
+    _log(f"[TIMER] Config loading:          {_t_config_done - _t_config_start:.3f}s")
 
     mode = config.get("mode", "recommend")
     output_path = config.get("output_file", "om_recommendation_results.json")
@@ -1268,13 +1476,31 @@ def main():
     else:
         result = run_recommendations(config)
 
+    _t_write_start = _time.perf_counter()
     with open(output_path, "w", encoding="utf-8") as fh:
         json.dump(result, fh, indent=2)
+    _t_write_done = _time.perf_counter()
+    _log(f"[TIMER] Write results JSON:      {_t_write_done - _t_write_start:.3f}s")
+
+    _t_main_done = _time.perf_counter()
+    _t_total = _t_main_done - _t_script_start
+
+    # Print performance summary table
+    _log(f"[TIMER] === Performance Summary ===")
+    _log(f"[TIMER] Stdlib imports:          {_t_stdlib_done - _t_script_start:.3f}s")
+    _log(f"[TIMER] Import PyOpenMagnetics:  {_t_pm_import_done - _t_pm_import_start:.3f}s")
+    _log(f"[TIMER] Config loading:          {_t_config_done - _t_config_start:.3f}s")
+    # Timings from run_recommendations() are stored in module-level dict
+    for label, elapsed in _stage_timings:
+        _log(f"[TIMER] {label}{elapsed:.3f}s")
+    _log(f"[TIMER] Write results JSON:      {_t_write_done - _t_write_start:.3f}s")
+    _log(f"[TIMER] Total:                   {_t_total:.3f}s")
+    sys.stderr.flush()
 
     if result.get("status") == "OK":
         print("OK")
     else:
-        print(f"ERROR: {result.get('error', 'unknown')}", file=sys.stderr)
+        _log(f"ERROR: {result.get('error', 'unknown')}")
         sys.exit(1)
 
 

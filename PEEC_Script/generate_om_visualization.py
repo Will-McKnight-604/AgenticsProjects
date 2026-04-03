@@ -27,8 +27,10 @@ import sys
 import os
 import re
 
+from om_shared import sanitize_local_key as make_valid_name, import_pyopenmagnetics
+
 try:
-    import PyOpenMagnetics as pm
+    pm = import_pyopenmagnetics()
 except ImportError as e:
     print(f"ImportError: {e}", file=sys.stderr)
     print(f"Python executable: {sys.executable}", file=sys.stderr)
@@ -69,18 +71,6 @@ def raise_if_invalid(obj, label):
     if not isinstance(obj, dict):
         raise RuntimeError(f'{label} failed: unexpected payload type {type(obj).__name__}')
     return obj
-
-
-def make_valid_name(raw):
-    if raw is None:
-        raw = ''
-    raw = str(raw)
-    name = re.sub(r'[^a-zA-Z0-9_]', '_', raw)
-    if not name:
-        name = 'Unknown'
-    if not name[0].isalpha():
-        name = 'W_' + name
-    return name
 
 
 def _as_string_list(value):
@@ -319,6 +309,49 @@ def resolve_wire_data(winding_cfg):
     return ensure_dict(pm.get_wire_data_by_name('Round 0.5 - Grade 1'))
 
 
+def get_wire_with_insulation_type(wire_name, insulation_type, pm_api):
+    """Get wire, attempting TIW variant if requested.
+
+    Args:
+        wire_name: Original wire name (e.g., 'AWG_22')
+        insulation_type: 'standard' or 'tiw'
+        pm_api: PyOpenMagnetics API handle
+
+    Returns:
+        Wire dict with applied insulation type
+    """
+    insulation_type = str(insulation_type).lower()
+
+    try:
+        wire = ensure_dict(pm_api.find_wire_by_name(wire_name))
+        if is_exception_payload(wire):
+            return wire
+    except Exception:
+        return {}
+
+    # If TIW requested, try TIW variant
+    if insulation_type == 'tiw' and 'tiw' not in wire_name.lower():
+        try:
+            # Try common TIW naming: add "TIW", "Served", or "Coated"
+            tiw_variants = [
+                wire_name.replace('Grade', 'Grade') + ' TIW',
+                wire_name + ' Served',
+                'TIW ' + wire_name,
+            ]
+            for variant in tiw_variants:
+                try:
+                    tiw_wire = ensure_dict(pm_api.find_wire_by_name(variant))
+                    if not is_exception_payload(tiw_wire):
+                        return tiw_wire
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    # Return original wire as fallback
+    return wire
+
+
 def strip_elements_by_class(svg_content, class_names):
     if not class_names:
         return svg_content
@@ -451,6 +484,14 @@ def parse_section_order(order_str, n_windings):
             continue
         if 1 <= v <= n_windings:
             order.append(v - 1)  # zero-based for PyOpenMagnetics
+
+    # Ensure all windings appear at least once (matching MATLAB-side logic).
+    # Without this, wind_by_sections receives an incomplete order and
+    # missing windings get no section allocation, causing layout errors.
+    for w in range(n_windings):
+        if w not in order:
+            order.append(w)
+
     return order
 
 
@@ -780,7 +821,20 @@ def build_magnetic_from_config(config):
     # 5. Build coil functional description
     coil_func = []
     for i, w in enumerate(windings):
-        wire = resolve_wire_data(w)
+        # Check for wire insulation type (standard vs TIW)
+        wire_insulation = w.get('wire_insulation', 'standard')
+        wire_name = w.get('wire_name', '')
+
+        # Try to get wire with insulation type first, fallback to resolve_wire_data
+        if wire_insulation and wire_insulation.lower() != 'standard' and wire_name:
+            try:
+                wire = get_wire_with_insulation_type(wire_name, wire_insulation, pm)
+                if not wire or is_exception_payload(wire):
+                    wire = resolve_wire_data(w)
+            except Exception:
+                wire = resolve_wire_data(w)
+        else:
+            wire = resolve_wire_data(w)
         # Pre-flight check: foil/planar wires are not supported on toroidal cores
         wire_type = (wire.get('type', '') or '').lower()
         if core_type == 'toroidal' and wire_type in ('foil', 'planar'):
@@ -805,13 +859,40 @@ def build_magnetic_from_config(config):
                 'numberConductors': 1,
                 'material': wire.get('material', 'copper')
             }
+        # For toroidal cores, all windings must use the same isolationSide
+        # to avoid the "slots cannot be less than 1" error in the OM engine.
+        # The OM slot calculation for toroids requires all windings to share
+        # a single isolation side; mixing sides (e.g. primary + secondary)
+        # causes the slot count to fall below 1.
+        iso_side = w.get('isolation_side', 'primary')
+        if core_type == 'toroidal':
+            if i > 0:
+                print(f'NOTE: Toroidal core - forcing isolationSide=primary for '
+                      f'winding {i} to avoid slot error', file=sys.stderr)
+            iso_side = 'primary'
+
         winding_entry = {
             'name': w.get('name', f'winding_{i}'),
             'numberTurns': w.get('num_turns', 10),
             'numberParallels': w.get('num_parallels', 1),
             'wire': wire,
-            'isolationSide': w.get('isolation_side', 'primary')
+            'isolationSide': iso_side
         }
+
+        # Add margin tape if enabled globally in config
+        try:
+            allow_margin_tape = config.get('allow_margin_tape', False)
+            if allow_margin_tape:
+                tape_thickness = float(config.get('tape_thickness', 0.05e-3) or 0.05e-3)
+                winding_entry['marginTape'] = {
+                    'top': tape_thickness,
+                    'bottom': tape_thickness,
+                    'left': tape_thickness,
+                    'right': tape_thickness,
+                }
+        except Exception:
+            pass
+
         coil_func.append(winding_entry)
 
     # 6. Assemble magnetic
@@ -882,75 +963,111 @@ def build_magnetic_from_config(config):
                 'functionalDescription': coil_func,
             }
 
-            # Use three-step winding: wind_by_sections → wind_by_layers → wind_by_turns
-            insul_thick_val = insulation_thickness if insulation_thickness > 0 else 0.0
-
-            def sections_once(insul):
-                out = ensure_dict(pm.wind_by_sections(
-                    base_coil, 1, proportions, section_order, insul
-                ))
-                if isinstance(out, str):
-                    raise RuntimeError(out)
-                if isinstance(out, dict) and out.get('errorMessage'):
-                    raise RuntimeError(out.get('errorMessage'))
-                return out
-
-            try:
-                coil_tmp = sections_once(insul_thick_val)
-            except Exception:
-                if insul_thick_val > 0:
-                    coil_tmp = sections_once(0.0)
-                else:
-                    raise
-
-            # Inject alignment into each sectionsDescription entry before
-            # calling wind_by_layers. Per MAS schema:
-            #   section.layersOrientation: "contiguous" | "overlapping"
-            #   section.layersAlignment:   "inner or top" | "outer or bottom" | "spread" | "centered"
-            # wind_by_layers reads these from the section objects, not from
-            # coil-level fields.
-            sections_desc = coil_tmp.get('sectionsDescription', [])
-            if isinstance(sections_desc, list):
-                for i, sec in enumerate(sections_desc):
-                    if not isinstance(sec, dict):
-                        continue
-                    # Apply per-section turns alignment if available, else global
-                    sec_ta = (per_section_turns_alignment[i]
-                              if i < len(per_section_turns_alignment)
-                              else turns_alignment)
-                    sec['layersOrientation'] = layers_orientation
-                    sec['layersAlignment'] = sec_ta
-                coil_tmp['sectionsDescription'] = sections_desc
-
-            try:
-                print(
-                    f'[VIZ] wind_by_layers: sections={len(sections_desc)}, '
-                    f'layersOrientation={layers_orientation!r}, '
-                    f'layersAlignment={turns_alignment!r}',
-                    file=sys.stderr,
-                )
-                coil_tmp = ensure_dict(pm.wind_by_layers(coil_tmp, {}, 0.0))
-                if isinstance(coil_tmp, str):
-                    raise RuntimeError(coil_tmp)
-            except Exception as e:
-                print(f'NOTE: wind_by_layers failed ({e}), '
-                      f'falling back to pm.wind()', file=sys.stderr)
-                # pm.wind() is the all-in-one function; it accepts layersOrientation
-                # and turnsAlignment at the coil level (per its own docstring).
-                fallback_coil = {
-                    'bobbin': bobbin,
-                    'functionalDescription': coil_func,
-                    'layersOrientation': layers_orientation,
-                    'turnsAlignment': turns_alignment,
+            # Toroidal cores use overlapping layers and cannot use wind_by_sections
+            # (the C++ slot calculator always errors for toroids regardless of
+            # isolation side settings). Autocomplete the coil first, then call wind_by_turns.
+            if core_type == 'toroidal':
+                print('[VIZ] Toroidal core: autocompleting then using wind_by_turns', file=sys.stderr)
+                # Build a minimal magnetic object for autocomplete
+                mag_minimal = {
+                    'core': core_full,
+                    'coil': {
+                        'bobbin': bobbin,
+                        'functionalDescription': coil_func
+                    }
                 }
-                coil_tmp = ensure_dict(pm.wind(
-                    fallback_coil, 1, proportions, section_order, []
-                ))
-                if isinstance(coil_tmp, str):
-                    raise RuntimeError(coil_tmp)
+                mag_ac = ensure_dict(pm.magnetic_autocomplete(mag_minimal, {}))
+                if isinstance(mag_ac, str):
+                    raise RuntimeError(mag_ac)
+                coil_tmp = mag_ac.get('coil', {})
+                # If autocomplete didn't generate turnsDescription, call wind_by_turns
+                if not coil_tmp.get('turnsDescription'):
+                    coil_tmp = ensure_dict(pm.wind_by_turns(coil_tmp))
+                    if isinstance(coil_tmp, str):
+                        raise RuntimeError(coil_tmp)
+            else:
+                # Use three-step winding: wind_by_sections → wind_by_layers → wind_by_turns
+                insul_thick_val = insulation_thickness if insulation_thickness > 0 else 0.0
 
-            if not coil_tmp.get('turnsDescription'):
-                coil_tmp = ensure_dict(pm.wind_by_turns(coil_tmp))
+                def sections_once(insul):
+                    out = ensure_dict(pm.wind_by_sections(
+                        base_coil, 1, proportions, section_order, insul
+                    ))
+                    if isinstance(out, str):
+                        raise RuntimeError(out)
+                    if isinstance(out, dict) and out.get('errorMessage'):
+                        raise RuntimeError(out.get('errorMessage'))
+                    return out
+
+                try:
+                    coil_tmp = sections_once(insul_thick_val)
+                except Exception as e1:
+                    e1_str = str(e1).lower()
+                    if insul_thick_val > 0:
+                        try:
+                            coil_tmp = sections_once(0.0)
+                        except Exception as e2:
+                            e2_str = str(e2).lower()
+                            if 'slot' in e2_str:
+                                # Slots error persists even with zero insulation.
+                                # Re-raise with the original message so the outer
+                                # handler records a clear diagnostic.
+                                raise RuntimeError(str(e2)) from e2
+                            raise
+                    else:
+                        if 'slot' in e1_str:
+                            # Slots error with no insulation thickness to reduce.
+                            raise RuntimeError(str(e1)) from e1
+                        raise
+
+                # Inject alignment into each sectionsDescription entry before
+                # calling wind_by_layers. Per MAS schema:
+                #   section.layersOrientation: "contiguous" | "overlapping"
+                #   section.layersAlignment:   "inner or top" | "outer or bottom" | "spread" | "centered"
+                # wind_by_layers reads these from the section objects, not from
+                # coil-level fields.
+                sections_desc = coil_tmp.get('sectionsDescription', [])
+                if isinstance(sections_desc, list):
+                    for i, sec in enumerate(sections_desc):
+                        if not isinstance(sec, dict):
+                            continue
+                        # Apply per-section turns alignment if available, else global
+                        sec_ta = (per_section_turns_alignment[i]
+                                  if i < len(per_section_turns_alignment)
+                                  else turns_alignment)
+                        sec['layersOrientation'] = layers_orientation
+                        sec['layersAlignment'] = sec_ta
+                    coil_tmp['sectionsDescription'] = sections_desc
+
+                try:
+                    print(
+                        f'[VIZ] wind_by_layers: sections={len(sections_desc)}, '
+                        f'layersOrientation={layers_orientation!r}, '
+                        f'layersAlignment={turns_alignment!r}',
+                        file=sys.stderr,
+                    )
+                    coil_tmp = ensure_dict(pm.wind_by_layers(coil_tmp, {}, 0.0))
+                    if isinstance(coil_tmp, str):
+                        raise RuntimeError(coil_tmp)
+                except Exception as e:
+                    print(f'NOTE: wind_by_layers failed ({e}), '
+                          f'falling back to pm.wind()', file=sys.stderr)
+                    # pm.wind() is the all-in-one function; it accepts layersOrientation
+                    # and turnsAlignment at the coil level (per its own docstring).
+                    fallback_coil = {
+                        'bobbin': bobbin,
+                        'functionalDescription': coil_func,
+                        'layersOrientation': layers_orientation,
+                        'turnsAlignment': turns_alignment,
+                    }
+                    coil_tmp = ensure_dict(pm.wind(
+                        fallback_coil, 1, proportions, section_order, []
+                    ))
+                    if isinstance(coil_tmp, str):
+                        raise RuntimeError(coil_tmp)
+
+                if not coil_tmp.get('turnsDescription'):
+                    coil_tmp = ensure_dict(pm.wind_by_turns(coil_tmp))
 
             # delimit_and_compact generates additionalCoordinates for toroidal
             # turns (outer-edge positions), which the painter needs to draw
@@ -986,18 +1103,22 @@ def generate_visualization(config):
     mag_complete, wind_meta, core_full, bobbin = build_magnetic_from_config(config)
 
     # 8. Generate SVG
-    if plot_type == 'core':
-        result = pm.plot_core(mag_complete)
-    elif plot_type == 'bobbin':
-        result = pm.plot_bobbin(mag_complete)
-    else:
-        result = pm.plot_magnetic(mag_complete)
-        # If winding failed, plot_magnetic will fail with COIL_NOT_PROCESSED.
-        # Fall back to plot_bobbin so the user still sees the core outline.
-        if not result.get('success', False) and wind_meta.get('wind_error'):
-            print(f'WARNING: plot_magnetic failed after winding error, '
-                  f'falling back to plot_bobbin', file=sys.stderr)
+    try:
+        if plot_type == 'core':
+            result = pm.plot_core(mag_complete)
+        elif plot_type == 'bobbin':
             result = pm.plot_bobbin(mag_complete)
+        else:
+            result = pm.plot_magnetic(mag_complete)
+            # If winding failed, plot_magnetic will fail with COIL_NOT_PROCESSED.
+            # Fall back to plot_bobbin so the user still sees the core outline.
+            if not result.get('success', False) and wind_meta.get('wind_error'):
+                print(f'WARNING: plot_magnetic failed after winding error, '
+                      f'falling back to plot_bobbin', file=sys.stderr)
+                result = pm.plot_bobbin(mag_complete)
+    except Exception as exc:
+        print(f'ERROR: pm.plot_* exception: {exc}', file=sys.stderr)
+        return False
 
     if not result.get('success', False):
         error_msg = result.get('error', 'Unknown error')

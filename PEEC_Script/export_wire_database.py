@@ -9,10 +9,13 @@ Usage:
     python export_wire_database.py --types foil rectangular  # Export specific types
 """
 
-import PyOpenMagnetics as pm
 import json
 import sys
 import os
+
+from om_shared import import_pyopenmagnetics
+
+pm = import_pyopenmagnetics()
 
 def extract_nominal(field):
     """Extract the nominal value from a PyOpenMagnetics dimension field."""
