@@ -38,7 +38,7 @@ function interactive_winding_designer(design_spec)
     data.om_window_cache = struct();
 
     % OM winding layout defaults (matches OpenMagnetics native controls)
-    data.om_winding_orientation = 'contiguous';   % 'contiguous' or 'overlapping'
+    data.om_winding_orientation = 'overlapping';   % 'contiguous' or 'overlapping'
     data.om_section_alignment = 'inner or top';    % 'centered','inner or top','outer or bottom','spread'
     data.om_turns_alignment = {};                  % per-winding: cell array of alignment strings
     data.om_proportions = {};                      % per-winding: cell array of proportion values (0-1)
@@ -119,6 +119,7 @@ function interactive_winding_designer(design_spec)
     data.core_gap_type = 'Ungapped';   % Ungapped, Ground, Spacer, Distributed
     data.core_gap_length = 0;          % Gap length in meters (0 = ungapped)
     data.core_num_gaps = 1;            % Number of gaps
+    data.core_num_stacks = 1;          % Number of stacked cores (from adviser)
     data.insulation_class = 'basic';
     data.insulation_standards = {'IEC 60664-1'};  % cell array of standards
     data.insulation_standard_index = 1;           % currently selected standard
@@ -157,7 +158,13 @@ function interactive_winding_designer(design_spec)
     data.excitation.sweep_mode = 'grid';               % 'nominal' | 'corners' | 'grid'
     data.excitation.duty_mode = 'derived';             % 'derived' | 'manual'
     data.excitation.manual_duty = 0.40;
-    data.excitation.line_scales = [0.90, 1.10];       % Vin_min and Vin_max
+    % NOTE: Only Vin_min (low-line) is used for PEEC winding loss analysis.
+    % Vin_min is the worst case for copper loss (max duty = max RMS current).
+    % Vin_max is excluded because PyOpenMagnetics v1.3.0 process_converter()
+    % produces incorrect (symmetrized) secondary waveforms for forward-family
+    % topologies at high-line, which corrupts the harmonic content and skews
+    % PEEC proximity/skin effect results.
+    data.excitation.line_scales = [0.90];              % Vin_min only (worst case for winding loss)
     data.excitation.load_scales = [1.00];              % Imax only
     data.excitation.conduction_mode = 'ccm+dcm';
     data.excitation.harmonic_energy_pct = 99.5;
@@ -575,12 +582,23 @@ function data = apply_design_spec(data, spec)
             end
         end
 
+        % Number of stacked cores
+        if isfield(rec, 'numberStacks') && rec.numberStacks > 1
+            data.core_num_stacks = rec.numberStacks;
+            fprintf('[DESIGN_SPEC] Core stacking: %d stacks\n', data.core_num_stacks);
+        else
+            data.core_num_stacks = 1;
+        end
+
         turns_str = num2str(data.windings(1).n_turns);
         for si = 2:data.n_windings
             turns_str = [turns_str '/' num2str(data.windings(si).n_turns)];
         end
-        fprintf('[DESIGN_SPEC] Applied recommendation fields: supplier=%d core=%d material=%d wireP=%d wireS=%d turns=%s\n', ...
-            supplier_applied, core_applied, material_applied, pri_wire_applied, sec_wire_applied, turns_str);
+        fprintf('[DESIGN_SPEC] Applied recommendation fields: supplier=%d core=%d material=%d wireP=%d wireS=%d turns=%s stacks=%d\n', ...
+            supplier_applied, core_applied, material_applied, pri_wire_applied, sec_wire_applied, turns_str, data.core_num_stacks);
+        fprintf('[DESIGN_SPEC] NOTE: Adviser recommendations do not validate geometric packing.\n');
+        fprintf('[DESIGN_SPEC]       Check winding layout for fit after applying recommendation.\n');
+        data.recommendation_applied = true;
     end
 
     % --- Core-loss method + Steinmetz pass-through from design_spec ---
@@ -710,13 +728,21 @@ function [applied, data] = apply_wire_from_rec(data, rec, prefix, winding_idx)
         end
     end
 
-    picked = pick_wire_dialog(data, raw_wire, type_hint);
-    if ~isempty(picked) && isfield(data.wires, picked)
-        data = set_winding_wire(data, winding_idx, picked);
-        applied = true;
-        fprintf('[DESIGN_SPEC] %s wire selected by user: "%s"\n', prefix, picked);
+    % Only show the wire picker dialog if the GUI figure already exists.
+    % Showing a modal dialog before the main figure is created can cause
+    % Octave to misparent the dialog, leaving the winding panel greyed out.
+    if isfield(data, 'fig_gui') && ~isempty(data.fig_gui) && ishandle(data.fig_gui)
+        picked = pick_wire_dialog(data, raw_wire, type_hint);
+        if ~isempty(picked) && isfield(data.wires, picked)
+            data = set_winding_wire(data, winding_idx, picked);
+            applied = true;
+            fprintf('[DESIGN_SPEC] %s wire selected by user: "%s"\n', prefix, picked);
+        else
+            fprintf('[DESIGN_SPEC] %s wire: user cancelled or no selection\n', prefix);
+        end
     else
-        fprintf('[DESIGN_SPEC] %s wire: user cancelled or no selection\n', prefix);
+        fprintf('[DESIGN_SPEC] %s wire not matched. GUI not yet created — skipping dialog.\n', prefix);
+        fprintf('[DESIGN_SPEC] Change wire type manually in the winding configuration panel.\n');
     end
 end
 
@@ -867,7 +893,7 @@ function build_gui(data)
 
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', get_core_info_text(data), ...
-              'Position', [20 465 380 85], ...
+              'Position', [20 430 380 120], ...
               'HorizontalAlignment', 'left', ...
               'BackgroundColor', [0.95 0.95 0.95], ...
               'Tag', 'core_info');
@@ -875,7 +901,7 @@ function build_gui(data)
     % --- Material dropdown (filtered by supplier) ---
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Core Material:', ...
-              'Position', [20 438 120 20], ...
+              'Position', [20 403 120 20], ...
               'HorizontalAlignment', 'left');
 
     supplier_mats = data.api.get_materials_by_supplier(data.selected_supplier);
@@ -900,7 +926,7 @@ function build_gui(data)
 
     uicontrol('Parent', core_panel, 'Style', 'popupmenu', ...
               'String', supplier_mats, ...
-              'Position', [20 416 380 25], ...
+              'Position', [20 381 380 25], ...
               'Value', mat_idx, ...
               'Tag', 'material_dropdown', ...
               'Callback', @select_material);
@@ -908,7 +934,7 @@ function build_gui(data)
     % Material info
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', get_material_info_text(data), ...
-              'Position', [20 360 380 55], ...
+              'Position', [20 325 380 55], ...
               'HorizontalAlignment', 'left', ...
               'BackgroundColor', [0.95 0.95 0.95], ...
               'Tag', 'material_info');
@@ -935,18 +961,18 @@ function build_gui(data)
     % Core Loss label + method + k/a/b all on one compact row at y=333
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Core Loss:', ...
-              'Position', [20 336 68 16], ...
+              'Position', [20 301 68 16], ...
               'FontWeight', 'bold', 'HorizontalAlignment', 'left', ...
               'FontSize', 8);
 
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Method:', ...
-              'Position', [91 336 45 16], ...
+              'Position', [91 301 45 16], ...
               'HorizontalAlignment', 'left', 'FontSize', 8);
 
     uicontrol('Parent', core_panel, 'Style', 'popupmenu', ...
               'String', loss_methods, ...
-              'Position', [138 333 62 22], ...
+              'Position', [138 298 62 22], ...
               'Value', loss_idx, ...
               'Tag', 'core_loss_method', ...
               'FontSize', 8, ...
@@ -963,12 +989,12 @@ function build_gui(data)
 
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'k:', ...
-              'Position', [204 336 14 16], ...
+              'Position', [204 301 14 16], ...
               'HorizontalAlignment', 'right', 'FontSize', 8);
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', steinmetz_k_str, ...
-              'Position', [220 333 52 22], ...
+              'Position', [220 298 52 22], ...
               'Tag', 'steinmetz_k', ...
               'FontSize', 8, ...
               'BackgroundColor', steinmetz_bg, ...
@@ -977,12 +1003,12 @@ function build_gui(data)
 
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'a:', ...
-              'Position', [276 336 14 16], ...
+              'Position', [276 301 14 16], ...
               'HorizontalAlignment', 'right', 'FontSize', 8);
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', steinmetz_a_str, ...
-              'Position', [292 333 42 22], ...
+              'Position', [292 298 42 22], ...
               'Tag', 'steinmetz_alpha', ...
               'FontSize', 8, ...
               'BackgroundColor', steinmetz_bg, ...
@@ -991,12 +1017,12 @@ function build_gui(data)
 
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'b:', ...
-              'Position', [338 336 14 16], ...
+              'Position', [338 301 14 16], ...
               'HorizontalAlignment', 'right', 'FontSize', 8);
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', steinmetz_b_str, ...
-              'Position', [354 333 40 22], ...
+              'Position', [354 298 40 22], ...
               'Tag', 'steinmetz_beta', ...
               'FontSize', 8, ...
               'BackgroundColor', steinmetz_bg, ...
@@ -1006,13 +1032,13 @@ function build_gui(data)
     % --- Gap Configuration ---
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Gap Configuration:', ...
-              'Position', [20 310 180 20], ...
+              'Position', [20 275 180 20], ...
               'FontWeight', 'bold', 'HorizontalAlignment', 'left');
 
     % Gap Type
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Type:', ...
-              'Position', [30 288 50 20], ...
+              'Position', [30 253 50 20], ...
               'HorizontalAlignment', 'left');
 
     gap_types = {'Ungapped', 'Ground', 'Spacer', 'Distributed'};
@@ -1021,7 +1047,7 @@ function build_gui(data)
 
     uicontrol('Parent', core_panel, 'Style', 'popupmenu', ...
               'String', gap_types, ...
-              'Position', [130 288 200 25], ...
+              'Position', [130 253 200 25], ...
               'Value', gap_idx, ...
               'Tag', 'gap_type_dropdown', ...
               'TooltipString', 'Gap type: Ground=subtractive, Spacer=additive, Distributed=multiple gaps', ...
@@ -1030,58 +1056,58 @@ function build_gui(data)
     % Gap Length
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Length:', ...
-              'Position', [30 263 50 20], ...
+              'Position', [30 228 50 20], ...
               'HorizontalAlignment', 'left');
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', num2str(data.core_gap_length * 1e3), ...
-              'Position', [130 263 80 25], ...
+              'Position', [130 228 80 25], ...
               'Tag', 'gap_length', ...
               'Enable', 'off', ...
               'Callback', @update_gap_length);
 
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'mm', ...
-              'Position', [215 263 30 20], ...
+              'Position', [215 228 30 20], ...
               'HorizontalAlignment', 'left', ...
               'Tag', 'gap_length_unit');
 
     % Number of Gaps
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'No. Gaps:', ...
-              'Position', [260 263 60 20], ...
+              'Position', [260 228 60 20], ...
               'HorizontalAlignment', 'left');
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', num2str(data.core_num_gaps), ...
-              'Position', [330 263 60 25], ...
+              'Position', [330 228 60 25], ...
               'Tag', 'gap_num', ...
               'Enable', 'off', ...
               'Callback', @update_num_gaps);
 
-    % Frequency input (y=238)
+    % Frequency input (y=203)
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Operating Frequency (kHz):', ...
-              'Position', [20 241 180 18], ...
+              'Position', [20 206 180 18], ...
               'HorizontalAlignment', 'left');
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', num2str(data.f/1e3), ...
-              'Position', [210 238 80 22], ...
+              'Position', [210 203 80 22], ...
               'Tag', 'frequency', ...
               'Callback', @update_frequency);
 
     % Insulation Standard label bold (y=216, above radio group at y=192)
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Insulation Standard:', ...
-              'Position', [20 216 180 18], ...
+              'Position', [20 181 180 18], ...
               'HorizontalAlignment', 'left', 'FontWeight', 'bold', ...
               'FontSize', 9, ...
               'Tag', 'insulation_std_label');
 
-    % Insulation Standard radio button group (pixel coords, y=192)
+    % Insulation Standard radio button group (pixel coords, y=157)
     insulation_standard_group = uibuttongroup('Parent', core_panel, ...
-              'Units', 'pixels', 'Position', [20 192 370 22], ...
+              'Units', 'pixels', 'Position', [20 157 370 22], ...
               'BorderType', 'none', ...
               'SelectionChangedFcn', @cb_insulation_standard_changed);
 
@@ -1108,10 +1134,10 @@ function build_gui(data)
                   'Tag', sprintf('insulation_std_%d', i));
     end
 
-    % Insulation Class label + dropdown (y=168)
+    % Insulation Class label + dropdown (y=133)
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Insulation Class:', ...
-              'Position', [20 171 120 18], ...
+              'Position', [20 136 120 18], ...
               'HorizontalAlignment', 'left', ...
               'Tag', 'insulation_class_label');
 
@@ -1121,85 +1147,85 @@ function build_gui(data)
 
     uicontrol('Parent', core_panel, 'Style', 'popupmenu', ...
               'String', insulation_list, ...
-              'Position', [145 168 140 22], ...
+              'Position', [145 133 140 22], ...
               'Value', ins_idx, ...
               'Tag', 'insulation_class', ...
               'Callback', @update_insulation_class);
 
-    % Main Supply Voltage (y=168, same row as insulation class - right side)
+    % Main Supply Voltage (y=133, same row as insulation class - right side)
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Supply (V):', ...
-              'Position', [295 171 60 18], ...
+              'Position', [295 136 60 18], ...
               'HorizontalAlignment', 'left', ...
               'Tag', 'supply_voltage_label');
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', num2str(data.main_supply_voltage), ...
-              'Position', [358 168 36 22], ...
+              'Position', [358 133 36 22], ...
               'Tag', 'main_supply_voltage', ...
               'Callback', @update_main_supply_voltage);
 
-    % Tape thickness + layers (y=145)
+    % Tape thickness + layers (y=110)
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Tape Thk (mm):', ...
-              'Position', [20 148 95 18], ...
+              'Position', [20 113 95 18], ...
               'HorizontalAlignment', 'left', ...
               'Tag', 'tape_thickness_label');
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', num2str(data.tape_thickness * 1e3), ...
-              'Position', [118 145 45 22], ...
+              'Position', [118 110 45 22], ...
               'Tag', 'tape_thickness', ...
               'Callback', @update_tape_thickness);
 
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Layers:', ...
-              'Position', [168 148 42 18], ...
+              'Position', [168 113 42 18], ...
               'HorizontalAlignment', 'left', ...
               'Tag', 'tape_layers_label');
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', num2str(data.tape_layers), ...
-              'Position', [213 145 35 22], ...
+              'Position', [213 110 35 22], ...
               'Tag', 'tape_layers', ...
               'Callback', @update_tape_layers);
 
-    % Tape strength + TIW (y=145, same row - right side)
+    % Tape strength + TIW (y=110, same row - right side)
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Str(kV/mm):', ...
-              'Position', [253 148 65 18], ...
+              'Position', [253 113 65 18], ...
               'HorizontalAlignment', 'left', ...
               'Tag', 'tape_strength_label');
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', num2str(data.tape_kv_per_mm), ...
-              'Position', [321 145 38 22], ...
+              'Position', [321 110 38 22], ...
               'Tag', 'tape_strength', ...
               'Callback', @update_tape_strength);
 
-    % TIW kV + Edge margin (y=124)
+    % TIW kV + Edge margin (y=89)
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'TIW (kV):', ...
-              'Position', [20 127 58 18], ...
+              'Position', [20 92 58 18], ...
               'HorizontalAlignment', 'left', ...
               'Tag', 'tiw_kv_label');
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', num2str(data.tiw_kv), ...
-              'Position', [81 124 38 22], ...
+              'Position', [81 89 38 22], ...
               'Tag', 'tiw_kv', ...
               'Callback', @update_tiw_kv);
 
-    % Edge margin (mm) (y=124, same row as TIW - right side)
+    % Edge margin (mm) (y=89, same row as TIW - right side)
     uicontrol('Parent', core_panel, 'Style', 'text', ...
               'String', 'Edge Margin (mm):', ...
-              'Position', [130 127 115 18], ...
+              'Position', [130 92 115 18], ...
               'HorizontalAlignment', 'left', ...
               'Tag', 'edge_margin_label');
 
     uicontrol('Parent', core_panel, 'Style', 'edit', ...
               'String', num2str(data.edge_margin * 1e3), ...
-              'Position', [248 124 60 22], ...
+              'Position', [248 89 60 22], ...
               'Tag', 'edge_margin', ...
               'Callback', @update_edge_margin);
 
@@ -4199,6 +4225,9 @@ function config = build_om_viz_config(data)
     config.proportions_per_winding = data.om_proportions;
     if isfield(data, 'tape_thickness'); config.tape_thickness = data.tape_thickness; end
     if isfield(data, 'tape_layers'); config.tape_layers = data.tape_layers; end
+    if isfield(data, 'core_num_stacks') && data.core_num_stacks > 1
+        config.numberStacks = data.core_num_stacks;
+    end
 
     % === INSULATION FIELDS ===
     % Pass global insulation parameters to visualization
@@ -4444,7 +4473,11 @@ function visualize_core_window(data, ax)
             pattern, cwf.usable_area_m2*1e6);
         color = [0.8 1.0 0.8];
     else
-        info_str = sprintf('Windings DO NOT FIT\nTry smaller wire or fewer turns');
+        if isfield(data, 'recommendation_applied') && data.recommendation_applied
+            info_str = sprintf('Windings DO NOT FIT (Adviser recommendation)\nAdviser did not validate packing. Try smaller wire, fewer turns, or larger core.');
+        else
+            info_str = sprintf('Windings DO NOT FIT\nTry smaller wire or fewer turns');
+        end
         color = [1.0 0.8 0.8];
     end
 
@@ -4850,7 +4883,7 @@ function ex_cfg = resolve_excitation_config(data)
     ex_cfg.sweep_mode = 'grid';
     ex_cfg.duty_mode = 'derived';
     ex_cfg.manual_duty = 0.40;
-    ex_cfg.line_scales = [0.90, 1.10];
+    ex_cfg.line_scales = [0.90];   % Vin_min only (see note at data.excitation init)
     ex_cfg.load_scales = [1.00];
     ex_cfg.harmonic_energy_pct = 99.5;
     ex_cfg.harmonic_max_order = 60;
@@ -5251,6 +5284,16 @@ function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_
     n_w = data.n_windings;
     winding_rdc = compute_winding_rdc_from_geometry(data, conductors_template, winding_map);
 
+    % --- MLT scaling: PEEC solver outputs W/m (per unit length). ---
+    % Multiply by Mean Length per Turn to convert to absolute Watts.
+    core_params = data.api.get_core_params(data.selected_core, data.core_num_stacks);
+    MLT = core_params.MLT;
+    if MLT <= 0
+        warning('run_peec_with_excitation_profile: MLT is zero or negative (%.4g), losses will be per-unit-length', MLT);
+        MLT = 1;  % fall back to per-unit-length (no scaling)
+    end
+    winding_rdc = winding_rdc * MLT;  % Ω/m -> Ω
+
     ops = profile.operating_points;
     if iscell(ops)
         try
@@ -5377,6 +5420,9 @@ function analysis_run = run_peec_with_excitation_profile(data, geom, conductors_
             end
 
             results_h = peec_solve_frequency(geom, cond_h, f_h, data.sigma, data.mu0, solve_options);
+            % Scale from W/m to W using MLT
+            results_h.P_fil   = results_h.P_fil * MLT;
+            results_h.P_total = results_h.P_total * MLT;
             op_total_loss = op_total_loss + results_h.P_total;
             op_ac_loss = op_ac_loss + accumulate_winding_losses(results_h.P_fil, winding_map, geom.Nx, geom.Ny, n_w);
             solved_harmonics = solved_harmonics + 1;
@@ -6505,6 +6551,10 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
             end
         end
 
+        % MLT scaling for DC resistance (per-unit-length -> absolute)
+        core_params_disp = data.api.get_core_params(data.selected_core, data.core_num_stacks);
+        MLT_disp = core_params_disp.MLT;
+        if MLT_disp <= 0; MLT_disp = 1; end
         for w = 1:data.n_windings
             cond_idx = find(winding_map == w);
             if isempty(cond_idx)
@@ -6513,7 +6563,7 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
             else
                 A = max(1e-12, mean(conductors(cond_idx,3) .* conductors(cond_idx,4)));
             end
-            winding_Rdc(w) = (data.windings(w).n_turns / max(1, data.windings(w).n_filar)) / (data.sigma * A);
+            winding_Rdc(w) = (data.windings(w).n_turns / max(1, data.windings(w).n_filar)) / (data.sigma * A) * MLT_disp;
             winding_Pdc(w) = 0.5 * data.windings(w).current^2 * winding_Rdc(w);
         end
         rac_rdc = winding_losses ./ max(winding_Pdc, 1e-12);
@@ -6756,8 +6806,9 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
     end
 
     % Panel 4: Magnetic Parameters
-    % Shows single authoritative values: adviser when available, reluctance model otherwise.
-    % PEEC column removed — PEEC is used only for AC winding loss (proximity effect).
+    % Reluctance model is authoritative for Lm, Bpk, dB (physics-based).
+    % Adviser values shown as reference. Red warning if they diverge >2x.
+    % Core loss: adviser (OM) is authoritative (richer material database).
     has_mag = isstruct(analysis_run) && isfield(analysis_run, 'mag_results') ...
               && isstruct(analysis_run.mag_results) && analysis_run.mag_results.valid;
     has_mkf = isstruct(analysis_run) && isfield(analysis_run, 'mkf_ref') ...
@@ -6779,30 +6830,32 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
             mk = analysis_run.mkf_ref;
         end
 
-        % Source label: adviser values vs reluctance recalculation
-        if has_mkf
-            src_label = 'Source: Adviser';
-            src_color = [0.1 0.5 0.1];
-        else
-            src_label = 'Source: Reluctance model';
-            src_color = [0.3 0.3 0.6];
-        end
+        % Source label
+        src_label = 'Lm: reluctance_network';
+        src_color = [0.3 0.3 0.6];
         text(0.02, y_mag, src_label, 'FontSize', 7, 'Color', src_color);
         y_mag = y_mag - 0.055;
 
-        % Lm — adviser primary, reluctance fallback
+        % Lm — reluctance model primary, adviser as reference
         Lm_uH = 0; Lm_label = '';
-        if has_mkf && mk.Lm_uH > 0
-            Lm_uH = mk.Lm_uH;
-            if has_mag && mr.Lm_H > 0
-                Lm_label = sprintf('  (recalc: %.1f)', mr.Lm_H * 1e6);
-            end
-        elseif has_mag && mr.Lm_H > 0
+        if has_mag && mr.Lm_H > 0
             Lm_uH = mr.Lm_H * 1e6;
-            Lm_label = '  (recalculated)';
+            if has_mkf && mk.Lm_uH > 0
+                Lm_label = sprintf('  (adv: %.1f)', mk.Lm_uH);
+            end
+        elseif has_mkf && mk.Lm_uH > 0
+            Lm_uH = mk.Lm_uH;
+            Lm_label = '  (adviser only)';
+        end
+        Lm_color = [0 0 0];
+        if has_mag && has_mkf && mr.Lm_H > 0 && mk.Lm_uH > 0
+            ratio = mk.Lm_uH / (mr.Lm_H * 1e6);
+            if ratio > 2 || ratio < 0.5
+                Lm_color = [0.8 0.0 0.0];  % Red: divergence >2x
+            end
         end
         text(0.02, y_mag, sprintf('Lm (uH)     %7.1f%s', Lm_uH, Lm_label), ...
-             'FontSize', 8, 'FontName', 'FixedWidth');
+             'FontSize', 8, 'FontName', 'FixedWidth', 'Color', Lm_color);
         y_mag = y_mag - 0.055;
 
         % Llk — adviser only (PEEC Llk extraction removed)
@@ -6815,29 +6868,36 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
         end
         y_mag = y_mag - 0.055;
 
-        % Bpk — adviser primary, reluctance fallback
-        Bpk_mT = 0;
-        if has_mkf && mk.B_peak_mT > 0
-            Bpk_mT = mk.B_peak_mT;
-        elseif has_mag && mr.Bpk_T > 0
+        % Bpk — reluctance model primary, adviser as reference
+        Bpk_mT = 0; Bpk_label = '';
+        if has_mag && mr.Bpk_T > 0
             Bpk_mT = mr.Bpk_T * 1e3;
+            if has_mkf && mk.B_peak_mT > 0
+                Bpk_label = sprintf('  (adv: %.0f)', mk.B_peak_mT);
+            end
+        elseif has_mkf && mk.B_peak_mT > 0
+            Bpk_mT = mk.B_peak_mT;
+            Bpk_label = '  (adviser only)';
         end
-        text(0.02, y_mag, sprintf('Bpk (mT)    %7.1f', Bpk_mT), ...
+        text(0.02, y_mag, sprintf('Bpk (mT)    %7.1f%s', Bpk_mT, Bpk_label), ...
              'FontSize', 8, 'FontName', 'FixedWidth');
         y_mag = y_mag - 0.055;
 
-        % deltaB
-        dB_mT = 0;
-        if has_mkf && mk.B_pp_mT > 0
-            dB_mT = mk.B_pp_mT;
-        elseif has_mag && mr.deltaB_T > 0
+        % deltaB — reluctance model primary
+        dB_mT = 0; dB_label = '';
+        if has_mag && mr.deltaB_T > 0
             dB_mT = mr.deltaB_T * 1e3;
+            if has_mkf && mk.B_pp_mT > 0
+                dB_label = sprintf('  (adv: %.0f)', mk.B_pp_mT);
+            end
+        elseif has_mkf && mk.B_pp_mT > 0
+            dB_mT = mk.B_pp_mT;
         end
-        text(0.02, y_mag, sprintf('dB (mT)     %7.1f', dB_mT), ...
+        text(0.02, y_mag, sprintf('dB (mT)     %7.1f%s', dB_mT, dB_label), ...
              'FontSize', 8, 'FontName', 'FixedWidth');
         y_mag = y_mag - 0.055;
 
-        % Core loss — adviser primary, iGSE fallback
+        % Core loss — adviser (OM) primary (richer material data), reluctance fallback
         Pcore_W = 0; method_label = '';
         if has_mkf && mk.core_loss_W > 0
             Pcore_W = mk.core_loss_W;
@@ -6852,6 +6912,19 @@ function display_results(data, geom, conductors, winding_map, results, analysis_
         if ~isempty(method_label)
             text(0.04, y_mag, method_label, 'FontSize', 7, 'FontName', 'FixedWidth', 'Color', [0.4 0.4 0.4]);
             y_mag = y_mag - 0.045;
+        end
+
+        % Divergence warning
+        if has_mag && has_mkf && mr.Lm_H > 0 && mk.Lm_uH > 0
+            ratio = mk.Lm_uH / (mr.Lm_H * 1e6);
+            if ratio > 2 || ratio < 0.5
+                text(0.02, y_mag, sprintf('WARNING: Adviser Lm differs %.0fx from recalc', ratio), ...
+                     'FontSize', 7, 'Color', [0.8 0 0], 'FontWeight', 'bold');
+                y_mag = y_mag - 0.04;
+                text(0.02, y_mag, 'Adviser values may be unreliable', ...
+                     'FontSize', 7, 'Color', [0.8 0 0]);
+                y_mag = y_mag - 0.045;
+            end
         end
 
         % Total loss (PEEC AC winding + core)
@@ -7079,8 +7152,12 @@ function export_mas_file(~, ~)
     end
     core_fd.gapping = gapping_cells;
 
-    % Number of stacks
-    core_fd.numberStacks = 1;
+    % Number of stacks (from adviser recommendation, default 1)
+    if isfield(data, 'core_num_stacks') && data.core_num_stacks > 1
+        core_fd.numberStacks = data.core_num_stacks;
+    else
+        core_fd.numberStacks = 1;
+    end
 
     mas.magnetic.core.functionalDescription = core_fd;
 
@@ -8241,7 +8318,7 @@ function est = quick_magnetic_estimate(data)
     end
 
     % Core parameters
-    core_params = data.api.get_core_params(data.selected_core);
+    core_params = data.api.get_core_params(data.selected_core, data.core_num_stacks);
     Ae = core_params.Ae;
     le = core_params.le;
     Ve = core_params.Ve;
@@ -8272,16 +8349,37 @@ function est = quick_magnetic_estimate(data)
         gapping = {struct('type', 'residual', 'length', 10e-6)};
     end
 
-    % Reluctance network: Lm = N^2 / (R_core + sum(R_gap))
+    % Reluctance network (Zhang model): Lm = N^2 / (R_core + sum(R_gap))
     mu_0 = 4 * pi * 1e-7;
     R_core = le / (mu_0 * mu_r * Ae);
     R_gap_total = 0;
-    sqrt_Ae = sqrt(Ae);
+
+    % Gap geometry from core params
+    col_shape = core_params.columnShape;
+    col_w = core_params.columnWidth;
+    col_d = core_params.columnDepth;
+    if ~isempty(col_shape) && col_w > 0
+        if strcmp(col_shape, 'round')
+            gap_perimeter = pi * col_w;
+        else
+            gap_perimeter = 2 * col_w + 2 * max(col_d, col_w);
+        end
+    else
+        gap_perimeter = 4 * sqrt(Ae);
+    end
+    h_normal = max(core_params.bobbin_h / 2, sqrt(Ae));
+
     for gi = 1:length(gapping)
         lg = gapping{gi}.length;
         if lg > 0
-            F_fringe = 1 + (lg / sqrt_Ae) * log(2 * sqrt_Ae / lg);
-            R_gap_total = R_gap_total + lg / (mu_0 * Ae * F_fringe);
+            R_internal = lg / (mu_0 * Ae);
+            log_arg = (2 * h_normal + lg) / lg;
+            if log_arg > 1
+                R_fringing = pi / (mu_0 * gap_perimeter * log(log_arg));
+                R_gap_total = R_gap_total + 1 / (1/R_internal + 1/R_fringing);
+            else
+                R_gap_total = R_gap_total + R_internal;
+            end
         end
     end
     R_total = R_core + R_gap_total;
@@ -8343,6 +8441,15 @@ function est = quick_magnetic_estimate(data)
         B_amp = deltaB / 2;
         Pv = sk * fsw^sa * B_amp^sb;
         est.Pcore_W = Pv * Ve;
+    elseif isfield(data, 'design_spec') && isstruct(data.design_spec) ...
+            && isfield(data.design_spec, 'recommendation') && isstruct(data.design_spec.recommendation)
+        % No Steinmetz params -- use OpenMagnetics adviser core loss if available
+        rec = data.design_spec.recommendation;
+        if isfield(rec, 'core_loss_W') && rec.core_loss_W > 0
+            est.Pcore_W = rec.core_loss_W;
+        elseif isfield(rec, 'core_losses_w') && rec.core_losses_w > 0
+            est.Pcore_W = rec.core_losses_w;
+        end
     end
 
     est.valid = true;
@@ -8351,7 +8458,7 @@ end
 
 function update_core_info_with_estimate(fig, data)
 % Update the core_info text area to include live magnetic estimates.
-% Uses compact format to fit within the 85px text area height.
+% Uses compact format to fit within the 120px text area height.
     str = get_core_info_text(data);
     est = quick_magnetic_estimate(data);
     if est.valid
@@ -8419,7 +8526,7 @@ function mag_results = compute_magnetic_params(data, geom, solve_options)
                          'R_total', 0, 'n_gaps_used', 0);
 
     % --- Get core parameters ---
-    core_params = data.api.get_core_params(data.selected_core);
+    core_params = data.api.get_core_params(data.selected_core, data.core_num_stacks);
     Ae = core_params.Ae;
     Ve = core_params.Ve;
 
@@ -8453,7 +8560,13 @@ function mag_results = compute_magnetic_params(data, geom, solve_options)
     fprintf('  Gap: %s, %d gap(s), total=%.1f um\n', ...
             data.core_gap_type, n_gaps, total_gap * 1e6);
 
-    % --- Compute Lm from reluctance network (Partridge fringing) ---
+    % --- Compute Lm from reluctance network (Zhang model) ---
+    % Zhang: R_gap = parallel(R_internal, R_fringing)
+    %   R_internal = lg / (mu_0 * Ag)
+    %   R_fringing = pi / (mu_0 * perimeter * ln((2*h + lg) / lg))
+    %   R_gap = 1 / (1/R_internal + 1/R_fringing)
+    % Ref: X. Zhang et al., "Improved Calculation Method for Inductance
+    %      Value of the Air-Gap Inductor", IEEE CIYCEE 2020.
     mu_0 = 4 * pi * 1e-7;
     Npri = data.windings(1).n_turns;
     if Npri <= 0
@@ -8468,14 +8581,40 @@ function mag_results = compute_magnetic_params(data, geom, solve_options)
         R_core = 0;
     end
 
+    % Derive gap geometry from core parameters:
+    % - Perimeter: from column shape (round=pi*D, rect=2W+2D)
+    % - h: distance from gap to nearest normal surface ≈ bobbin_h/2 (half window height)
+    col_shape = core_params.columnShape;
+    col_w = core_params.columnWidth;
+    col_d = core_params.columnDepth;
+    if ~isempty(col_shape) && col_w > 0
+        if strcmp(col_shape, 'round')
+            gap_perimeter = pi * col_w;  % pi * diameter
+        else
+            gap_perimeter = 2 * col_w + 2 * max(col_d, col_w);
+        end
+    else
+        % Fallback: approximate from Ae (assume square cross-section)
+        gap_perimeter = 4 * sqrt(Ae);
+    end
+    % Distance to closest normal surface (half the bobbin height)
+    h_normal = max(core_params.bobbin_h / 2, sqrt(Ae));
+
     R_gap_total = 0;
-    sqrt_Ae = sqrt(Ae);
     for gi = 1:n_gaps
         lg = gapping{gi}.length;
         if lg > 0
-            F_fringe = 1 + (lg / sqrt_Ae) * log(2 * sqrt_Ae / lg);
-            Ae_eff = Ae * F_fringe;
-            R_gap_total = R_gap_total + lg / (mu_0 * Ae_eff);
+            % Zhang model: parallel combination of internal + fringing reluctance
+            R_internal = lg / (mu_0 * Ae);
+            log_arg = (2 * h_normal + lg) / lg;
+            if log_arg > 1
+                R_fringing = pi / (mu_0 * gap_perimeter * log(log_arg));
+                % Parallel combination
+                R_gap_total = R_gap_total + 1 / (1/R_internal + 1/R_fringing);
+            else
+                % No fringing benefit (shouldn't happen with valid geometry)
+                R_gap_total = R_gap_total + R_internal;
+            end
         end
     end
 
@@ -8487,6 +8626,7 @@ function mag_results = compute_magnetic_params(data, geom, solve_options)
     mag_results.R_gap_total = R_gap_total;
     mag_results.R_total = R_total;
     mag_results.n_gaps_used = n_gaps;
+    mag_results.Lm_source = 'reluctance_network (Zhang)';
 
     % --- Compute B(t) and peak flux density ---
     fsw = data.f;
@@ -8564,7 +8704,23 @@ function mag_results = compute_magnetic_params(data, geom, solve_options)
             mag_results.method = 'iGSE';
         end
     else
-        mag_results.method = 'N/A (no Steinmetz data)';
+        % No local Steinmetz data -- use OpenMagnetics adviser value if available
+        adviser_pcore = 0;
+        if isfield(data, 'design_spec') && isstruct(data.design_spec) ...
+                && isfield(data.design_spec, 'recommendation') && isstruct(data.design_spec.recommendation)
+            rec = data.design_spec.recommendation;
+            if isfield(rec, 'core_loss_W') && rec.core_loss_W > 0
+                adviser_pcore = rec.core_loss_W;
+            elseif isfield(rec, 'core_losses_w') && rec.core_losses_w > 0
+                adviser_pcore = rec.core_losses_w;
+            end
+        end
+        if adviser_pcore > 0
+            mag_results.Pcore_W = adviser_pcore;
+            mag_results.method = 'OpenMagnetics (adviser)';
+        else
+            mag_results.method = 'N/A (no Steinmetz data)';
+        end
     end
 
     mag_results.valid = true;

@@ -34020,7 +34020,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL05_32TXX_2(MWXX)": {
+  "Litz_DXXL05_32TXX_2_MWXX_": {
     "name": "Litz DXXL05/32TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34042,7 +34042,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL07_28TXX_2(MWXX)": {
+  "Litz_DXXL07_28TXX_2_MWXX_": {
     "name": "Litz DXXL07/28TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34064,7 +34064,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL07_28TXX_3(MWXX)": {
+  "Litz_DXXL07_28TXX_3_MWXX_": {
     "name": "Litz DXXL07/28TXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34086,7 +34086,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL07_30TXX_2(MWXX)": {
+  "Litz_DXXL07_30TXX_2_MWXX_": {
     "name": "Litz DXXL07/30TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34108,7 +34108,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL07_30TXX_3(MWXX)": {
+  "Litz_DXXL07_30TXX_3_MWXX_": {
     "name": "Litz DXXL07/30TXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34130,7 +34130,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL07_32TXX_2(MWXX)": {
+  "Litz_DXXL07_32TXX_2_MWXX_": {
     "name": "Litz DXXL07/32TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34152,7 +34152,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL07_32TXX_3(MWXX)": {
+  "Litz_DXXL07_32TXX_3_MWXX_": {
     "name": "Litz DXXL07/32TXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34174,7 +34174,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL100_38TXX_2(MWXX)": {
+  "Litz_DXXL100_38TXX_2_MWXX_": {
     "name": "Litz DXXL100/38TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34196,7 +34196,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL100_38TXX_3(MWXX)": {
+  "Litz_DXXL100_38TXX_3_MWXX_": {
     "name": "Litz DXXL100/38TXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34218,7 +34218,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL120_38TXX_2(MWXX)": {
+  "Litz_DXXL120_38TXX_2_MWXX_": {
     "name": "Litz DXXL120/38TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34240,7 +34240,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL120_38TXX_3(MWXX)": {
+  "Litz_DXXL120_38TXX_3_MWXX_": {
     "name": "Litz DXXL120/38TXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34262,7 +34262,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL19_36TXX_2(MWXX)": {
+  "Litz_DXXL19_36TXX_2_MWXX_": {
     "name": "Litz DXXL19/36TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34284,7 +34284,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL19_36TXX_3(MWXX)": {
+  "Litz_DXXL19_36TXX_3_MWXX_": {
     "name": "Litz DXXL19/36TXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34306,7 +34306,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL20_34TXX_2(MWXX)": {
+  "Litz_DXXL20_34TXX_2_MWXX_": {
     "name": "Litz DXXL20/34TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34328,7 +34328,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL20_34TXX_3(MWXX)": {
+  "Litz_DXXL20_34TXX_3_MWXX_": {
     "name": "Litz DXXL20/34TXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34350,7 +34350,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL230_44TXX_2(MWXX)": {
+  "Litz_DXXL230_44TXX_2_MWXX_": {
     "name": "Litz DXXL230/44TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34372,7 +34372,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL360_44TXX_2(MWXX)": {
+  "Litz_DXXL360_44TXX_2_MWXX_": {
     "name": "Litz DXXL360/44TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34394,7 +34394,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL360_44TXX_3(MWXX)": {
+  "Litz_DXXL360_44TXX_3_MWXX_": {
     "name": "Litz DXXL360/44TXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34416,7 +34416,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL40_40TXX_2(MWXX)": {
+  "Litz_DXXL40_40TXX_2_MWXX_": {
     "name": "Litz DXXL40/40TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34438,7 +34438,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL550_44TXX_2(MWXX)": {
+  "Litz_DXXL550_44TXX_2_MWXX_": {
     "name": "Litz DXXL550/44TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34460,7 +34460,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL550_44TXX_3(MWXX)": {
+  "Litz_DXXL550_44TXX_3_MWXX_": {
     "name": "Litz DXXL550/44TXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34482,7 +34482,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL66_38TXX_2(MWXX)": {
+  "Litz_DXXL66_38TXX_2_MWXX_": {
     "name": "Litz DXXL66/38TXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34504,7 +34504,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL66_38TXX_3(MWXX)": {
+  "Litz_DXXL66_38TXX_3_MWXX_": {
     "name": "Litz DXXL66/38TXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34526,7 +34526,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_DXXL825_44TXX_3(MWXX)": {
+  "Litz_DXXL825_44TXX_3_MWXX_": {
     "name": "Litz DXXL825/44TXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34548,7 +34548,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL07_28FX_2(MWXX)": {
+  "Litz_SXXL07_28FX_2_MWXX_": {
     "name": "Litz SXXL07/28FX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34570,7 +34570,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL07_28FX_3(MWXX)": {
+  "Litz_SXXL07_28FX_3_MWXX_": {
     "name": "Litz SXXL07/28FX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34592,7 +34592,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL07_30FX_2(MWXX)": {
+  "Litz_SXXL07_30FX_2_MWXX_": {
     "name": "Litz SXXL07/30FX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34614,7 +34614,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL07_30FX_3(MWXX)": {
+  "Litz_SXXL07_30FX_3_MWXX_": {
     "name": "Litz SXXL07/30FX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34636,7 +34636,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL07_32FX_2(MWXX)": {
+  "Litz_SXXL07_32FX_2_MWXX_": {
     "name": "Litz SXXL07/32FX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34658,7 +34658,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL07_32FX_3(MWXX)": {
+  "Litz_SXXL07_32FX_3_MWXX_": {
     "name": "Litz SXXL07/32FX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34680,7 +34680,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL100_38FX_3(MWXX)": {
+  "Litz_SXXL100_38FX_3_MWXX_": {
     "name": "Litz SXXL100/38FX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34702,7 +34702,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL120_38FX_3(MWXX)": {
+  "Litz_SXXL120_38FX_3_MWXX_": {
     "name": "Litz SXXL120/38FX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34724,7 +34724,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL19_36FX_2(MWXX)": {
+  "Litz_SXXL19_36FX_2_MWXX_": {
     "name": "Litz SXXL19/36FX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34746,7 +34746,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL19_36FX_3(MWXX)": {
+  "Litz_SXXL19_36FX_3_MWXX_": {
     "name": "Litz SXXL19/36FX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34768,7 +34768,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL20_34FX_2(MWXX)": {
+  "Litz_SXXL20_34FX_2_MWXX_": {
     "name": "Litz SXXL20/34FX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34790,7 +34790,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL20_34FX_3(MWXX)": {
+  "Litz_SXXL20_34FX_3_MWXX_": {
     "name": "Litz SXXL20/34FX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34812,7 +34812,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL230_44FX_3(MWXX)": {
+  "Litz_SXXL230_44FX_3_MWXX_": {
     "name": "Litz SXXL230/44FX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34834,7 +34834,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL360_44FX_3(MWXX)": {
+  "Litz_SXXL360_44FX_3_MWXX_": {
     "name": "Litz SXXL360/44FX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34856,7 +34856,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL40_40FX_2(MWXX)": {
+  "Litz_SXXL40_40FX_2_MWXX_": {
     "name": "Litz SXXL40/40FX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34878,7 +34878,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL550_44FX_3(MWXX)": {
+  "Litz_SXXL550_44FX_3_MWXX_": {
     "name": "Litz SXXL550/44FX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34900,7 +34900,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL66_38FX_2(MWXX)": {
+  "Litz_SXXL66_38FX_2_MWXX_": {
     "name": "Litz SXXL66/38FX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -34922,7 +34922,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL66_38FX_3(MWXX)": {
+  "Litz_SXXL66_38FX_3_MWXX_": {
     "name": "Litz SXXL66/38FX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34944,7 +34944,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_SXXL825_44FX_3(MWXX)": {
+  "Litz_SXXL825_44FX_3_MWXX_": {
     "name": "Litz SXXL825/44FX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -34966,7 +34966,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_09_35_LITZ_(MWXX)": {
+  "Litz_TCA3_09_35_LITZ__MWXX_": {
     "name": "Litz TCA3 09/35 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -34988,7 +34988,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_135_38_LITZ_(MWXX)": {
+  "Litz_TCA3_135_38_LITZ__MWXX_": {
     "name": "Litz TCA3 135/38 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -35010,7 +35010,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_150_44_LITZ_(MWXX)": {
+  "Litz_TCA3_150_44_LITZ__MWXX_": {
     "name": "Litz TCA3 150/44 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -35032,7 +35032,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_16_44_LITZ_(MWXX)": {
+  "Litz_TCA3_16_44_LITZ__MWXX_": {
     "name": "Litz TCA3 16/44 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -35054,7 +35054,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_19_36_LITZ_(MWXX)": {
+  "Litz_TCA3_19_36_LITZ__MWXX_": {
     "name": "Litz TCA3 19/36 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -35076,7 +35076,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_19_40_LITZ_(MWXX)": {
+  "Litz_TCA3_19_40_LITZ__MWXX_": {
     "name": "Litz TCA3 19/40 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -35098,7 +35098,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_25_38_LITZ_(MWXX)": {
+  "Litz_TCA3_25_38_LITZ__MWXX_": {
     "name": "Litz TCA3 25/38 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -35120,7 +35120,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_35_38_LITZ_(MWXX)": {
+  "Litz_TCA3_35_38_LITZ__MWXX_": {
     "name": "Litz TCA3 35/38 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -35142,7 +35142,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_40_40_LITZ_(MWXX)": {
+  "Litz_TCA3_40_40_LITZ__MWXX_": {
     "name": "Litz TCA3 40/40 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -35164,7 +35164,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_5_32_LITZ_(MWXX)": {
+  "Litz_TCA3_5_32_LITZ__MWXX_": {
     "name": "Litz TCA3 5/32 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -35186,7 +35186,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_7_30_LITZ_(MWXX)": {
+  "Litz_TCA3_7_30_LITZ__MWXX_": {
     "name": "Litz TCA3 7/30 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -35208,7 +35208,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_7_32_LITZ_(MWXX)": {
+  "Litz_TCA3_7_32_LITZ__MWXX_": {
     "name": "Litz TCA3 7/32 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -35230,7 +35230,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TCA3_7_35_LITZ_(MWXX)": {
+  "Litz_TCA3_7_35_LITZ__MWXX_": {
     "name": "Litz TCA3 7/35 LITZ (MWXX)",
     "type": "litz",
     "material": null,
@@ -35252,7 +35252,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL05_32TXXX_1_5(MWXX)": {
+  "Litz_TXXL05_32TXXX_1_5_MWXX_": {
     "name": "Litz TXXL05/32TXXX-1.5(MWXX)",
     "type": "litz",
     "material": null,
@@ -35274,7 +35274,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL05_32TXXX_2(MWXX)": {
+  "Litz_TXXL05_32TXXX_2_MWXX_": {
     "name": "Litz TXXL05/32TXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35296,7 +35296,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL07_28FXXX_2(MWXX)": {
+  "Litz_TXXL07_28FXXX_2_MWXX_": {
     "name": "Litz TXXL07/28FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35318,7 +35318,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL07_28FXXX_3(MWXX)": {
+  "Litz_TXXL07_28FXXX_3_MWXX_": {
     "name": "Litz TXXL07/28FXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -35340,7 +35340,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL07_30TXXX_1_5(MWXX)": {
+  "Litz_TXXL07_30TXXX_1_5_MWXX_": {
     "name": "Litz TXXL07/30TXXX-1.5(MWXX)",
     "type": "litz",
     "material": null,
@@ -35362,7 +35362,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL07_30TXXX_2(MWXX)": {
+  "Litz_TXXL07_30TXXX_2_MWXX_": {
     "name": "Litz TXXL07/30TXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35384,7 +35384,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL07_32FXXX_2(MWXX)": {
+  "Litz_TXXL07_32FXXX_2_MWXX_": {
     "name": "Litz TXXL07/32FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35406,7 +35406,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL07_32TXXX_1_5(MWXX)": {
+  "Litz_TXXL07_32TXXX_1_5_MWXX_": {
     "name": "Litz TXXL07/32TXXX-1.5(MWXX)",
     "type": "litz",
     "material": null,
@@ -35428,7 +35428,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL07_32TXXX_2(MWXX)": {
+  "Litz_TXXL07_32TXXX_2_MWXX_": {
     "name": "Litz TXXL07/32TXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35450,7 +35450,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL108_40FXXX_2(MWXX)": {
+  "Litz_TXXL108_40FXXX_2_MWXX_": {
     "name": "Litz TXXL108/40FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35472,7 +35472,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL108_40FXXX_3(MWXX)": {
+  "Litz_TXXL108_40FXXX_3_MWXX_": {
     "name": "Litz TXXL108/40FXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -35494,7 +35494,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL120_38FXXX_2(MWXX)": {
+  "Litz_TXXL120_38FXXX_2_MWXX_": {
     "name": "Litz TXXL120/38FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35516,7 +35516,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL120_38FXXX_3(MWXX)": {
+  "Litz_TXXL120_38FXXX_3_MWXX_": {
     "name": "Litz TXXL120/38FXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -35538,7 +35538,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL15_30TXXX_1_5(MWXX)": {
+  "Litz_TXXL15_30TXXX_1_5_MWXX_": {
     "name": "Litz TXXL15/30TXXX-1.5(MWXX)",
     "type": "litz",
     "material": null,
@@ -35560,7 +35560,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL15_30TXXX_2(MWXX)": {
+  "Litz_TXXL15_30TXXX_2_MWXX_": {
     "name": "Litz TXXL15/30TXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35582,7 +35582,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL15_30TXXX_3(MWXX)": {
+  "Litz_TXXL15_30TXXX_3_MWXX_": {
     "name": "Litz TXXL15/30TXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -35604,7 +35604,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL16_44TXXX_1_5(MWXX)": {
+  "Litz_TXXL16_44TXXX_1_5_MWXX_": {
     "name": "Litz TXXL16/44TXXX-1.5(MWXX)",
     "type": "litz",
     "material": null,
@@ -35626,7 +35626,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL180_38TXXX_2(MWXX)": {
+  "Litz_TXXL180_38TXXX_2_MWXX_": {
     "name": "Litz TXXL180/38TXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35648,7 +35648,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL180_38TXXX_3(MWXX)": {
+  "Litz_TXXL180_38TXXX_3_MWXX_": {
     "name": "Litz TXXL180/38TXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -35670,7 +35670,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL19_34FXXX_2(MWXX)": {
+  "Litz_TXXL19_34FXXX_2_MWXX_": {
     "name": "Litz TXXL19/34FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35692,7 +35692,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL19_34FXXX_3(MWXX)": {
+  "Litz_TXXL19_34FXXX_3_MWXX_": {
     "name": "Litz TXXL19/34FXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -35714,7 +35714,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL19_36FXXX_2(MWXX)": {
+  "Litz_TXXL19_36FXXX_2_MWXX_": {
     "name": "Litz TXXL19/36FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35736,7 +35736,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL19_36FXXX_3(MWXX)": {
+  "Litz_TXXL19_36FXXX_3_MWXX_": {
     "name": "Litz TXXL19/36FXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -35758,7 +35758,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL19_36TXXX_2(MWXX)": {
+  "Litz_TXXL19_36TXXX_2_MWXX_": {
     "name": "Litz TXXL19/36TXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35780,7 +35780,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL19_36TXXX_3(MWXX)": {
+  "Litz_TXXL19_36TXXX_3_MWXX_": {
     "name": "Litz TXXL19/36TXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -35802,7 +35802,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL19_40TXXX_1_5(MWXX)": {
+  "Litz_TXXL19_40TXXX_1_5_MWXX_": {
     "name": "Litz TXXL19/40TXXX-1.5(MWXX)",
     "type": "litz",
     "material": null,
@@ -35824,7 +35824,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL19_40TXXX_2(MWXX)": {
+  "Litz_TXXL19_40TXXX_2_MWXX_": {
     "name": "Litz TXXL19/40TXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35846,7 +35846,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL230_44FXXX_2(MWXX)": {
+  "Litz_TXXL230_44FXXX_2_MWXX_": {
     "name": "Litz TXXL230/44FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35868,7 +35868,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL230_44FXXX_3(MWXX)": {
+  "Litz_TXXL230_44FXXX_3_MWXX_": {
     "name": "Litz TXXL230/44FXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -35890,7 +35890,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL230_44TXXX_2(MWXX)": {
+  "Litz_TXXL230_44TXXX_2_MWXX_": {
     "name": "Litz TXXL230/44TXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35912,7 +35912,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL230_44TXXX_3(MWXX)": {
+  "Litz_TXXL230_44TXXX_3_MWXX_": {
     "name": "Litz TXXL230/44TXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -35934,7 +35934,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL35_38TXXX_2(MWXX)": {
+  "Litz_TXXL35_38TXXX_2_MWXX_": {
     "name": "Litz TXXL35/38TXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -35956,7 +35956,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL35_38TXXX_3(MWXX)": {
+  "Litz_TXXL35_38TXXX_3_MWXX_": {
     "name": "Litz TXXL35/38TXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -35978,7 +35978,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL350_38FXXX_2(MWXX)": {
+  "Litz_TXXL350_38FXXX_2_MWXX_": {
     "name": "Litz TXXL350/38FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -36000,7 +36000,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL350_38FXXX_3(MWXX)": {
+  "Litz_TXXL350_38FXXX_3_MWXX_": {
     "name": "Litz TXXL350/38FXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -36022,7 +36022,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL360_44FXXX_2(MWXX)": {
+  "Litz_TXXL360_44FXXX_2_MWXX_": {
     "name": "Litz TXXL360/44FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -36044,7 +36044,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL360_44FXXX_3(MWXX)": {
+  "Litz_TXXL360_44FXXX_3_MWXX_": {
     "name": "Litz TXXL360/44FXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -36066,7 +36066,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL360_44TXXX_2(MWXX)": {
+  "Litz_TXXL360_44TXXX_2_MWXX_": {
     "name": "Litz TXXL360/44TXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -36088,7 +36088,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL360_44TXXX_3(MWXX)": {
+  "Litz_TXXL360_44TXXX_3_MWXX_": {
     "name": "Litz TXXL360/44TXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -36110,7 +36110,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL40_40FXXX_2(MWXX)": {
+  "Litz_TXXL40_40FXXX_2_MWXX_": {
     "name": "Litz TXXL40/40FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -36132,7 +36132,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL40_40TXXX_1_5(MWXX)": {
+  "Litz_TXXL40_40TXXX_1_5_MWXX_": {
     "name": "Litz TXXL40/40TXXX-1.5(MWXX)",
     "type": "litz",
     "material": null,
@@ -36154,7 +36154,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL40_40TXXX_2(MWXX)": {
+  "Litz_TXXL40_40TXXX_2_MWXX_": {
     "name": "Litz TXXL40/40TXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -36176,7 +36176,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL550_44FXXX_2(MWXX)": {
+  "Litz_TXXL550_44FXXX_2_MWXX_": {
     "name": "Litz TXXL550/44FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -36198,7 +36198,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL550_44FXXX_3(MWXX)": {
+  "Litz_TXXL550_44FXXX_3_MWXX_": {
     "name": "Litz TXXL550/44FXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -36220,7 +36220,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL66_38FXXX_2(MWXX)": {
+  "Litz_TXXL66_38FXXX_2_MWXX_": {
     "name": "Litz TXXL66/38FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -36242,7 +36242,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL66_38FXXX_3(MWXX)": {
+  "Litz_TXXL66_38FXXX_3_MWXX_": {
     "name": "Litz TXXL66/38FXXX-3(MWXX)",
     "type": "litz",
     "material": null,
@@ -36264,7 +36264,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL825_44FXXX_2(MWXX)": {
+  "Litz_TXXL825_44FXXX_2_MWXX_": {
     "name": "Litz TXXL825/44FXXX-2(MWXX)",
     "type": "litz",
     "material": null,
@@ -36286,7 +36286,7 @@
     "strand_type": "round",
     "strand_numberConductors": 1
   },
-  "Litz_TXXL825_44FXXX_3(MWXX)": {
+  "Litz_TXXL825_44FXXX_3_MWXX_": {
     "name": "Litz TXXL825/44FXXX-3(MWXX)",
     "type": "litz",
     "material": null,

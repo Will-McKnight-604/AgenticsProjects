@@ -18,7 +18,7 @@ import sys
 import os
 import time
 
-from om_shared import import_pyopenmagnetics
+from om_shared import import_pyopenmagnetics, sanitize_local_key
 
 pm = import_pyopenmagnetics()
 
@@ -122,8 +122,7 @@ def export_wires(output_dir, wire_types=None):
                 except Exception:
                     pass
 
-            safe_key = name.replace(' ', '_').replace('.', '_').replace(
-                '-', '_').replace('/', '_')
+            safe_key = sanitize_local_key(name)
             exported[safe_key] = flat
             type_counts[wtype] = type_counts.get(wtype, 0) + 1
 
@@ -228,6 +227,26 @@ def export_cores(output_dir):
                         core_entry['effectiveVolume'] = eff.get('effectiveVolume')
                         core_entry['minimumArea'] = eff.get('minimumArea')
 
+                    # Column geometry from central column (for MKF-aligned MLT)
+                    columns = proc.get('columns', [])
+                    central = None
+                    for col in (columns if isinstance(columns, list) else []):
+                        if isinstance(col, dict) and col.get('type') == 'central':
+                            central = col
+                            break
+                    if central is None and columns:
+                        central = columns[0]  # fallback to first column
+                    if central and isinstance(central, dict):
+                        col_shape = central.get('shape')
+                        col_width = central.get('width')
+                        col_depth = central.get('depth')
+                        if col_shape is not None:
+                            core_entry['columnShape'] = col_shape
+                        if col_width is not None:
+                            core_entry['columnWidth'] = col_width
+                        if col_depth is not None:
+                            core_entry['columnDepth'] = col_depth
+
                     # Overall dimensions
                     core_entry['overallWidth'] = proc.get('width')
                     core_entry['overallHeight'] = proc.get('height')
@@ -244,8 +263,7 @@ def export_cores(output_dir):
                         'height': 2 * D,
                     }
 
-            safe_key = name.replace(' ', '_').replace('.', '_').replace(
-                '-', '_').replace('/', '_')
+            safe_key = sanitize_local_key(name)
             exported[safe_key] = core_entry
 
         except Exception as e:
@@ -378,14 +396,12 @@ def export_materials(output_dir):
             if manufacturer:
                 mfr_counts[manufacturer] = mfr_counts.get(manufacturer, 0) + 1
 
-            safe_key = name.replace(' ', '_').replace('.', '_').replace(
-                '-', '_').replace('/', '_')
+            safe_key = sanitize_local_key(name)
             exported[safe_key] = entry
 
         except Exception as e:
             print(f"  WARNING: Failed to export {name}: {e}")
-            safe_key = name.replace(' ', '_').replace('.', '_').replace(
-                '-', '_').replace('/', '_')
+            safe_key = sanitize_local_key(name)
             manufacturer = material_to_mfr.get(name)
             exported[safe_key] = {'name': name, 'manufacturer': manufacturer}
 

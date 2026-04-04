@@ -808,7 +808,7 @@ def build_magnetic_from_config(config):
             'shape': shape,
             'material': material,
             'gapping': gapping_use,
-            'numberStacks': 1
+            'numberStacks': int(config.get('numberStacks', 1))
         }
     }
 
@@ -953,11 +953,25 @@ def build_magnetic_from_config(config):
                 else:
                     per_section_turns_alignment.append(turns_alignment)
 
-            # base_coil must only contain schema-valid root coil fields:
-            # bobbin and functionalDescription. Alignment/orientation fields
-            # are NOT valid at the coil root level per MAS schema — they belong
-            # inside sectionsDescription entries. Passing them at root causes
-            # C++ nlohmann::json type errors during deserialization.
+            # Set sectionsOrientation and sectionsAlignment on the bobbin's
+            # winding window BEFORE calling wind_by_sections. These fields
+            # control how sections are arranged in the window and must be
+            # set at the winding window level per MAS schema.
+            try:
+                bobbin_pd = bobbin.get('processedDescription', {})
+                ww_list = bobbin_pd.get('windingWindows', [])
+                for ww_item in (ww_list if isinstance(ww_list, list) else []):
+                    if isinstance(ww_item, dict):
+                        ww_item['sectionsOrientation'] = layers_orientation
+                        ww_item['sectionsAlignment'] = section_alignment
+                if isinstance(bobbin_pd, dict) and isinstance(ww_list, list):
+                    bobbin_pd['windingWindows'] = ww_list
+                    bobbin['processedDescription'] = bobbin_pd
+                print(f'[VIZ] Set winding window: sectionsOrientation={layers_orientation!r}, '
+                      f'sectionsAlignment={section_alignment!r}', file=sys.stderr)
+            except Exception as e_ww:
+                print(f'NOTE: Could not set winding window orientation: {e_ww}', file=sys.stderr)
+
             base_coil = {
                 'bobbin': bobbin,
                 'functionalDescription': coil_func,

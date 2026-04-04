@@ -837,30 +837,73 @@ def run_recommendations(config):
         _log(f"[DEBUG] Could not dump processed: {_dbg_exc}")
     sys.stderr.flush()
 
+    # --- Dual search: run adviser for both toroidal and non-toroidal if requested ---
+    include_all_shapes = bool(config.get("include_all_core_shapes", False))
+    if include_all_shapes:
+        _log("[ADVISOR] include_all_core_shapes=True: running dual search (toroidal + non-toroidal)")
+        search_passes = [
+            ("non-toroidal", False),
+            ("toroidal", True),
+        ]
+    else:
+        # Single search with whatever useToroidalCores was set to
+        is_toroidal = bool(config.get("include_toroidal_cores", True))
+        search_passes = [
+            ("toroidal" if is_toroidal else "non-toroidal", is_toroidal),
+        ]
+
+    all_results = []
     _t_adviser_start = _time.perf_counter()
     try:
-        try:
-            results = pm.calculate_advised_magnetics(
-                processed,
-                maximum_number_results,
-                core_mode
-            )
-        finally:
-            _t_adviser_done = _time.perf_counter()
-            _stage_timings.append(("calculate_advised():     ", _t_adviser_done - _t_adviser_start))
-            _log(f"[TIMER] calculate_advised():     {_t_adviser_done - _t_adviser_start:.3f}s")
-            if settings_overridden and previous_settings is not None:
-                try:
-                    pm.set_settings(previous_settings)
-                except Exception as exc:
-                    _log(f"[ADVISOR] Warning: failed to restore settings: {exc}")
-            # Restore insulation data so downstream code can reference it
-            if saved_insulation is not None and isinstance(processed, dict):
-                processed.get("designRequirements", {})["insulation"] = saved_insulation
+        for pass_label, use_toroidal in search_passes:
+            # Set toroidal flag for this pass
+            current_settings = pm.get_settings()
+            if isinstance(current_settings, dict) and "data" not in current_settings:
+                current_settings["useToroidalCores"] = use_toroidal
+                pm.set_settings(current_settings)
+
+            _log(f"[ADVISOR] Running adviser pass: {pass_label} (useToroidalCores={use_toroidal})")
+            try:
+                pass_results = pm.calculate_advised_magnetics(
+                    processed,
+                    maximum_number_results,
+                    core_mode
+                )
+                # Collect results
+                if isinstance(pass_results, list):
+                    all_results.extend(pass_results)
+                elif isinstance(pass_results, dict):
+                    data_list = pass_results.get("data", [])
+                    if isinstance(data_list, list):
+                        all_results.extend(data_list)
+                    elif data_list:
+                        all_results.append(data_list)
+                _log(f"[ADVISOR] {pass_label} pass returned {len(all_results)} total results so far")
+            except Exception as pass_exc:
+                _log(f"[ADVISOR] {pass_label} pass failed: {pass_exc}")
+
+        # Wrap as a list for downstream parsing
+        results = all_results
     except Exception as exc:
+        results = []
+        _log(f"[ADVISOR] Dual search error: {exc}")
+    finally:
+        _t_adviser_done = _time.perf_counter()
+        _stage_timings.append(("calculate_advised():     ", _t_adviser_done - _t_adviser_start))
+        _log(f"[TIMER] calculate_advised():     {_t_adviser_done - _t_adviser_start:.3f}s")
+        if settings_overridden and previous_settings is not None:
+            try:
+                pm.set_settings(previous_settings)
+            except Exception as exc:
+                _log(f"[ADVISOR] Warning: failed to restore settings: {exc}")
+        # Restore insulation data so downstream code can reference it
+        if saved_insulation is not None and isinstance(processed, dict):
+            processed.get("designRequirements", {})["insulation"] = saved_insulation
+
+    if not all_results and not results:
         return {
             "status": "ERROR",
-            "error": f"calculate_advised_magnetics failed: {exc}",
+            "error": "calculate_advised_magnetics returned no results",
             "recommendations": []
         }
 
@@ -1276,6 +1319,9 @@ def extract_recommendation(item):
 
     # Gapping
     rec["gapping"] = core_fd.get("gapping", [])
+
+    # Number of stacked cores (e.g. 4 toroids stacked = 4x Ae)
+    rec["numberStacks"] = int(as_float(core_fd.get("numberStacks", 1), 1))
 
     # Coil / winding info
     coil = magnetic.get("coil", {})

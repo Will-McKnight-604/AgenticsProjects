@@ -222,6 +222,9 @@ def extract_recommendation(item):
     # Gapping
     rec["gapping"] = core_fd.get("gapping", [])
 
+    # Number of stacked cores (e.g. 4 toroids stacked = 4x Ae)
+    rec["numberStacks"] = int(as_float(core_fd.get("numberStacks", 1), 1))
+
     # Core name (from top-level core)
     rec["core_name"] = core.get("name", rec["core_shape"])
 
@@ -374,10 +377,27 @@ def apply_adviser_settings(config):
             settings_obj["coreAdviserMaximumNumberStacks"] = int(max_stacks)
             changed = True
 
+        # Core shape filters (match generate_om_recommendations.py logic)
+        inc_toroidal = bool(adv.get("include_toroidal_cores", True))
+        if settings_obj.get("useToroidalCores", True) != inc_toroidal:
+            settings_obj["useToroidalCores"] = inc_toroidal
+            changed = True
+
+        inc_stacks = bool(adv.get("include_stacked_cores", False))
+        if settings_obj.get("coreAdviserIncludeStacks", True) != inc_stacks:
+            settings_obj["coreAdviserIncludeStacks"] = inc_stacks
+            changed = True
+
+        inc_dist_gaps = bool(adv.get("include_distributed_gaps", False))
+        if settings_obj.get("coreAdviserIncludeDistributedGaps", True) != inc_dist_gaps:
+            settings_obj["coreAdviserIncludeDistributedGaps"] = inc_dist_gaps
+            changed = True
+
         if changed:
             pm.set_settings(settings_obj)
             _log(f"[CONVERTER_API] Applied settings: inStock={use_in_stock}, "
-                 f"maxFilter={max_after_filter}")
+                 f"maxFilter={max_after_filter}, toroidal={inc_toroidal}, "
+                 f"stacks={inc_stacks}, distGaps={inc_dist_gaps}")
             return True, previous_settings
 
         return False, previous_settings
@@ -396,17 +416,122 @@ def restore_settings(overridden, previous):
             _log(f"[CONVERTER_API] Warning: failed to restore settings: {exc}")
 
 
-def format_raw_results(raw_data, t_start):
-    """Format adviser raw results into display-ready output items."""
+def _estimate_fill_factor(rec, local_idx):
+    """Estimate window fill factor from recommendation data + local databases.
+
+    Uses π/4 × OD² for round/litz wire, W × H for rectangular/foil wire.
+
+    Returns (fill_factor, conductor_area_mm2, window_area_mm2) or (None, 0, 0) if
+    insufficient data.
+    """
+    import math
+
+    core_db = local_idx.get("_core_db")
+    wire_db = local_idx.get("_wire_db")
+    if not core_db or not wire_db:
+        return None, 0, 0
+
+    # Get window area from local core database
+    core_key = rec.get("core_shape_local_key", "")
+    core_data = core_db.get(core_key, {})
+    ww = core_data.get("windingWindow", {})
+    if isinstance(ww, dict):
+        w_width = ww.get("width") or 0
+        w_height = ww.get("height") or 0
+        window_area = w_width * w_height  # m²
+        # For toroidal cores, use area directly (radial window)
+        if window_area <= 0 and ww.get("area"):
+            window_area = ww["area"]
+    else:
+        window_area = 0
+    if window_area <= 0:
+        return None, 0, 0
+
+    # Sum conductor cross-sectional area across all windings
+    total_cond_area = 0.0
+    for prefix in ["primary", "secondary", "secondary_2", "secondary_3"]:
+        n_turns = rec.get(f"{prefix}_turns", 0)
+        n_par = rec.get(f"{prefix}_parallels", 1) or 1
+        if n_turns <= 0:
+            continue
+
+        wire_key = rec.get(f"{prefix}_wire_local_key", "")
+        wire_data = wire_db.get(wire_key, {})
+        wire_type = (wire_data.get("type", "") or "").lower()
+
+        od = wire_data.get("outerDiameter", 0) or 0
+        ow = wire_data.get("outerWidth", 0) or 0
+        oh = wire_data.get("outerHeight", 0) or 0
+
+        if wire_type in ("foil", "rectangular") and ow > 0 and oh > 0:
+            # Rectangular/foil: width × height
+            cond_area = ow * oh  # m²
+        elif od > 0:
+            # Round or Litz: π/4 × OD²
+            cond_area = math.pi / 4 * od * od  # m²
+        elif ow > 0 and oh > 0:
+            # Fallback to rectangular if OD not available
+            cond_area = ow * oh
+        else:
+            continue  # Can't estimate without wire dimensions
+
+        total_cond_area += n_turns * n_par * cond_area
+
+    if total_cond_area <= 0:
+        return None, 0, 0
+
+    fill = total_cond_area / window_area
+    return fill, total_cond_area * 1e6, window_area * 1e6  # return mm² for logging
+
+
+def format_raw_results(raw_data, t_start, config=None):
+    """Format adviser raw results into display-ready output items.
+
+    Applies window fill factor filtering and scoring:
+      - Hard reject: fill < fill_min_pct (default 20%)
+      - Score penalty: fill between min and target (40%) — score *= sqrt(fill/target)
+      - Warning flags: approaching min limit, or above fill_max_pct (manufacturability)
+
+    Fill factor uses π/4 × OD² for round/litz, W × H for rectangular/foil.
+    """
+    import math
+
     if not isinstance(raw_data, list):
         raw_data = [raw_data]
+
+    if config is None:
+        config = {}
+    adv_cfg = config.get("adviser_settings", {})
 
     t_format = time.perf_counter()
     base_dir = os.path.dirname(os.path.abspath(__file__))
     local_idx = load_local_catalog_index(base_dir)
     core_filter_active = len(local_idx.get("core_keys", set())) > 0
 
+    # Load full core and wire databases for fill factor estimation
+    try:
+        core_db_path = os.path.join(base_dir, "openmagnetics_core_database.json")
+        wire_db_path = os.path.join(base_dir, "openmagnetics_wire_database.json")
+        with open(core_db_path, "r", encoding="utf-8") as f:
+            local_idx["_core_db"] = json.load(f)
+        with open(wire_db_path, "r", encoding="utf-8") as f:
+            local_idx["_wire_db"] = json.load(f)
+    except Exception as exc:
+        _log(f"[FILL] Could not load databases for fill estimation: {exc}")
+        local_idx["_core_db"] = {}
+        local_idx["_wire_db"] = {}
+
+    # Fill factor thresholds (user-configurable from topology wizard)
+    FILL_MIN_PCT = float(adv_cfg.get("fill_min_pct", 20))   # Hard reject below this
+    FILL_MAX_PCT = float(adv_cfg.get("fill_max_pct", 60))   # Manufacturability warning above
+    TARGET_FILL = 0.40                                        # Ideal fill for scoring (40%)
+    WARN_MARGIN_PCT = 5.0                                     # "Approaching limit" margin
+
+    _log(f"[FILL] Thresholds: reject<{FILL_MIN_PCT:.0f}%, warn_approach<{FILL_MIN_PCT+WARN_MARGIN_PCT:.0f}%, "
+         f"target={TARGET_FILL*100:.0f}%, mfg_warn>{FILL_MAX_PCT:.0f}%")
+
     formatted_results = []
+    rejected_count = 0
     for item in raw_data:
         rec = extract_recommendation(item)
         if not rec:
@@ -415,6 +540,52 @@ def format_raw_results(raw_data, t_start):
 
         if core_filter_active and not rec.get("core_shape_local_key"):
             _log(f"[CONVERTER_API] Core not in local DB: {rec.get('core_shape', '?')}")
+
+        raw_score = rec.get("score", 0.0)
+        core_label = rec.get("core_shape", "?")
+
+        # Window utilization analysis
+        fill, cond_mm2, win_mm2 = _estimate_fill_factor(rec, local_idx)
+        fill_pct = fill * 100 if fill is not None else -1
+        fill_penalty = 1.0
+        fill_warning = ""
+
+        if fill is not None:
+            if fill_pct < FILL_MIN_PCT:
+                # Hard reject
+                _log(f"[FILL] REJECT {core_label}: fill={fill_pct:.1f}% < {FILL_MIN_PCT:.0f}% "
+                     f"(cond={cond_mm2:.1f}mm2 / win={win_mm2:.0f}mm2)")
+                rejected_count += 1
+                continue
+
+            elif fill_pct < FILL_MIN_PCT + WARN_MARGIN_PCT:
+                # Approaching lower limit
+                fill_penalty = max(0.3, math.sqrt(fill / TARGET_FILL))
+                fill_warning = f"Approaching min fill limit ({fill_pct:.0f}%)"
+                _log(f"[FILL] WARN {core_label}: fill={fill_pct:.1f}% approaching "
+                     f"min={FILL_MIN_PCT:.0f}%, penalty={fill_penalty:.3f}")
+
+            elif fill_pct > FILL_MAX_PCT:
+                # Above manufacturability threshold — no score penalty, just warning
+                fill_warning = f"Fill {fill_pct:.0f}% > {FILL_MAX_PCT:.0f}%: may be difficult to manufacture"
+                _log(f"[FILL] MFG_WARN {core_label}: fill={fill_pct:.1f}% > {FILL_MAX_PCT:.0f}%")
+
+            elif fill < TARGET_FILL:
+                # Below target — score penalty
+                fill_penalty = max(0.3, math.sqrt(fill / TARGET_FILL))
+                _log(f"[FILL] {core_label}: fill={fill_pct:.1f}% penalty={fill_penalty:.3f}")
+
+            else:
+                # Between target and max — ideal range
+                _log(f"[FILL] {core_label}: fill={fill_pct:.1f}% (good)")
+
+        adjusted_score = raw_score * fill_penalty
+        rec["fill_factor"] = fill if fill is not None else -1
+        rec["fill_factor_pct"] = fill_pct
+        rec["fill_penalty"] = fill_penalty
+        rec["fill_warning"] = fill_warning
+        rec["score_original"] = raw_score
+        rec["score"] = adjusted_score
 
         out_item = {
             "core_name": rec.get("core_name", rec.get("core_shape", "Unknown")),
@@ -426,12 +597,18 @@ def format_raw_results(raw_data, t_start):
             "Lm_uH": rec.get("Lm_uH", 0.0),
             "Llk_uH": rec.get("Llk_uH", 0.0),
             "B_peak_mT": rec.get("B_peak_mT", 0.0),
-            "score": rec.get("score", 0.0),
+            "score": adjusted_score,
             "recommendation": rec,
         }
         if isinstance(item, dict) and "mas" in item:
             out_item["mas_data"] = item["mas"]
         formatted_results.append(out_item)
+
+    if rejected_count > 0:
+        _log(f"[FILL] Rejected {rejected_count} recommendation(s) below {FILL_MIN_PCT:.0f}% fill")
+
+    # Sort by adjusted score (highest first)
+    formatted_results.sort(key=lambda x: x.get("score", 0), reverse=True)
 
     t_format_done = time.perf_counter()
     _log(f"[TIMER] Format results:     {t_format_done - t_format:.3f}s")
@@ -440,6 +617,7 @@ def format_raw_results(raw_data, t_start):
     return {
         "status": "OK",
         "count": len(formatted_results),
+        "rejected_by_fill": rejected_count,
         "data": formatted_results,
     }
 
@@ -505,7 +683,7 @@ def run_converter_design(config):
             "data": [], "count": 0
         }
 
-    return format_raw_results(raw_data, t_start)
+    return format_raw_results(raw_data, t_start, config)
 
 
 def _ensure_list(value):
@@ -635,9 +813,42 @@ def run_process_and_advise(config):
     _log(f"[TIMER] Apply settings:     {time.perf_counter() - t_settings:.3f}s")
 
     # Step 3: Call calculate_advised_magnetics to search cores
+    # Dual search: run for both toroidal and non-toroidal when include_all_core_shapes=true
+    adv_cfg = config.get("adviser_settings", {})
+    include_all_shapes = bool(adv_cfg.get("include_all_core_shapes", False))
+
     t_advise = time.perf_counter()
+    all_raw_data = []
     try:
-        result = pm.calculate_advised_magnetics(mas, max_results, 'available cores')
+        if include_all_shapes:
+            _log("[PROCESS_ADVISE] Dual search: running for both toroidal + non-toroidal")
+            for pass_label, use_toroidal in [("non-toroidal", False), ("toroidal", True)]:
+                cur_settings = pm.get_settings()
+                if isinstance(cur_settings, dict) and "data" not in cur_settings:
+                    cur_settings["useToroidalCores"] = use_toroidal
+                    pm.set_settings(cur_settings)
+                _log(f"[PROCESS_ADVISE] Running {pass_label} pass (useToroidalCores={use_toroidal})")
+                try:
+                    pass_result = pm.calculate_advised_magnetics(mas, max_results, 'available cores')
+                    if isinstance(pass_result, dict) and "data" in pass_result:
+                        pass_data = pass_result.get("data", [])
+                        if isinstance(pass_data, list):
+                            all_raw_data.extend(pass_data)
+                            _log(f"[PROCESS_ADVISE] {pass_label}: got {len(pass_data)} results")
+                        elif pass_data:
+                            all_raw_data.append(pass_data)
+                    elif isinstance(pass_result, list):
+                        all_raw_data.extend(pass_result)
+                except Exception as pass_exc:
+                    _log(f"[PROCESS_ADVISE] {pass_label} pass failed: {pass_exc}")
+        else:
+            result = pm.calculate_advised_magnetics(mas, max_results, 'available cores')
+            if isinstance(result, dict) and "data" in result:
+                all_raw_data = result.get("data", [])
+            elif isinstance(result, dict) and "error" in result:
+                _log(f"[PROCESS_ADVISE] API error: {result['error']}")
+            elif isinstance(result, list):
+                all_raw_data = result
     except Exception as exc:
         restore_settings(settings_overridden, previous_settings)
         return {
@@ -649,18 +860,11 @@ def run_process_and_advise(config):
         restore_settings(settings_overridden, previous_settings)
 
     _log(f"[TIMER] advised_magnetics:  {time.perf_counter() - t_advise:.1f}s")
+    _log(f"[PROCESS_ADVISE] Total raw results: {len(all_raw_data)}")
 
-    # Parse results
-    if not isinstance(result, dict) or "data" not in result:
-        error_msg = "Unknown error"
-        if isinstance(result, dict) and "error" in result:
-            error_msg = str(result["error"])
-        else:
-            error_msg = f"Unexpected result type: {type(result).__name__}"
-        _log(f"[PROCESS_ADVISE] API error: {error_msg}")
-        return {"status": "ERROR", "error": error_msg, "data": [], "count": 0}
-
-    raw_data = result.get("data", [])
+    raw_data = all_raw_data
+    if not raw_data:
+        return {"status": "ERROR", "error": "No results from adviser", "data": [], "count": 0}
 
     # The adviser sometimes returns data as a string (error message) instead of a list.
     if isinstance(raw_data, str):
@@ -673,7 +877,7 @@ def run_process_and_advise(config):
 
     _log(f"[PROCESS_ADVISE] Adviser returned {len(raw_data)} result(s)")
 
-    return format_raw_results(raw_data, t_start)
+    return format_raw_results(raw_data, t_start, config)
 
 
 def main():

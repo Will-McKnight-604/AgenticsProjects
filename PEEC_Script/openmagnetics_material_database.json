@@ -1,5 +1,5 @@
 {
-  "15": {
+  "W_15": {
     "name": "15",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -11,7 +11,7 @@
     "saturationFluxDensity": 0.15,
     "initialPermeability": 1500.0
   },
-  "20": {
+  "W_20": {
     "name": "20",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -23,7 +23,7 @@
     "saturationFluxDensity": 0.33,
     "initialPermeability": 2000.0
   },
-  "31": {
+  "W_31": {
     "name": "31",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -35,7 +35,7 @@
     "saturationFluxDensity": 0.21,
     "initialPermeability": 1500.0
   },
-  "3C90": {
+  "W_3C90": {
     "name": "3C90",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -79,7 +79,7 @@
       }
     ]
   },
-  "3C91": {
+  "W_3C91": {
     "name": "3C91",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -123,7 +123,7 @@
       }
     ]
   },
-  "3C92": {
+  "W_3C92": {
     "name": "3C92",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -167,7 +167,7 @@
       }
     ]
   },
-  "3C92A": {
+  "W_3C92A": {
     "name": "3C92A",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -201,7 +201,7 @@
       }
     ]
   },
-  "3C94": {
+  "W_3C94": {
     "name": "3C94",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -245,7 +245,7 @@
       }
     ]
   },
-  "3C95": {
+  "W_3C95": {
     "name": "3C95",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -289,7 +289,7 @@
       }
     ]
   },
-  "3C95A": {
+  "W_3C95A": {
     "name": "3C95A",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -333,7 +333,7 @@
       }
     ]
   },
-  "3C95F": {
+  "W_3C95F": {
     "name": "3C95F",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -377,7 +377,7 @@
       }
     ]
   },
-  "3C96": {
+  "W_3C96": {
     "name": "3C96",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -421,7 +421,7 @@
       }
     ]
   },
-  "3C97": {
+  "W_3C97": {
     "name": "3C97",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -465,7 +465,7 @@
       }
     ]
   },
-  "3C98": {
+  "W_3C98": {
     "name": "3C98",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -509,7 +509,7 @@
       }
     ]
   },
-  "3C99": {
+  "W_3C99": {
     "name": "3C99",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -553,7 +553,7 @@
       }
     ]
   },
-  "3E6": {
+  "W_3E6": {
     "name": "3E6",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -565,7 +565,7 @@
     "saturationFluxDensity": 0.27,
     "initialPermeability": 10000.0
   },
-  "3F3": {
+  "W_3F3": {
     "name": "3F3",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -609,7 +609,7 @@
       }
     ]
   },
-  "3F36": {
+  "W_3F36": {
     "name": "3F36",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -653,7 +653,7 @@
       }
     ]
   },
-  "3F4": {
+  "W_3F4": {
     "name": "3F4",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -697,7 +697,7 @@
       }
     ]
   },
-  "3F46": {
+  "W_3F46": {
     "name": "3F46",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -731,7 +731,7 @@
       }
     ]
   },
-  "43": {
+  "W_43": {
     "name": "43",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -743,7 +743,7 @@
     "saturationFluxDensity": 0.25,
     "initialPermeability": 800.0
   },
-  "44": {
+  "W_44": {
     "name": "44",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -755,7 +755,7 @@
     "saturationFluxDensity": 0.215,
     "initialPermeability": 500.0
   },
-  "46": {
+  "W_46": {
     "name": "46",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -767,7 +767,7 @@
     "saturationFluxDensity": 0.15,
     "initialPermeability": 500.0
   },
-  "4F1": {
+  "W_4F1": {
     "name": "4F1",
     "manufacturer": "Ferroxcube",
     "type": "commercial",
@@ -811,7 +811,7 @@
       }
     ]
   },
-  "51": {
+  "W_51": {
     "name": "51",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -823,7 +823,7 @@
     "saturationFluxDensity": 0.28,
     "initialPermeability": 350.0
   },
-  "52": {
+  "W_52": {
     "name": "52",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -835,7 +835,7 @@
     "saturationFluxDensity": 0.35000000000000003,
     "initialPermeability": 250.0
   },
-  "61": {
+  "W_61": {
     "name": "61",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -899,7 +899,7 @@
       }
     ]
   },
-  "67": {
+  "W_67": {
     "name": "67",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -963,7 +963,7 @@
       }
     ]
   },
-  "68": {
+  "W_68": {
     "name": "68",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -975,7 +975,7 @@
     "saturationFluxDensity": 0.26,
     "initialPermeability": 16.0
   },
-  "73": {
+  "W_73": {
     "name": "73",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -987,7 +987,7 @@
     "saturationFluxDensity": 0.30000000000000004,
     "initialPermeability": 2500.0
   },
-  "75": {
+  "W_75": {
     "name": "75",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -999,7 +999,7 @@
     "saturationFluxDensity": 0.35000000000000003,
     "initialPermeability": 5000.0
   },
-  "75_Series_26": {
+  "W_75_Series_26": {
     "name": "75-Series 26",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -1011,7 +1011,7 @@
     "saturationFluxDensity": 0.9,
     "initialPermeability": 26.0
   },
-  "75_Series_40": {
+  "W_75_Series_40": {
     "name": "75-Series 40",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -1023,7 +1023,7 @@
     "saturationFluxDensity": 0.9,
     "initialPermeability": 40.0
   },
-  "75_Series_60": {
+  "W_75_Series_60": {
     "name": "75-Series 60",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -1035,7 +1035,7 @@
     "saturationFluxDensity": 0.9,
     "initialPermeability": 60.0
   },
-  "76": {
+  "W_76": {
     "name": "76",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -1047,7 +1047,7 @@
     "saturationFluxDensity": 0.19,
     "initialPermeability": 10000.0
   },
-  "77": {
+  "W_77": {
     "name": "77",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -1111,7 +1111,7 @@
       }
     ]
   },
-  "78": {
+  "W_78": {
     "name": "78",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -1175,7 +1175,7 @@
       }
     ]
   },
-  "79": {
+  "W_79": {
     "name": "79",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -1229,7 +1229,7 @@
       }
     ]
   },
-  "80": {
+  "W_80": {
     "name": "80",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -1283,7 +1283,7 @@
       }
     ]
   },
-  "95": {
+  "W_95": {
     "name": "95",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -1327,7 +1327,7 @@
       }
     ]
   },
-  "96": {
+  "W_96": {
     "name": "96",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -1339,7 +1339,7 @@
     "saturationFluxDensity": 0.33,
     "initialPermeability": 3300.0
   },
-  "97": {
+  "W_97": {
     "name": "97",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -1393,7 +1393,7 @@
       }
     ]
   },
-  "98": {
+  "W_98": {
     "name": "98",
     "manufacturer": "Fair-Rite",
     "type": "commercial",
@@ -1915,33 +1915,33 @@
     "name": "DMR40",
     "manufacturer": "DMEGC",
     "type": "commercial",
-    "family": "DMR",
+    "family": "Power Ferrite",
     "material": "ferrite",
     "curieTemperature": 215.0,
     "density": 4800.0,
     "resistivity": null,
-    "saturationFluxDensity": 0.503,
+    "saturationFluxDensity": 0.51,
     "initialPermeability": 1169.0,
     "steinmetz_ranges": [
       {
         "fmin": 1.0,
-        "fmax": 100000.0,
-        "k": 0.6960476850090921,
-        "alpha": 1.3121671632319434,
-        "beta": 1.3126464740218287,
-        "ct0": 2.608780093387211,
-        "ct1": 0.0376232229565721,
-        "ct2": 0.0002281914898360582
+        "fmax": 200000.0,
+        "k": 14.791911763832118,
+        "alpha": 1.2774935555398184,
+        "beta": 2.4349233169402393,
+        "ct0": 1.5866428580162288,
+        "ct1": 0.024963144168332313,
+        "ct2": 0.000129354502041205
       },
       {
-        "fmin": 100000.0,
-        "fmax": 50000000.0,
-        "k": 0.025286349056747436,
-        "alpha": 1.6361772845454499,
-        "beta": 1.5019160461279177,
-        "ct0": 1.906923808182759,
-        "ct1": 0.027632894973289492,
-        "ct2": 0.00019163886742191205
+        "fmin": 200000.0,
+        "fmax": 600000000.0,
+        "k": 0.48545180256892867,
+        "alpha": 1.576759049805174,
+        "beta": 2.5314027183903294,
+        "ct0": 1.4481279294765155,
+        "ct1": 0.01916938342020277,
+        "ct2": 0.00011358903191295219
       }
     ]
   },
@@ -1961,33 +1961,33 @@
     "name": "DMR44",
     "manufacturer": "DMEGC",
     "type": "commercial",
-    "family": "DMR",
+    "family": "Power Ferrite",
     "material": "ferrite",
     "curieTemperature": 215.0,
     "density": 4800.0,
     "resistivity": null,
-    "saturationFluxDensity": 0.53,
+    "saturationFluxDensity": 0.51,
     "initialPermeability": 1332.0,
     "steinmetz_ranges": [
       {
         "fmin": 1.0,
-        "fmax": 500000.0,
-        "k": 41.42060047419895,
-        "alpha": 0.946536180142482,
-        "beta": 1.380301512199964,
-        "ct0": 0.01661737519178984,
-        "ct1": -0.13317098797868052,
-        "ct2": -0.02327247409348495
+        "fmax": 200000.0,
+        "k": 8.198005367588834,
+        "alpha": 1.2909110005865103,
+        "beta": 2.256080751111745,
+        "ct0": 1.5904530153395995,
+        "ct1": 0.024222974252790894,
+        "ct2": 0.00012055403165412108
       },
       {
-        "fmin": 500000.0,
-        "fmax": 1000000000.0,
-        "k": 1.4422645068056663,
-        "alpha": 0.9059223082743196,
-        "beta": 1.261588670261757e-15,
-        "ct0": 1.5083181687510092,
-        "ct1": 0.009632025156426725,
-        "ct2": 4.7100863056141825e-05
+        "fmin": 200000.0,
+        "fmax": 600000000.0,
+        "k": 0.15474481964926678,
+        "alpha": 1.6446083505397324,
+        "beta": 2.389398453801316,
+        "ct0": 1.448487065738769,
+        "ct1": 0.018372773499832292,
+        "ct2": 0.00010598218705522252
       }
     ]
   },
@@ -1995,33 +1995,33 @@
     "name": "DMR47",
     "manufacturer": "DMEGC",
     "type": "commercial",
-    "family": "DMR",
+    "family": "Power Ferrite",
     "material": "ferrite",
     "curieTemperature": 230.0,
     "density": 4800.0,
     "resistivity": null,
-    "saturationFluxDensity": 0.55,
+    "saturationFluxDensity": 0.52,
     "initialPermeability": 1381.0,
     "steinmetz_ranges": [
       {
         "fmin": 1.0,
-        "fmax": 500000.0,
-        "k": 0.0008763564038957559,
-        "alpha": 2.0481063397226467,
-        "beta": 2.5952713702690815,
-        "ct0": 2.3015023630092304,
-        "ct1": 0.015702817955797334,
-        "ct2": 2.9464527495570276e-05
+        "fmax": 200000.0,
+        "k": 5.885383856720776,
+        "alpha": 1.305926755822317,
+        "beta": 2.2258975142364075,
+        "ct0": 1.6085182038578558,
+        "ct1": 0.02480709085247819,
+        "ct2": 0.00012244642606126321
       },
       {
-        "fmin": 500000.0,
-        "fmax": 1000000000.0,
-        "k": 1.6098763552999654e-11,
-        "alpha": 3.4030589542567573,
-        "beta": 2.4502813566439374,
-        "ct0": 0.003961894591035735,
-        "ct1": -0.05867484234134673,
-        "ct2": -0.0004871446128725971
+        "fmin": 200000.0,
+        "fmax": 600000000.0,
+        "k": 0.17349517434769837,
+        "alpha": 1.6289656923130138,
+        "beta": 2.382102728916435,
+        "ct0": 1.451438571370231,
+        "ct1": 0.01827443185927432,
+        "ct2": 0.00010242215169429606
       }
     ]
   },
@@ -2029,33 +2029,33 @@
     "name": "DMR50",
     "manufacturer": "DMEGC",
     "type": "commercial",
-    "family": "DMR",
+    "family": "High Frequency Ferrite",
     "material": "ferrite",
     "curieTemperature": 240.0,
     "density": 4800.0,
     "resistivity": null,
-    "saturationFluxDensity": 0.45,
-    "initialPermeability": 950.0,
+    "saturationFluxDensity": 0.47,
+    "initialPermeability": 949.98,
     "steinmetz_ranges": [
       {
         "fmin": 1.0,
-        "fmax": 500000.0,
-        "k": 24.734449021193683,
-        "alpha": 1.4606382773125481,
-        "beta": 3.8624989402904237,
-        "ct0": 7.071910486212375,
-        "ct1": 0.13569359938484912,
-        "ct2": 0.0007491808381257066
+        "fmax": 200000.0,
+        "k": 66.4755486469593,
+        "alpha": 1.1904328226386038,
+        "beta": 2.5603745168204153,
+        "ct0": 1.3813928616950988,
+        "ct1": 0.017296688051811386,
+        "ct2": 7.889820741021498e-05
       },
       {
-        "fmin": 500000.0,
-        "fmax": 1000000000.0,
-        "k": 3.870682179045883e-14,
-        "alpha": 3.951486268847913,
-        "beta": 3.3845348420790935,
-        "ct0": 0.16609063751137582,
-        "ct1": -1.2824580415658502,
-        "ct2": -0.48789019920398613
+        "fmin": 200000.0,
+        "fmax": 600000000.0,
+        "k": 0.04041775068232576,
+        "alpha": 1.7940240884884844,
+        "beta": 2.6377692449590286,
+        "ct0": 1.2478241848020528,
+        "ct1": 0.011048505511879459,
+        "ct2": 5.681777521544878e-05
       }
     ]
   },
@@ -2233,13 +2233,13 @@
     "name": "DMR53",
     "manufacturer": "DMEGC",
     "type": "commercial",
-    "family": "DMR",
+    "family": "High Frequency Ferrite",
     "material": "ferrite",
     "curieTemperature": 280.0,
     "density": 4800.0,
     "resistivity": null,
-    "saturationFluxDensity": 0.46,
-    "initialPermeability": 850.33875
+    "saturationFluxDensity": 0.56,
+    "initialPermeability": 849.48
   },
   "DMR55": {
     "name": "DMR55",
@@ -2393,43 +2393,33 @@
     "name": "DMR95",
     "manufacturer": "DMEGC",
     "type": "commercial",
-    "family": "DMR",
+    "family": "Power Ferrite",
     "material": "ferrite",
     "curieTemperature": 215.0,
     "density": 4900.0,
     "resistivity": null,
-    "saturationFluxDensity": 0.546,
+    "saturationFluxDensity": 0.53,
     "initialPermeability": 1850.0,
     "steinmetz_ranges": [
       {
         "fmin": 1.0,
-        "fmax": 150000.0,
-        "k": 1.9470963742680476,
-        "alpha": 1.446537240523819,
-        "beta": 2.927407804681784,
-        "ct0": 1.5013587973489804,
-        "ct1": 0.011052503547348711,
-        "ct2": 6.668180332988764e-05
+        "fmax": 200000.0,
+        "k": 1.560553183432708,
+        "alpha": 1.4143544274015523,
+        "beta": 2.4758954765457983,
+        "ct0": 1.3290550291862504,
+        "ct1": 0.014223611841470677,
+        "ct2": 8.053936244191383e-05
       },
       {
-        "fmin": 150000.0,
-        "fmax": 1000000.0,
-        "k": 2.1853388454934485e-05,
-        "alpha": 2.2858331981815634,
-        "beta": 2.3427465973535435,
-        "ct0": 1.0972346090239138,
-        "ct1": 0.006509991127664048,
-        "ct2": 5.5635816996570404e-05
-      },
-      {
-        "fmin": 1000000.0,
-        "fmax": 1000000000.0,
-        "k": 1.709672403226505,
-        "alpha": 1.3969764700660419,
-        "beta": 2.060899540781853,
-        "ct0": 0.0023198824402452154,
-        "ct1": -0.04429460700528344,
-        "ct2": -0.0003431780582970139
+        "fmin": 200000.0,
+        "fmax": 600000000.0,
+        "k": 0.0003689380259299914,
+        "alpha": 2.0795678955583843,
+        "beta": 2.383715410207671,
+        "ct0": 1.2372437193073833,
+        "ct1": 0.010304469009626427,
+        "ct2": 7.474867865828297e-05
       }
     ]
   },
@@ -2483,33 +2473,33 @@
     "name": "DMR96A",
     "manufacturer": "DMEGC",
     "type": "commercial",
-    "family": "DMR",
+    "family": "Power Ferrite",
     "material": "ferrite",
     "curieTemperature": 230.0,
     "density": 4800.0,
     "resistivity": null,
-    "saturationFluxDensity": 0.43,
-    "initialPermeability": 1106.0292,
+    "saturationFluxDensity": 0.54,
+    "initialPermeability": 743.86,
     "steinmetz_ranges": [
       {
         "fmin": 1.0,
-        "fmax": 150000.0,
-        "k": 1.9227744520429129,
-        "alpha": 1.4192413319307462,
-        "beta": 2.754128201049423,
-        "ct0": 0.9854154580592809,
-        "ct1": 0.0046618314822320555,
-        "ct2": 4.707595196811742e-05
+        "fmax": 200000.0,
+        "k": 1.9353584926436207,
+        "alpha": 1.3964318807001892,
+        "beta": 2.645585554693802,
+        "ct0": 1.0823449156597693,
+        "ct1": 0.0036033582195261695,
+        "ct2": 2.6030796299290497e-05
       },
       {
-        "fmin": 150000.0,
-        "fmax": 40000000.0,
-        "k": 0.0005062630298570697,
-        "alpha": 2.095247988575096,
-        "beta": 2.755513257448118,
-        "ct0": 0.9960986907184045,
-        "ct1": 0.01075756664703782,
-        "ct2": 0.00010645359388196585
+        "fmin": 200000.0,
+        "fmax": 600000000.0,
+        "k": 7.928248511450792e-05,
+        "alpha": 2.1953530775974044,
+        "beta": 2.5090889190928256,
+        "ct0": 1.0422358002503473,
+        "ct1": 0.0016526994164127622,
+        "ct2": 3.110596935107753e-05
       }
     ]
   },
@@ -3349,7 +3339,7 @@
     "saturationFluxDensity": 0.275,
     "initialPermeability": 1133.09
   },
-  "Kool_M\u00b5_125": {
+  "Kool_M__125": {
     "name": "Kool M\u00b5 125",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3361,7 +3351,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 125.0
   },
-  "Kool_M\u00b5_14": {
+  "Kool_M__14": {
     "name": "Kool M\u00b5 14",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3373,7 +3363,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 14.0
   },
-  "Kool_M\u00b5_26": {
+  "Kool_M__26": {
     "name": "Kool M\u00b5 26",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3385,7 +3375,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 26.0
   },
-  "Kool_M\u00b5_40": {
+  "Kool_M__40": {
     "name": "Kool M\u00b5 40",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3397,7 +3387,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 40.0
   },
-  "Kool_M\u00b5_60": {
+  "Kool_M__60": {
     "name": "Kool M\u00b5 60",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3409,7 +3399,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 60.0
   },
-  "Kool_M\u00b5_75": {
+  "Kool_M__75": {
     "name": "Kool M\u00b5 75",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3421,7 +3411,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 75.0
   },
-  "Kool_M\u00b5_90": {
+  "Kool_M__90": {
     "name": "Kool M\u00b5 90",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3433,7 +3423,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 90.0
   },
-  "Kool_M\u00b5_H\u0192_125": {
+  "Kool_M__H__125": {
     "name": "Kool M\u00b5 H\u0192 125",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3445,7 +3435,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 125.0
   },
-  "Kool_M\u00b5_H\u0192_26": {
+  "Kool_M__H__26": {
     "name": "Kool M\u00b5 H\u0192 26",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3457,7 +3447,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 26.0
   },
-  "Kool_M\u00b5_H\u0192_40": {
+  "Kool_M__H__40": {
     "name": "Kool M\u00b5 H\u0192 40",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3469,7 +3459,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 40.0
   },
-  "Kool_M\u00b5_H\u0192_60": {
+  "Kool_M__H__60": {
     "name": "Kool M\u00b5 H\u0192 60",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3481,7 +3471,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 60.0
   },
-  "Kool_M\u00b5_H\u0192_75": {
+  "Kool_M__H__75": {
     "name": "Kool M\u00b5 H\u0192 75",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3493,7 +3483,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 75.0
   },
-  "Kool_M\u00b5_MAX_14": {
+  "Kool_M__MAX_14": {
     "name": "Kool M\u00b5 MAX 14",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3505,7 +3495,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 14.0
   },
-  "Kool_M\u00b5_MAX_19": {
+  "Kool_M__MAX_19": {
     "name": "Kool M\u00b5 MAX 19",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3517,7 +3507,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 19.0
   },
-  "Kool_M\u00b5_MAX_26": {
+  "Kool_M__MAX_26": {
     "name": "Kool M\u00b5 MAX 26",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3529,7 +3519,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 26.0
   },
-  "Kool_M\u00b5_MAX_40": {
+  "Kool_M__MAX_40": {
     "name": "Kool M\u00b5 MAX 40",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3541,7 +3531,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 40.0
   },
-  "Kool_M\u00b5_MAX_60": {
+  "Kool_M__MAX_60": {
     "name": "Kool M\u00b5 MAX 60",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3553,7 +3543,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 60.0
   },
-  "Kool_M\u00b5_MAX_75": {
+  "Kool_M__MAX_75": {
     "name": "Kool M\u00b5 MAX 75",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3565,7 +3555,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 75.0
   },
-  "Kool_M\u00b5_MAX_90": {
+  "Kool_M__MAX_90": {
     "name": "Kool M\u00b5 MAX 90",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3577,7 +3567,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 90.0
   },
-  "Kool_M\u00b5_Ultra_26": {
+  "Kool_M__Ultra_26": {
     "name": "Kool M\u00b5 Ultra 26",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3589,7 +3579,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 26.0
   },
-  "Kool_M\u00b5_Ultra_40": {
+  "Kool_M__Ultra_40": {
     "name": "Kool M\u00b5 Ultra 40",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -3601,7 +3591,7 @@
     "saturationFluxDensity": 1.0,
     "initialPermeability": 40.0
   },
-  "Kool_M\u00b5_Ultra_60": {
+  "Kool_M__Ultra_60": {
     "name": "Kool M\u00b5 Ultra 60",
     "manufacturer": "Magnetics",
     "type": "commercial",
@@ -6113,13 +6103,13 @@
     "name": "R10K",
     "manufacturer": "DMEGC",
     "type": "commercial",
-    "family": "R",
+    "family": "High Permeability Ferrite",
     "material": "ferrite",
-    "curieTemperature": 120.0,
-    "density": 4900.0,
+    "curieTemperature": 130.0,
+    "density": 4950.0,
     "resistivity": null,
-    "saturationFluxDensity": 0.405,
-    "initialPermeability": 3088.0
+    "saturationFluxDensity": 0.45,
+    "initialPermeability": 3944.78
   },
   "R10KC": {
     "name": "R10KC",
@@ -6149,13 +6139,13 @@
     "name": "R12K",
     "manufacturer": "DMEGC",
     "type": "commercial",
-    "family": "R",
+    "family": "High Permeability Ferrite",
     "material": "ferrite",
-    "curieTemperature": 110.0,
+    "curieTemperature": 130.0,
     "density": 4900.0,
     "resistivity": null,
-    "saturationFluxDensity": 0.40900000000000003,
-    "initialPermeability": 3590.0
+    "saturationFluxDensity": 0.43,
+    "initialPermeability": 4528.48
   },
   "R12KZ": {
     "name": "R12KZ",
@@ -6173,13 +6163,13 @@
     "name": "R15K",
     "manufacturer": "DMEGC",
     "type": "commercial",
-    "family": "R",
+    "family": "High Permeability Ferrite",
     "material": "ferrite",
-    "curieTemperature": 110.0,
+    "curieTemperature": 130.0,
     "density": 4900.0,
     "resistivity": null,
-    "saturationFluxDensity": 0.40800000000000003,
-    "initialPermeability": 7590.0
+    "saturationFluxDensity": 0.43,
+    "initialPermeability": 5177.12
   },
   "R15KZ": {
     "name": "R15KZ",
@@ -6197,13 +6187,13 @@
     "name": "R5K",
     "manufacturer": "DMEGC",
     "type": "commercial",
-    "family": "R",
+    "family": "High Permeability Ferrite",
     "material": "ferrite",
-    "curieTemperature": 140.0,
-    "density": 4850.0,
+    "curieTemperature": 135.0,
+    "density": 4900.0,
     "resistivity": null,
-    "saturationFluxDensity": 0.443,
-    "initialPermeability": 1994.0
+    "saturationFluxDensity": 0.45,
+    "initialPermeability": 2745.36
   },
   "R5KC": {
     "name": "R5KC",
@@ -6233,13 +6223,13 @@
     "name": "R7K",
     "manufacturer": "DMEGC",
     "type": "commercial",
-    "family": "R",
+    "family": "High Permeability Ferrite",
     "material": "ferrite",
-    "curieTemperature": 125.0,
+    "curieTemperature": 175.0,
     "density": 4900.0,
     "resistivity": null,
-    "saturationFluxDensity": 0.44,
-    "initialPermeability": 2494.0
+    "saturationFluxDensity": 0.49,
+    "initialPermeability": 2921.7
   },
   "R7KC": {
     "name": "R7KC",

@@ -204,11 +204,24 @@ classdef openmagnetics_api_interface < handle
             if isfield(r, 'ct2'), ct2 = r.ct2; end
         end
 
-        function params = get_core_params(obj, core_name)
+        function params = get_core_params(obj, core_name, num_stacks)
             % Get effective magnetic parameters for a core.
-            % Returns struct with Ae, le, Ve, bobbin, MLT (mean turn length).
+            % Returns struct with Ae, le, Ve, bobbin, MLT (mean turn length),
+            % and column geometry for radius-dependent MLT.
+            %
+            % num_stacks (optional, default 1): number of stacked cores.
+            %   Scales Ae, Ve, columnDepth, and MLT accordingly.
+            %   OM's processed description already handles this, but since
+            %   the exported DB stores single-core values, we scale here.
+            if nargin < 3 || isempty(num_stacks) || num_stacks < 1
+                num_stacks = 1;
+            end
+            num_stacks = round(num_stacks);
+
             params = struct('Ae', 0, 'le', 0, 'Ve', 0, ...
-                            'bobbin_w', 0, 'bobbin_h', 0, 'MLT', 0);
+                            'bobbin_w', 0, 'bobbin_h', 0, 'MLT', 0, ...
+                            'columnShape', '', 'columnWidth', 0, 'columnDepth', 0, ...
+                            'num_stacks', num_stacks);
 
             safe_key = make_valid_name(core_name);
             if ~isfield(obj.core_database, safe_key)
@@ -222,9 +235,26 @@ classdef openmagnetics_api_interface < handle
             elseif isfield(core, 'effectiveLength'), params.le = core.effectiveLength; end
             if isfield(core, 'Ve'), params.Ve = core.Ve;
             elseif isfield(core, 'effectiveVolume'), params.Ve = core.effectiveVolume; end
+
+            % Scale Ae and Ve for stacked cores (le stays the same)
+            if num_stacks > 1
+                params.Ae = params.Ae * num_stacks;
+                params.Ve = params.Ve * num_stacks;
+            end
             if isfield(core, 'bobbin')
                 if isfield(core.bobbin, 'width'), params.bobbin_w = core.bobbin.width; end
                 if isfield(core.bobbin, 'height'), params.bobbin_h = core.bobbin.height; end
+            end
+
+            % Extract column geometry from exported OM processed description
+            if isfield(core, 'columnShape')
+                params.columnShape = lower(core.columnShape);
+            end
+            if isfield(core, 'columnWidth')
+                params.columnWidth = core.columnWidth;
+            end
+            if isfield(core, 'columnDepth')
+                params.columnDepth = core.columnDepth;
             end
 
             % Determine core family for MLT calculation
@@ -235,44 +265,90 @@ classdef openmagnetics_api_interface < handle
                 core_family = lower(core.shape);
             end
 
-            % Compute mean turn length (MLT)
+            % --- Compute MLT using MKF-aligned formulas ---
+            % MKF: computeTurnLengthAtRadius(radius, columnShape, columnWidth, columnDepth)
+            %   ROUND:       2*pi*radius
+            %   OBLONG:      2*pi*radius + 4*(columnDepth - columnWidth)
+            %   RECTANGULAR: 4*columnDepth + 4*columnWidth + 2*pi*cornerRadius
+            %                where cornerRadius = max(radius - columnWidth, 1e-6)
+            %
+            % For MLT we evaluate at the average winding radius (midpoint of window).
+
             if strcmp(core_family, 't')
-                % Toroidal core: MLT = pi * (ID + height)
-                % For toroid: A=OD, B=ID, C=height
+                % --- TOROIDAL CORE ---
+                % Wire wraps through the center hole and around the cross-section.
+                % For toroids the "radius" concept doesn't apply the same way.
+                % Use: MLT = perimeter of core cross-section at mean winding radius.
+                %   cross-section ≈ rectangle with width=(OD-ID)/2, height=C
+                %   MLT = 2 * C + 2 * (OD-ID)/2 = 2*C + (OD-ID)
+                % More accurate: account for wire path going through hole (inner arc)
+                % and around outside (outer arc):
+                %   MLT = pi*r_inner + pi*r_outer + 2*C
+                %       = pi*(r_inner + r_outer) + 2*C
+                % where r_inner = ID/2, r_outer = OD/2 at the mean winding position.
+                % But for a tightly wound toroid, the standard formula is:
+                %   MLT = 2*C + (OD - ID)  (rectangular cross-section perimeter path)
                 if isfield(core, 'dimensions')
                     dims = core.dimensions;
-                    B_id = obj.extract_dim(dims.B);  % inner diameter
-                    C_ht = obj.extract_dim(dims.C);  % height
-                    if B_id > 0 && C_ht > 0
-                        % MLT wraps around cross-section: approximate as
-                        % perimeter of rectangular cross-section at mean radius
-                        params.MLT = 2 * C_ht + (B_id * pi);
-                        % Better: MLT = pi * (A + B)/2 for circular path
-                        % but for wire going through the hole and around,
-                        % MLT ≈ 2*C + pi*(A-B)/2 (half inner, half outer path)
-                        A_od = obj.extract_dim(dims.A);
-                        if A_od > 0
-                            % Standard toroid MLT formula
-                            params.MLT = 2 * C_ht + (A_od - B_id);
-                        end
+                    A_od = 0; B_id = 0; C_ht = 0;
+                    if isfield(dims, 'A'), A_od = obj.extract_dim(dims.A); end
+                    if isfield(dims, 'B'), B_id = obj.extract_dim(dims.B); end
+                    if isfield(dims, 'C'), C_ht = obj.extract_dim(dims.C); end
+                    % Scale height by number of stacks (stacking = more depth for wire to wrap)
+                    C_ht = C_ht * num_stacks;
+                    if A_od > 0 && B_id > 0 && C_ht > 0
+                        % Standard toroid MLT formula (C scaled for stacking)
+                        params.MLT = 2 * C_ht + (A_od - B_id);
+                    elseif B_id > 0 && C_ht > 0
+                        params.MLT = 2 * C_ht + B_id * pi;
                     end
                 end
             else
-                % Non-toroidal: use core dimensions or winding window
-                if isfield(core, 'dimensions')
-                    dims = core.dimensions;
-                    if isfield(dims, 'C') && isfield(dims, 'E')
-                        C = obj.extract_dim(dims.C);
-                        E = obj.extract_dim(dims.E);
-                        if C > 0 && E > 0
-                            params.MLT = 2 * (C + E);
-                            return;
+                % --- NON-TOROIDAL CORE (E, ETD, PQ, RM, etc.) ---
+                % Use MKF-aligned formula if column geometry is available.
+                % MKF uses half-width convention (radius-like), but OM's
+                % processedDescription gives full column width/depth.
+                col_shape = params.columnShape;
+                col_hw = params.columnWidth / 2;  % half-width (MKF convention)
+                col_hd = params.columnDepth / 2 * num_stacks;  % half-depth, scaled for stacking
+
+                if ~isempty(col_shape) && (col_hw > 0 || col_hd > 0)
+                    % Average winding radius = column half-width + half of bobbin window.
+                    % This gives the turn length at the center of the winding area.
+                    if params.bobbin_w > 0
+                        radius_avg = col_hw + params.bobbin_w / 2;
+                    else
+                        % No bobbin info: estimate wire at 50% past column surface
+                        radius_avg = col_hw * 1.5;
+                    end
+                    radius_avg = max(radius_avg, 1e-6);
+
+                    if strcmp(col_shape, 'round')
+                        % ROUND column: MLT = 2*pi*radius
+                        params.MLT = 2 * pi * radius_avg;
+                    elseif strcmp(col_shape, 'oblong')
+                        % OBLONG column: MLT = 2*pi*radius + 4*(half_depth - half_width)
+                        params.MLT = 2 * pi * radius_avg + 4 * (col_hd - col_hw);
+                    else
+                        % RECTANGULAR (default): 4*hd + 4*hw + 2*pi*cornerRadius
+                        corner_r = max(radius_avg - col_hw, 1e-6);
+                        params.MLT = 4 * col_hd + 4 * col_hw + 2 * pi * corner_r;
+                    end
+                else
+                    % Fallback: use core dimensions C and E
+                    if isfield(core, 'dimensions')
+                        dims = core.dimensions;
+                        C_val = 0; E_val = 0;
+                        if isfield(dims, 'C'), C_val = obj.extract_dim(dims.C); end
+                        if isfield(dims, 'E'), E_val = obj.extract_dim(dims.E); end
+                        if C_val > 0 && E_val > 0
+                            params.MLT = 2 * (C_val + E_val);
                         end
                     end
-                end
-                % Fallback: approximate from winding window
-                if params.bobbin_w > 0 && params.bobbin_h > 0
-                    params.MLT = 2 * (params.bobbin_w + params.bobbin_h);
+                    % Fallback: approximate from winding window perimeter
+                    if params.MLT == 0 && params.bobbin_w > 0 && params.bobbin_h > 0
+                        params.MLT = 2 * (params.bobbin_w + params.bobbin_h);
+                    end
                 end
             end
         end

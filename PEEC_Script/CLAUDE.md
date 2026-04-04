@@ -131,6 +131,92 @@ MAS topology strings must be exact (case and spacing matter):
 
 ---
 
+## Session Changelog (2026-04-03)
+
+### PEEC Solver: MLT Scaling Fix (Critical)
+- **Bug:** PEEC solver output was in W/m (per unit length) but displayed as watts. MLT multiplication was missing.
+- **Fix:** `run_peec_with_excitation_profile()` now fetches MLT from `get_core_params()` and scales `P_fil` and `P_total` by MLT after each solver call. Also scales `winding_rdc` in both profile and fallback display paths.
+- **Files:** `interactive_winding_designer.m` (lines ~5263, ~5391, ~6555)
+
+### MLT Calculation: MKF-Aligned Zhang-style Formulas
+- **Old:** Simple `2*(C+E)` or `2*C+(OD-ID)` formulas. Overestimated by 20-30% for round-column cores.
+- **New:** Uses MKF's `computeTurnLengthAtRadius()` formulas with column geometry from OM processed description:
+  - Round: `2π × radius_avg`
+  - Oblong: `2π × radius_avg + 4 × (half_depth - half_width)`
+  - Rectangular: `4×hd + 4×hw + 2π×cornerRadius`
+- **Stacking:** MLT scales with `num_stacks` (C dimension for toroids, column depth for others).
+- **Files:** `openmagnetics_api_interface.m` (`get_core_params`), `export_openmagnetics_database.py` (column geometry export)
+
+### Reluctance Model: Zhang (Replaces Partridge)
+- **Old:** Partridge fringing factor `F = 1 + (lg/√Ae)*ln(2√Ae/lg)`.
+- **New:** Zhang model — parallel combination of internal + fringing reluctances:
+  - `R_internal = lg / (μ₀ × Ae)`
+  - `R_fringing = π / (μ₀ × perimeter × ln((2h + lg) / lg))`
+  - `R_gap = 1 / (1/R_internal + 1/R_fringing)`
+- **Ref:** X. Zhang et al., "Improved Calculation Method for Inductance Value of the Air-Gap Inductor", IEEE CIYCEE 2020.
+- **Files:** `interactive_winding_designer.m` (`compute_magnetic_params`, `quick_magnetic_estimate`)
+
+### Magnetic Parameters Display: Reluctance Model as Primary
+- **Old:** Adviser Lm/Bpk shown as primary, reluctance model as secondary reference.
+- **New:** Reluctance model is authoritative for Lm/Bpk/dB. Adviser values shown as `(adv: X.X)` reference. Red warning when adviser Lm diverges >2× from recalculated value.
+- **Core loss:** OM adviser remains authoritative (richer material database).
+- **Files:** `interactive_winding_designer.m` (display_results Panel 4)
+
+### Core Shape Search: Dual Search (Toroid + Non-Toroid)
+- **Problem:** OM's `useToroidalCores` flag is either/or (toroids only OR non-toroids only), not additive.
+- **Fix:** New `include_all_core_shapes` option runs the adviser twice and merges results.
+- **UI:** "All core shapes" checkbox (default: checked) in topology wizard. "Include toroidal cores" renamed to "Toroidal cores only" with correct tooltip.
+- **Files:** `call_converter_api.py` (dual search in `run_process_and_advise`), `generate_om_recommendations.py`, `topology_wizard.m`
+
+### Window Fill Factor Filter
+- **Hard reject** below user-configurable min fill % (default 20%)
+- **Score penalty** between min and 40% target: `score *= √(fill/0.40)`
+- **Warning** when approaching min limit (within 5%)
+- **Manufacturability warning** above user-configurable max fill % (default 60%)
+- **Wire area:** `π/4 × OD²` for round/litz, `W × H` for rectangular/foil
+- **UI:** "Min fill %" and "Max fill %" edit boxes in topology wizard
+- **Files:** `call_converter_api.py` (`_estimate_fill_factor`, `format_raw_results`), `topology_wizard.m`
+
+### Stacked Cores: numberStacks Passthrough
+- **Bug:** `numberStacks` was never extracted from adviser recommendation in `call_converter_api.py`.
+- **Fix:** Added extraction in both `call_converter_api.py` and `generate_om_recommendations.py`. Stored as `data.core_num_stacks`, used in `get_core_params()` to scale Ae, Ve, MLT.
+- **Files:** `call_converter_api.py`, `generate_om_recommendations.py`, `interactive_winding_designer.m`, `generate_om_visualization.py`
+
+### Wire Database: Full Export + Key Sanitization Fix
+- **Bug 1:** Wire DB only had 29 foil wires. Default export was `wire_types=['foil']`.
+- **Fix 1:** Re-exported with `--all-wires`: 4,329 wires (1,628 litz, 1,382 round, 1,290 rectangular, 29 foil).
+- **Bug 2:** Export used `name.replace(...)` (preserving parentheses) while lookups used `sanitize_local_key()` (stripping them). Keys mismatched.
+- **Fix 2:** All exports now use `sanitize_local_key()` consistently.
+- **Files:** `export_openmagnetics_database.py`, `om_shared.py`
+
+### GUI: Core Information Text Clipping Fix
+- **Bug:** Text box was 85px, content needed ~120px. Magnetic estimates (Lm/Bpk/Pc) got clipped.
+- **Fix:** Increased to 120px, shifted all 25+ elements below by 35px.
+- **File:** `interactive_winding_designer.m` (lines 868-1204)
+
+### Winding Layout: Parameter Passing Fix
+- **Bug:** `sectionsOrientation` and `sectionsAlignment` were not set on the bobbin's winding window before `wind_by_sections()`. Default orientation was `'contiguous'` instead of `'overlapping'`.
+- **Fix:** Set both fields on bobbin winding window before winding API calls. Changed default to `'overlapping'`.
+- **Files:** `generate_om_visualization.py`, `interactive_winding_designer.m`
+
+### Excitation: Vin_Max Workaround
+- **Problem:** PyOpenMagnetics v1.3.0 symmetrizes secondary waveforms for forward-family topologies at Vin_Max, corrupting harmonic content fed to PEEC.
+- **Fix:** Only evaluate Vin_Min operating point (worst case for winding loss anyway). Vin_Max excluded until OM fix available.
+- **Files:** `interactive_winding_designer.m` (line_scales changed from `[0.90, 1.10]` to `[0.90]`)
+
+### Adviser Fit Warning
+- Enhanced "DO NOT FIT" warning to mention adviser source when recommendation was applied.
+- Wire picker dialog deferred to after GUI creation to prevent Octave focus/rendering issues.
+- **File:** `interactive_winding_designer.m`
+
+### Known Issues (PyOpenMagnetics v1.3.0)
+- **No Windows wheels for v1.3.1+:** Only Linux wheels published for 1.3.1-1.3.4. Stuck on 1.3.0 unless building from source (~30 min C++ compile).
+- **Vin_Max secondary waveform:** `process_converter()` symmetrizes forward secondary waveforms at high line. Workaround: skip Vin_Max.
+- **Adviser Lm sometimes wrong:** Adviser returns physically impossible Lm values for some core/turns combinations. Our reluctance model is now primary.
+- **`useToroidalCores`:** Either/or toggle, not additive. Workaround: dual search.
+
+---
+
 ## Agent Definitions
 
 These specialized sub-agents encode domain knowledge for automated review.
